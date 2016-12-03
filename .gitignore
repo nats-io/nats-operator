@@ -1,0 +1,7 @@
+## Go
+bin
+pkg
+
+## IntelliJ
+.idea
+*.iml
