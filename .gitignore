@@ -1,6 +1,6 @@
 ## Go
-bin
-pkg
+_output
+vendor/*
 
 ## IntelliJ
 .idea
