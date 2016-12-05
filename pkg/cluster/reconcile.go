@@ -48,7 +48,7 @@ func (c *Cluster) reconcileSize(pods []*api.Pod) error {
 		if err := c.createAndWaitForPod(); err != nil {
 			return err
 		}
-	} else if len(pods) < c.spec.Size {
+	} else if len(pods) > c.spec.Size {
 		if err := c.removePod(pods[len(pods)-1].Name); err != nil {
 			c.logger.Error(err)
 		}
