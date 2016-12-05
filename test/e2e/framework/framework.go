@@ -79,13 +79,13 @@ func Teardown() error {
 	}
 	// TODO: check all deleted and wait
 	Global = nil
-	logrus.Info("e2e teardown successfully")
+	logrus.Info("e2e teardown successful")
 	return nil
 }
 
 func (f *Framework) setup(opImage string) error {
 	if err := f.setupOperator(opImage); err != nil {
-		logrus.Errorf("fail to setup NATS operator: %v", err)
+		logrus.Errorf("Failed to setup NATS operator: %v", err)
 		return err
 	}
 	logrus.Info("e2e setup successfully")
@@ -93,7 +93,8 @@ func (f *Framework) setup(opImage string) error {
 }
 
 func (f *Framework) setupOperator(opImage string) error {
-	// TODO: unify this and the yaml file in example/
+	logrus.Info("Creating NATS operator...")
+
 	pod := &api.Pod{
 		ObjectMeta: api.ObjectMeta{
 			Name:   "nats-operator",
@@ -105,9 +106,14 @@ func (f *Framework) setupOperator(opImage string) error {
 					Name:            "nats-operator",
 					Image:           opImage,
 					ImagePullPolicy: api.PullAlways,
+					Env: []api.EnvVar{
+						{
+							Name:      "MY_POD_NAMESPACE",
+							ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
+						},
+					},
 				},
 			},
-			RestartPolicy: api.RestartPolicyNever,
 		},
 	}
 

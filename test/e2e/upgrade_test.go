@@ -26,8 +26,8 @@ import (
 func TestNATSUpgrade(t *testing.T) {
 	f := framework.Global
 
-	originalVersion := "v0.9.2"
-	newVersion := "v0.9.4"
+	originalVersion := "0.9.2"
+	newVersion := "0.9.4"
 
 	original := makeClusterSpec("test-nats-", 3)
 	original = clusterWithVersion(original, originalVersion)
