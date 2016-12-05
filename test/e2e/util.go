@@ -32,15 +32,15 @@ import (
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
-func waitUntilSizeReached(f *framework.Framework, clusterName string, size, timeout int) ([]string, error) {
+func waitUntilSizeReached(f *framework.Framework, clusterName string, size int, timeout time.Duration) ([]string, error) {
 	return waitSizeReachedWithFilter(f, clusterName, size, timeout, func(*api.Pod) bool {
 		return true
 	})
 }
 
-func waitSizeReachedWithFilter(f *framework.Framework, clusterName string, size, timeout int, filterPod func(*api.Pod) bool) ([]string, error) {
+func waitSizeReachedWithFilter(f *framework.Framework, clusterName string, size int, timeout time.Duration, podValidationFunc func(*api.Pod) bool) ([]string, error) {
 	var names []string
-	err := wait.Poll(5*time.Second, time.Duration(timeout)*time.Second, func() (done bool, err error) {
+	err := wait.Poll(5*time.Second, timeout, func() (done bool, err error) {
 		podList, err := f.KubeClient.Pods(f.Namespace.Name).List(k8sutil.PodListOpt(clusterName))
 		if err != nil {
 			return false, err
@@ -56,7 +56,18 @@ func waitSizeReachedWithFilter(f *framework.Framework, clusterName string, size,
 		if len(names) != size {
 			return false, nil
 		}
-		// TODO: check NATS member membership
+
+		upgraded := 0
+		for i := range podList.Items {
+			pod := &podList.Items[i]
+			if podValidationFunc(pod) {
+				upgraded++
+			}
+		}
+		if upgraded != size {
+			return false, nil
+		}
+
 		return true, nil
 	})
 	if err != nil {

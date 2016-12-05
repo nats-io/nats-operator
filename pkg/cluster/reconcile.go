@@ -59,7 +59,9 @@ func (c *Cluster) reconcileSize(pods []*api.Pod) error {
 
 func (c *Cluster) reconcileUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) error {
 	c.logger.Warningf("Cluster version doesn't match, reconciling...")
-	return c.upgradeAndWaitForPod(pickPodToUpgrade(pods, cs.Version))
+	pod := pickPodToUpgrade(pods, cs.Version)
+	k8sutil.SetNATSVersion(pod, cs.Version)
+	return c.upgradeAndWaitForPod(pod)
 }
 
 // needsUpgrade determines whether cluster needs upgrade or not.
@@ -71,10 +73,9 @@ func needsUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) bool {
 // correspond to desired version.
 func pickPodToUpgrade(pods []*api.Pod, newVersion string) *api.Pod {
 	for _, pod := range pods {
-		if k8sutil.GetNATSVersion(pod) == newVersion {
-			continue
+		if k8sutil.GetNATSVersion(pod) != newVersion {
+			return pod
 		}
-		return pod
 	}
 	return nil
 }
