@@ -1,0 +1,22 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nats-operator
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: nats-operator
+    spec:
+      containers:
+      - name: nats-operator
+        image: quay.io/pires/nats-operator:0.1
+        imagePullPolicy: Always
+        command: 
+        - "/usr/local/bin/nats-operator --pv-provisioner=kubernetes.io/gce-pd"
+        env:
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
