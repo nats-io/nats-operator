@@ -17,10 +17,9 @@ package constants
 import "time"
 
 const (
+	NatsVersion = "0.9.4"
+
 	ClientPort     = 4222
 	ClusterPort    = 6222
 	MonitoringPort = 8222
-
-	DefaultDialTimeout    = 5 * time.Second
-	DefaultRequestTimeout = 5 * time.Second
 )

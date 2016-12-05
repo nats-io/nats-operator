@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pires/nats-operator/pkg/spec"
+	"github.com/pires/nats-operator/pkg/util/constants"
 	"github.com/pires/nats-operator/pkg/util/k8sutil"
 
 	"github.com/Sirupsen/logrus"
@@ -33,8 +34,6 @@ type clusterEventType string
 const (
 	eventDeleteCluster clusterEventType = "Delete"
 	eventModifyCluster clusterEventType = "Modify"
-
-	defaultVersion = "v0.9.4"
 )
 
 type clusterEvent struct {
@@ -70,7 +69,7 @@ func Restore(c *unversioned.Client, name, ns string, spec *spec.ClusterSpec, sto
 func new(kclient *unversioned.Client, name, ns string, spec *spec.ClusterSpec, stopC <-chan struct{}, wg *sync.WaitGroup, isNewCluster bool) *Cluster {
 	if len(spec.Version) == 0 {
 		// TODO: set version in spec in apiserver
-		spec.Version = defaultVersion
+		spec.Version = constants.NatsVersion
 	}
 	c := &Cluster{
 		logger:    logrus.WithField("pkg", "cluster").WithField("cluster-name", name),
@@ -163,7 +162,7 @@ func (c *Cluster) Update(spec *spec.ClusterSpec) {
 		anyInterestedChange = true
 	}
 	if len(spec.Version) == 0 {
-		spec.Version = defaultVersion
+		spec.Version = constants.NatsVersion
 	}
 	if spec.Version != c.spec.Version {
 		anyInterestedChange = true
