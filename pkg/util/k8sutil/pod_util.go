@@ -17,7 +17,7 @@ package k8sutil
 import (
 	"encoding/json"
 
-	"github.com/pires/nats-operator/pkg/util/constants"
+	"github.com/pires/nats-operator/pkg/constants"
 
 	"k8s.io/kubernetes/pkg/api"
 	unversionedAPI "k8s.io/kubernetes/pkg/api/unversioned"

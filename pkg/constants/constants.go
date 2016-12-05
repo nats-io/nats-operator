@@ -14,8 +14,6 @@
 
 package constants
 
-import "time"
-
 const (
 	NatsVersion = "0.9.4"
 

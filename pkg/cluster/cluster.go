@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pires/nats-operator/pkg/constants"
 	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/constants"
 	"github.com/pires/nats-operator/pkg/util/k8sutil"
 
 	"github.com/Sirupsen/logrus"
