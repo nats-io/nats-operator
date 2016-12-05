@@ -24,12 +24,13 @@ import (
 	"k8s.io/kubernetes/pkg/util/intstr"
 )
 
-// TODO
-func natsContainer(commands, version string) api.Container {
+// natsPodContainer returns a NATS server pod container spec.
+func natsPodContainer(args []string, version string) api.Container {
 	c := api.Container{
-		Command: []string{commands},
-		Name:    "nats",
-		Image:   MakeNATSImage(version),
+		Name:            "nats",
+		Image:           MakeNATSImage(version),
+		ImagePullPolicy: api.PullAlways,
+		Args:            args,
 		Ports: []api.ContainerPort{
 			{
 				Name:          "cluster",

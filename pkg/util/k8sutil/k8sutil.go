@@ -170,18 +170,15 @@ func makeMgmtServiceSpec(clusterName string) *api.Service {
 	return svc
 }
 
-// MakePodSpec
+// MakePodSpec returns a NATS peer pod specification, based on the cluster specification.
 func MakePodSpec(clusterName string, cs *spec.ClusterSpec) *api.Pod {
 	// TODO add TLS, auth support, debug and tracing
-	commands := fmt.Sprintf("/usr/local/bin/gnatsd "+
-		"--cluster nats://0.0.0.0:%d"+
-		"--http_port=%d"+
-		"--routes nats://%s:%d",
-		constants.ClusterPort,
-		constants.MonitoringPort,
-		clusterName,
-		constants.ClusterPort,
-	)
+	args := []string{
+		fmt.Sprintf("--cluster=nats://0.0.0.0:%d", constants.ClusterPort),
+		fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
+		fmt.Sprintf("--routes=nats://%s:%d", clusterName+"-mgmt", constants.ClusterPort),
+	}
+
 	pod := &api.Pod{
 		ObjectMeta: api.ObjectMeta{
 			GenerateName: clusterName + "-",
@@ -193,7 +190,7 @@ func MakePodSpec(clusterName string, cs *spec.ClusterSpec) *api.Pod {
 		},
 		Spec: api.PodSpec{
 			Containers: []api.Container{
-				natsContainer(commands, cs.Version),
+				natsPodContainer(args, cs.Version),
 			},
 			RestartPolicy: api.RestartPolicyNever,
 			// TODO use for TLS
