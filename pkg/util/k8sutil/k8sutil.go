@@ -95,23 +95,6 @@ func DeleteService(kclient *unversioned.Client, clusterName, ns string) error {
 	return kclient.Services(ns).Delete(svc.Name)
 }
 
-func CreateAndWaitPod(kclient *unversioned.Client, ns string, pod *api.Pod, timeout time.Duration) error {
-	if _, err := kclient.Pods(ns).Create(pod); err != nil {
-		return err
-	}
-	w, err := kclient.Pods(ns).Watch(api.SingleObject(api.ObjectMeta{Name: pod.Name}))
-	if err != nil {
-		return err
-	}
-	_, err = watch.Until(timeout, w, unversioned.PodRunning)
-	// TODO remove dead pod?
-	//if err != nil {
-	//	kclient.Pods(ns).Delete(pod.Name, &api.DeleteOptions{})
-	//}
-
-	return err
-}
-
 func makeServiceSpec(clusterName string) *api.Service {
 	labels := map[string]string{
 		"app":          "nats",
@@ -170,6 +153,58 @@ func makeMgmtServiceSpec(clusterName string) *api.Service {
 	return svc
 }
 
+// CreateAndWaitPod creates a pod and waits for it to be healthy, or returns error otherwise.
+func CreateAndWaitPod(kclient *unversioned.Client, ns string, pod *api.Pod, timeout time.Duration) error {
+	// create pod
+	createdPod, err := kclient.Pods(ns).Create(pod)
+	if err != nil {
+		return err
+	}
+
+	// watch for pod to become healthy
+	w, err := kclient.Pods(ns).Watch(api.SingleObject(api.ObjectMeta{Name: createdPod.Name}))
+	if err != nil {
+		return err
+	}
+	_, err = watch.Until(timeout, w, unversioned.PodRunning)
+
+	// TODO remove dead pod?
+	//if err != nil {
+	//	kclient.Pods(ns).Delete(pod.Name, &api.DeleteOptions{})
+	//}
+
+	return err
+}
+
+// UpdateAndWaitPod updates a pod and waits for it to be healthy, or returns error otherwise.
+func UpdateAndWaitPod(kclient *unversioned.Client, ns string, pod *api.Pod, timeout time.Duration) error {
+	// make sure pod exists
+	_, err := kclient.Pods(ns).Get(pod.Name)
+	if err != nil {
+		return err
+	}
+
+	// update pod
+	updatedPod, err := kclient.Pods(ns).Update(pod)
+	if err != nil {
+		return err
+	}
+
+	// watch for pod to become healthy
+	w, err := kclient.Pods(ns).Watch(api.SingleObject(api.ObjectMeta{Name: updatedPod.Name}))
+	if err != nil {
+		return err
+	}
+	_, err = watch.Until(timeout, w, unversioned.PodRunning)
+
+	// TODO remove dead pod?
+	//if err != nil {
+	//	kclient.Pods(ns).Delete(pod.Name, &api.DeleteOptions{})
+	//}
+
+	return err
+}
+
 // MakePodSpec returns a NATS peer pod specification, based on the cluster specification.
 func MakePodSpec(clusterName string, cs *spec.ClusterSpec) *api.Pod {
 	// TODO add TLS, auth support, debug and tracing
@@ -203,7 +238,7 @@ func MakePodSpec(clusterName string, cs *spec.ClusterSpec) *api.Pod {
 	SetNATSVersion(pod, cs.Version)
 
 	if cs.AntiAffinity {
-		pod = PodWithAntiAffinity(pod, clusterName)
+		pod = podWithAntiAffinity(pod, clusterName)
 	}
 
 	if len(cs.NodeSelector) != 0 {

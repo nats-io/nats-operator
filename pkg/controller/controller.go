@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	tprName = "nats-cluster.nats.io"
+	tprName = "management.nats.io"
 )
 
 var (
@@ -44,7 +44,7 @@ var (
 		"kubernetes.io/aws-ebs": {},
 	}
 
-	ErrVersionOutdated = errors.New("requested version is outdated in apiserver")
+	ErrVersionOutdated = errors.New("Requested version is outdated.")
 
 	initRetryWaitTime = 30 * time.Second
 )
@@ -109,13 +109,11 @@ func (c *Controller) Run() error {
 		if err == nil {
 			break
 		}
-		c.logger.Errorf("initialization failed: %v", err)
-		c.logger.Infof("retry in %v...", initRetryWaitTime)
+		c.logger.Errorf("NATS operator initialization failed: %v", err)
+		c.logger.Infof("Retrying in %v...", initRetryWaitTime)
 		time.Sleep(initRetryWaitTime)
-		// todo: add max retry?
+		// TODO: add max retry?
 	}
-
-	c.logger.Infof("starts running from watch version: %s", watchVersion)
 
 	defer func() {
 		for _, stopC := range c.stopChMap {
@@ -140,13 +138,13 @@ func (c *Controller) Run() error {
 				c.clusters[clusterName] = nc
 			case "MODIFIED":
 				if c.clusters[clusterName] == nil {
-					c.logger.Warningf("ignored modification event: cluster %q not found (or dead)", clusterName)
+					c.logger.Warningf("Ignoring modification event: cluster %q not found (or dead)", clusterName)
 					break
 				}
 				c.clusters[clusterName].Update(&event.Object.Spec)
 			case "DELETED":
 				if c.clusters[clusterName] == nil {
-					c.logger.Warningf("ignored deletion event: cluster %q not found (or dead)", clusterName)
+					c.logger.Warningf("Ignoring deletion event: cluster %q not found (or dead)", clusterName)
 					break
 				}
 				c.clusters[clusterName].Delete()
@@ -158,7 +156,7 @@ func (c *Controller) Run() error {
 }
 
 func (c *Controller) findAllClusters() (string, error) {
-	c.logger.Info("finding existing clusters...")
+	c.logger.Info("Retrieving existing NATS clusters...")
 	resp, err := k8sutil.ListClusters(c.MasterHost, c.Namespace, c.KubeCli.RESTClient.Client)
 	if err != nil {
 		return "", err
@@ -183,13 +181,12 @@ func (c *Controller) initResource() (string, error) {
 	err := c.createTPR()
 	if err != nil {
 		if k8sutil.IsKubernetesResourceAlreadyExistError(err) {
-			// TPR has been initialized before. We need to recover existing cluster.
 			watchVersion, err = c.findAllClusters()
 			if err != nil {
 				return "", err
 			}
 		} else {
-			return "", fmt.Errorf("failed to create TPR: %v", err)
+			return "", fmt.Errorf("Failed to create TPR: %v", err)
 		}
 	}
 
@@ -245,19 +242,17 @@ func (c *Controller) monitor(watchVersion string) (<-chan *Event, <-chan error) 
 				return
 			}
 
-			c.logger.Infof("start watching at %v", watchVersion)
-
 			decoder := json.NewDecoder(resp.Body)
 			for {
 				ev, st, err := pollEvent(decoder)
 
 				if err != nil {
 					if err == io.EOF { // apiserver will close stream periodically
-						c.logger.Debug("apiserver closed stream")
+						c.logger.Debug("API server closed stream")
 						break
 					}
 
-					c.logger.Errorf("received invalid event from API server: %v", err)
+					c.logger.Errorf("Received invalid event from API server: %v", err)
 					errCh <- err
 					return
 				}
@@ -267,7 +262,7 @@ func (c *Controller) monitor(watchVersion string) (<-chan *Event, <-chan error) 
 						errCh <- ErrVersionOutdated // go to recovery path
 						return
 					}
-					c.logger.Fatalf("unexpected status response from API server: %v", st.Message)
+					c.logger.Fatalf("Unexpected status response from API server: %v", st.Message)
 				}
 
 				c.logger.Debugf("NATS cluster event: %v %v", ev.Type, ev.Object.Spec)
@@ -290,14 +285,14 @@ func pollEvent(decoder *json.Decoder) (*Event, *unversionedAPI.Status, error) {
 		if err == io.EOF {
 			return nil, nil, err
 		}
-		return nil, nil, fmt.Errorf("fail to decode raw event from apiserver (%v)", err)
+		return nil, nil, fmt.Errorf("Failed to decode raw event: %+v", err)
 	}
 
 	if re.Type == "ERROR" {
 		status := &unversionedAPI.Status{}
 		err = json.Unmarshal(re.Object, status)
 		if err != nil {
-			return nil, nil, fmt.Errorf("fail to decode (%s) into unversioned.Status (%v)", re.Object, err)
+			return nil, nil, fmt.Errorf("Failed to decode %+v into unversioned.Status %+v", re.Object, err)
 		}
 		return nil, status, nil
 	}
@@ -308,7 +303,7 @@ func pollEvent(decoder *json.Decoder) (*Event, *unversionedAPI.Status, error) {
 	}
 	err = json.Unmarshal(re.Object, ev.Object)
 	if err != nil {
-		return nil, nil, fmt.Errorf("fail to unmarshal NATSCluster object from data (%s): %v", re.Object, err)
+		return nil, nil, fmt.Errorf("Failed to unmarshal NATSCluster object from data %+v: %+v", re.Object, err)
 	}
 	return ev, nil, nil
 }

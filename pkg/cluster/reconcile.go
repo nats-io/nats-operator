@@ -25,77 +25,51 @@ import (
 // - it tries to reconcile the cluster to desired size.
 // - if the cluster needs upgrade, it tries to upgrade existing peers, one by one.
 func (c *Cluster) reconcile(pods []*api.Pod) error {
-	c.logger.Infoln("Start reconciling")
-	defer c.logger.Infoln("Finish reconciling")
+	c.logger.Debugln("Start reconciling...")
+	var err error
 
 	switch {
 	case len(pods) != c.spec.Size:
-		return c.reconcileSize(pods)
+		err = c.reconcileSize(pods)
 	case needsUpgrade(pods, c.spec):
 		c.status.upgradeVersionTo(c.spec.Version)
-		return reconcileUpgrade(pods, c.spec)
-	default:
-		c.status.setVersion(c.spec.Version)
-		return nil
+		err = c.reconcileUpgrade(pods, c.spec)
 	}
+
+	c.logger.Debugln("Finished reconciling.")
+	return err
 }
 
 // reconcileSize reconciles the size of cluster.
 func (c *Cluster) reconcileSize(pods []*api.Pod) error {
+	c.logger.Warningf("Cluster size needs reconciling: expected %d, has %d", c.spec.Size, len(pods))
 	// do we need to add or remove pods?
 	if len(pods) < c.spec.Size {
-		podsToAdd := c.spec.Size - len(pods)
-		for i := 0; i < podsToAdd; i++ {
-			// one at a time, sequentially
-			if err := c.addOnePeer(); err != nil {
-				c.logger.Error(err)
-			} else {
-
-			}
+		if err := c.createAndWaitForPod(); err != nil {
+			return err
 		}
 	} else if len(pods) < c.spec.Size {
-		podsToRemove := len(pods) - c.spec.Size
-		for i := podsToRemove; i > 0; i-- {
-			if err := c.removeOnePeer(pods[len(pods)-1]); err != nil {
-				c.logger.Error(err)
-			}
+		if err := c.removePod(pods[len(pods)-1].Name); err != nil {
+			c.logger.Error(err)
 		}
 	}
 
 	return nil
 }
 
-func (c *Cluster) addOnePeer() error {
-	if err := c.createAndWaitForPod(); err != nil {
-		c.logger.Errorf("failed to create new peer: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-func (c *Cluster) removeOnePeer(pod *api.Pod) error {
-	if err := c.removePod(pod.Name); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func reconcileUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) error {
-	// TODO implement
-
-	return nil
+func (c *Cluster) reconcileUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) error {
+	c.logger.Warningf("Cluster version doesn't match, reconciling...")
+	return c.upgradeAndWaitForPod(pickPodToUpgrade(pods, cs.Version))
 }
 
 // needsUpgrade determines whether cluster needs upgrade or not.
 func needsUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) bool {
-	return len(pods) == cs.Size && pickPeerToUpgrade(pods, cs.Version) != nil
+	return len(pods) == cs.Size && pickPodToUpgrade(pods, cs.Version) != nil
 }
 
 // pickExistingPeer selects the first pod, if any, which version doesn't
 // correspond to desired version.
-func pickPeerToUpgrade(pods []*api.Pod, newVersion string) *api.Pod {
+func pickPodToUpgrade(pods []*api.Pod, newVersion string) *api.Pod {
 	for _, pod := range pods {
 		if k8sutil.GetNATSVersion(pod) == newVersion {
 			continue

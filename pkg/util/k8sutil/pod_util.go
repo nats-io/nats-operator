@@ -71,8 +71,8 @@ func natsPodContainer(args []string, version string) api.Container {
 	return c
 }
 
-// PodWithAntiAffinity sets pod anti-affinity with the pods in the same NATS cluster
-func PodWithAntiAffinity(pod *api.Pod, clusterName string) *api.Pod {
+// podWithAntiAffinity sets pod anti-affinity with the pods in the same NATS cluster
+func podWithAntiAffinity(pod *api.Pod, clusterName string) *api.Pod {
 	affinity := api.Affinity{
 		PodAntiAffinity: &api.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
@@ -90,7 +90,7 @@ func PodWithAntiAffinity(pod *api.Pod, clusterName string) *api.Pod {
 
 	affinityb, err := json.Marshal(affinity)
 	if err != nil {
-		panic("failed to marshal affinty struct")
+		panic("Failed to marshal affinity spec: " + err.Error())
 	}
 
 	pod.Annotations[api.AffinityAnnotationKey] = string(affinityb)

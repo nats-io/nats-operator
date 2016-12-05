@@ -84,7 +84,7 @@ func new(kclient *unversioned.Client, name, ns string, spec *spec.ClusterSpec, s
 	if isNewCluster {
 		err := c.createServices()
 		if err != nil {
-			// todo: do not panic!
+			// TODO: do not panic!
 			panic("todo:" + err.Error())
 		}
 	}
@@ -112,7 +112,6 @@ func (c *Cluster) run(stopC <-chan struct{}, wg *sync.WaitGroup) {
 
 	defer func() {
 		if needDeleteCluster {
-			c.logger.Infof("deleting cluster")
 			c.delete()
 		}
 		close(c.stopCh)
@@ -128,29 +127,28 @@ func (c *Cluster) run(stopC <-chan struct{}, wg *sync.WaitGroup) {
 			switch event.typ {
 			case eventModifyCluster:
 				// TODO: we can't handle another upgrade while an upgrade is in progress
-				c.logger.Infof("spec update: from: %v to: %v", c.spec, event.spec)
+				c.logger.Infof("Cluster spec updated from: %+v to: %+v", c.spec, event.spec)
 				c.spec = &event.spec
 			case eventDeleteCluster:
 				return
 			}
 		case <-time.After(5 * time.Second):
 			if c.spec.Paused {
-				c.logger.Infof("control is paused, skipping reconcilation")
+				c.logger.Infof("NATS operator is paused, skipping reconcilement.")
 				continue
 			}
 
 			running, pending, err := c.pollPods()
 			if err != nil {
-				c.logger.Errorf("fail to poll pods: %v", err)
+				c.logger.Errorf("Failed to poll pods: %v", err)
 				continue
 			}
 			if len(pending) > 0 {
-				c.logger.Infof("skip reconciliation: running (%v), pending (%v)", k8sutil.GetPodNames(running), k8sutil.GetPodNames(pending))
+				c.logger.Infof("Skipping reconcilement: running (%v), pending (%v)", k8sutil.GetPodNames(running), k8sutil.GetPodNames(pending))
 				continue
 			}
-
 			if err := c.reconcile(running); err != nil {
-				c.logger.Errorf("fail to reconcile: %v", err)
+				c.logger.Errorf("Failed reconcilement: %v", err)
 			}
 		}
 	}
@@ -176,6 +174,8 @@ func (c *Cluster) Update(spec *spec.ClusterSpec) {
 }
 
 func (c *Cluster) delete() {
+	c.logger.Infof("Deleting NATS cluster %q...", c.name)
+
 	option := k8sapi.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"app":          "nats",
@@ -198,6 +198,8 @@ func (c *Cluster) delete() {
 		// todo: do not panic!
 		panic("todo:" + err.Error())
 	}
+
+	c.logger.Infof("Successfully deleted NATS cluster %q.", c.name)
 }
 
 func (c *Cluster) createServices() error {
@@ -254,7 +256,7 @@ func (c *Cluster) removePod(name string) error {
 func (c *Cluster) pollPods() ([]*k8sapi.Pod, []*k8sapi.Pod, error) {
 	podList, err := c.kclient.Pods(c.namespace).List(k8sutil.PodListOpt(c.name))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
+		return nil, nil, fmt.Errorf("Failed to list running pods for cluster %q: %+v", c.name, err)
 	}
 
 	var running []*k8sapi.Pod
@@ -270,4 +272,8 @@ func (c *Cluster) pollPods() ([]*k8sapi.Pod, []*k8sapi.Pod, error) {
 	}
 
 	return running, pending, nil
+}
+
+func (c *Cluster) upgradeAndWaitForPod(pod *k8sapi.Pod) error {
+	return k8sutil.UpdateAndWaitPod(c.kclient, c.namespace, pod, 60*time.Second)
 }

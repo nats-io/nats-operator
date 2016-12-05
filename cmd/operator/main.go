@@ -82,7 +82,7 @@ func main() {
 
 	id, err := os.Hostname()
 	if err != nil {
-		logrus.Fatalf("failed to get hostname: %v", err)
+		logrus.Fatalf("Failed to determine hostname: %v", err)
 	}
 
 	leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
@@ -103,7 +103,7 @@ func main() {
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: run,
 			OnStoppedLeading: func() {
-				logrus.Fatalf("leader election lost")
+				logrus.Fatalf("Lost leader election.")
 			},
 		},
 	})
@@ -122,7 +122,7 @@ func run(stop <-chan struct{}) {
 		switch err {
 		case controller.ErrVersionOutdated:
 		default:
-			logrus.Fatalf("controller Run() ended with failure: %v", err)
+			logrus.Fatalf("NATS operator ended with failure: %v", err)
 		}
 
 		cancel()
@@ -143,7 +143,6 @@ func newControllerConfig() controller.Config {
 		KubeCli:       kubecli,
 	}
 	if len(cfg.MasterHost) == 0 {
-		logrus.Info("use in cluster client from k8s library")
 		cfg.MasterHost = k8sutil.MustGetInClusterMasterHost()
 	}
 	return cfg
@@ -151,7 +150,9 @@ func newControllerConfig() controller.Config {
 
 func startChaos(ctx context.Context, k8s *unversioned.Client, ns string, chaosLevel int) {
 	m := chaos.NewMonkeys(k8s)
-	ls := labels.SelectorFromSet(map[string]string{"app": "nats"})
+	ls := labels.SelectorFromSet(map[string]string{
+		"app": "nats",
+	})
 
 	switch chaosLevel {
 	case 1:
