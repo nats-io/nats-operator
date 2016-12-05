@@ -66,7 +66,7 @@ func (c *Cluster) reconcileSize(pods []*api.Pod) error {
 }
 
 func (c *Cluster) addOnePeer() error {
-	if err := c.createPod(); err != nil {
+	if err := c.createAndWaitForPod(); err != nil {
 		c.logger.Errorf("failed to create new peer: %v", err)
 		return err
 	}

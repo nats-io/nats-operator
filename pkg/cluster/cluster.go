@@ -237,9 +237,9 @@ func (c *Cluster) deleteServices() error {
 	return nil
 }
 
-func (c *Cluster) createPod() error {
+func (c *Cluster) createAndWaitForPod() error {
 	pod := k8sutil.MakePodSpec(c.name, c.spec)
-	return k8sutil.CreateAndWaitPod(c.kclient, c.namespace, pod, 60 * time.Second)
+	return k8sutil.CreateAndWaitPod(c.kclient, c.namespace, pod, 60*time.Second)
 }
 
 func (c *Cluster) removePod(name string) error {
