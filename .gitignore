@@ -1,6 +1,7 @@
 ## Go
 _output
 vendor/*
+.glide/
 
 ## IntelliJ
 .idea

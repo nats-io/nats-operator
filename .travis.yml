@@ -1,0 +1,25 @@
+language: go
+
+go:
+  - 1.8
+
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - sudo apt-get update
+  - sudo apt-get -y install docker-ce
+
+script:
+  - docker build -t "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}" .
+
+after_success:
+  - if [[ "${TRAVIS_BRANCH}" == "master" ]] || [[ "${TRAVIS_TAG}" != "" ]];
+    then
+        docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" quay.io;
+        docker push "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}";
+    fi
