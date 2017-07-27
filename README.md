@@ -1,5 +1,7 @@
 # nats-operator
 
+[![Docker Repository on Quay](https://quay.io/repository/pires/nats-operator/status "Docker Repository on Quay")](https://quay.io/repository/pires/nats-operator)
+
 `nats-operator` manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
 
 **Project status: *ALPHA***
