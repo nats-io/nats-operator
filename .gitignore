@@ -1,7 +1,6 @@
 ## Go
 _output
-vendor/*
-.glide/
+vendor
 
 ## IntelliJ
 .idea
