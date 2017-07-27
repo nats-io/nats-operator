@@ -12,3 +12,13 @@ We do not support backward-compatibility for the alpha releases.
 - Kubernetes 1.4+
 
 [k8s-home]: http://kubernetes.io
+
+## Building the Image
+
+To build the `nats-operator` Docker image:
+
+```
+$ docker build -t <image>:<tag> .
+```
+
+You'll need Docker `17.06.0-ce` or higher.
