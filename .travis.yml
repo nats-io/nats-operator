@@ -1,8 +1,3 @@
-language: go
-
-go:
-  - 1.8
-
 sudo: required
 
 services:
@@ -18,7 +13,7 @@ script:
   - docker build -t "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}" .
 
 after_success:
-  - if [[ "${TRAVIS_BRANCH}" == "master" ]] || [[ "${TRAVIS_TAG}" != "" ]];
+  - if ([[ "${TRAVIS_BRANCH}" == "master" ]] && [[ "${TRAVIS_PULL_REQUEST}" == "false" ]]) || [[ "${TRAVIS_TAG}" != "" ]];
     then
         docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" quay.io;
         docker push "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}";
