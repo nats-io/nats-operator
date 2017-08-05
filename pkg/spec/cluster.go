@@ -1,4 +1,4 @@
-// Copyright 2016 The nats-operator Authors
+// Copyright 2017 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,21 +15,46 @@
 package spec
 
 import (
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/pires/nats-operator/pkg/constants"
+
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TODO: supports object store like s3
 type StorageType string
 
-const (
-	BackupStorageTypePersistentVolume = "PersistentVolume"
-)
+// NatsClusterList is a list of NATS clusters.
+type NatsClusterList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []NatsCluster `json:"items"`
+}
 
 type NatsCluster struct {
-	unversioned.TypeMeta `json:",inline"`
-	api.ObjectMeta       `json:"metadata,omitempty"`
-	Spec                 ClusterSpec `json:"spec"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              ClusterSpec   `json:"spec"`
+	Status            ClusterStatus `json:"status"`
+}
+
+func (c *NatsCluster) AsOwner() metav1.OwnerReference {
+	trueVar := true
+	return metav1.OwnerReference{
+		APIVersion: c.APIVersion,
+		Kind:       c.Kind,
+		Name:       c.Name,
+		UID:        c.UID,
+		Controller: &trueVar,
+	}
 }
 
 type ClusterSpec struct {
@@ -41,21 +66,244 @@ type ClusterSpec struct {
 	// Version is the expected version of the NATS cluster.
 	// The operator will eventually make the cluster version
 	// equal to the expected version.
+	//
+	// The version must follow the [semver]( http://semver.org) format, for example "1.0.2".
+	// Only NATS released versions are supported: https://github.com/nats-io/gnatsd/releases
+	//
+	// If version is not set, default is "1.0.2".
 	Version string `json:"version"`
-
-	// StorageType specifies the type of storage device to store files.
-	// If it's not set by user, the default is "PersistentVolume".
-	StorageType StorageType `json:"storageType"`
 
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
+
+	// Pod defines the policy to create pod for the NATS pod.
+	//
+	// Updating Pod does not take effect on any existing NATS pods.
+	Pod *PodPolicy `json:"pod,omitempty"`
+
+	// NATS cluster TLS configuration
+	TLS *TLSPolicy `json:"TLS,omitempty"`
+}
+
+// PodPolicy defines the policy to create pod for the NATS container.
+type PodPolicy struct {
+	// Labels specifies the labels to attach to pods the operator creates for the
+	// NATS cluster.
+	// "app" and "nats_*" labels are reserved for the internal use of this operator.
+	// Do not overwrite them.
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// NodeSelector specifies a map of key-value pairs. For the pod to be eligible
 	// to run on a node, the node must have each of the indicated key-value pairs as
 	// labels.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
-	// AntiAffinity determines if the operator tries to avoid scheduling
-	// NATS pods related to a same cluster onto the same node.
-	AntiAffinity bool `json:"antiAffinity"`
+	// AntiAffinity determines if the nats-operator tries to avoid putting
+	// the NATS members in the same cluster onto the same node.
+	AntiAffinity bool `json:"antiAffinity,omitempty"`
+
+	// Resources is the resource requirements for the NATS container.
+	// This field cannot be updated once the cluster is created.
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Tolerations specifies the pod's tolerations.
+	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
+
+	// List of environment variables to set in the NATS container.
+	// This is used to configure NATS process. NATS cluster cannot be created, when
+	// bad environment variables are provided.
+	// This field cannot be updated.
+	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
+}
+
+func (c *ClusterSpec) Validate() error {
+	if c.TLS != nil {
+		if err := c.TLS.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if c.Pod != nil {
+		for k := range c.Pod.Labels {
+			if k == "app" || strings.HasPrefix(k, "nats_") {
+				return errors.New("spec: pod labels contains reserved label")
+			}
+		}
+	}
+	return nil
+}
+
+// Cleanup cleans up user passed spec, e.g. defaulting, transforming fields.
+// TODO: move this to admission controller
+func (c *ClusterSpec) Cleanup() {
+	if len(c.Version) == 0 {
+		c.Version = constants.DefaultNatsVersion
+	}
+
+	c.Version = strings.TrimLeft(c.Version, "v")
+}
+
+type ClusterPhase string
+
+const (
+	ClusterPhaseNone     ClusterPhase = ""
+	ClusterPhaseCreating              = "Creating"
+	ClusterPhaseRunning               = "Running"
+	ClusterPhaseFailed                = "Failed"
+)
+
+type ClusterCondition struct {
+	Type ClusterConditionType `json:"type"`
+
+	Reason string `json:"reason"`
+
+	TransitionTime string `json:"transitionTime"`
+}
+
+type ClusterConditionType string
+
+const (
+	ClusterConditionReady = "Ready"
+
+	ClusterConditionRemovingDeadMember = "RemovingDeadMember"
+
+	ClusterConditionRecovering = "Recovering"
+
+	ClusterConditionScalingUp   = "ScalingUp"
+	ClusterConditionScalingDown = "ScalingDown"
+
+	ClusterConditionUpgrading = "Upgrading"
+)
+
+type ClusterStatus struct {
+	// Phase is the cluster running phase
+	Phase  ClusterPhase `json:"phase"`
+	Reason string       `json:"reason"`
+
+	// ControlPaused indicates the operator pauses the control of the cluster.
+	ControlPaused bool `json:"controlPaused"`
+
+	// Condition keeps ten most recent cluster conditions
+	Conditions []ClusterCondition `json:"conditions"`
+
+	// Size is the current size of the cluster
+	Size int `json:"size"`
+	// Members are the NATS members in the cluster
+	Members MembersStatus `json:"members"`
+	// CurrentVersion is the current cluster version
+	CurrentVersion string `json:"currentVersion"`
+	// TargetVersion is the version the cluster upgrading to.
+	// If the cluster is not upgrading, TargetVersion is empty.
+	TargetVersion string `json:"targetVersion"`
+}
+
+type MembersStatus struct {
+	// Ready are the NATS members that are ready to serve requests
+	// The member names are the same as the NATS pod names
+	Ready []string `json:"ready,omitempty"`
+	// Unready are the NATS members not ready to serve requests
+	Unready []string `json:"unready,omitempty"`
+}
+
+func (cs ClusterStatus) Copy() ClusterStatus {
+	newCS := ClusterStatus{}
+	b, err := json.Marshal(cs)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(b, &newCS)
+	if err != nil {
+		panic(err)
+	}
+	return newCS
+}
+
+func (cs *ClusterStatus) IsFailed() bool {
+	if cs == nil {
+		return false
+	}
+	return cs.Phase == ClusterPhaseFailed
+}
+
+func (cs *ClusterStatus) SetPhase(p ClusterPhase) {
+	cs.Phase = p
+}
+
+func (cs *ClusterStatus) PauseControl() {
+	cs.ControlPaused = true
+}
+
+func (cs *ClusterStatus) Control() {
+	cs.ControlPaused = false
+}
+
+func (cs *ClusterStatus) UpgradeVersionTo(v string) {
+	cs.TargetVersion = v
+}
+
+func (cs *ClusterStatus) SetVersion(v string) {
+	cs.TargetVersion = ""
+	cs.CurrentVersion = v
+}
+
+func (cs *ClusterStatus) SetReason(r string) {
+	cs.Reason = r
+}
+
+func (cs *ClusterStatus) AppendScalingUpCondition(from, to int) {
+	c := ClusterCondition{
+		Type:           ClusterConditionScalingUp,
+		Reason:         scalingReason(from, to),
+		TransitionTime: time.Now().Format(time.RFC3339),
+	}
+	cs.appendCondition(c)
+}
+
+func (cs *ClusterStatus) AppendScalingDownCondition(from, to int) {
+	c := ClusterCondition{
+		Type:           ClusterConditionScalingDown,
+		Reason:         scalingReason(from, to),
+		TransitionTime: time.Now().Format(time.RFC3339),
+	}
+	cs.appendCondition(c)
+}
+
+func (cs *ClusterStatus) AppendUpgradingCondition(to string, member string) {
+	reason := fmt.Sprintf("upgrading cluster member %s version to %v", member, to)
+
+	c := ClusterCondition{
+		Type:           ClusterConditionUpgrading,
+		Reason:         reason,
+		TransitionTime: time.Now().Format(time.RFC3339),
+	}
+	cs.appendCondition(c)
+}
+
+func (cs *ClusterStatus) SetReadyCondition() {
+	c := ClusterCondition{
+		Type:           ClusterConditionReady,
+		TransitionTime: time.Now().Format(time.RFC3339),
+	}
+
+	if len(cs.Conditions) == 0 {
+		cs.appendCondition(c)
+		return
+	}
+
+	lastc := cs.Conditions[len(cs.Conditions)-1]
+	if lastc.Type == ClusterConditionReady {
+		return
+	}
+	cs.appendCondition(c)
+}
+
+func (cs *ClusterStatus) appendCondition(c ClusterCondition) {
+	cs.Conditions = append(cs.Conditions, c)
+	if len(cs.Conditions) > 10 {
+		cs.Conditions = cs.Conditions[1:]
+	}
+}
+
+func scalingReason(from, to int) string {
+	return fmt.Sprintf("Current cluster size: %d, desired cluster size: %d", from, to)
 }

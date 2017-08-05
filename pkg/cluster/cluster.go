@@ -15,18 +15,33 @@
 package cluster
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/constants"
+	"github.com/pires/nats-operator/pkg/debug"
+	"github.com/pires/nats-operator/pkg/garbagecollection"
 	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/k8sutil"
+	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	natsutil "github.com/pires/nats-operator/pkg/util/nats"
+	"github.com/pires/nats-operator/pkg/util/retryutil"
 
 	"github.com/Sirupsen/logrus"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/labels"
+
+	"k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+)
+
+var (
+	reconcileInterval         = 8 * time.Second
+	podTerminationGracePeriod = int64(5)
 )
 
 type clusterEventType string
@@ -37,61 +52,123 @@ const (
 )
 
 type clusterEvent struct {
-	typ  clusterEventType
-	spec spec.ClusterSpec
+	typ     clusterEventType
+	cluster *spec.ClusterSpec
+}
+
+type Config struct {
+	ServiceAccount string
+
+	KubeCli kubernetes.Interface
 }
 
 type Cluster struct {
 	logger *logrus.Entry
+	// debug logger for self hosted cluster
+	debugLogger *debug.DebugLogger
 
-	kclient *unversioned.Client
+	config Config
 
-	status *Status
+	cluster *spec.NatsCluster
 
-	spec *spec.ClusterSpec
+	// in memory state of the cluster
+	// status is the source of truth after Cluster struct is materialized.
+	status        spec.ClusterStatus
+	memberCounter int
 
-	name      string
-	namespace string
+	eventCh chan *clusterEvent
+	stopCh  chan struct{}
 
-	idCounter int
-	eventCh   chan *clusterEvent
-	stopCh    chan struct{}
+	tlsConfig *tls.Config
+
+	gc *garbagecollection.GC
 }
 
-func New(c *unversioned.Client, name, ns string, spec *spec.ClusterSpec, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
-	return new(c, name, ns, spec, stopC, wg, true)
-}
+func New(config Config, cl *spec.NatsCluster, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
+	lg := logrus.WithField("pkg", "cluster").WithField("cluster-name", cl.Name)
 
-func Restore(c *unversioned.Client, name, ns string, spec *spec.ClusterSpec, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
-	return new(c, name, ns, spec, stopC, wg, false)
-}
-
-func new(kclient *unversioned.Client, name, ns string, spec *spec.ClusterSpec, stopC <-chan struct{}, wg *sync.WaitGroup, isNewCluster bool) *Cluster {
-	if len(spec.Version) == 0 {
-		// TODO: set version in spec in apiserver
-		spec.Version = constants.NatsVersion
-	}
 	c := &Cluster{
-		logger:    logrus.WithField("pkg", "cluster").WithField("cluster-name", name),
-		kclient:   kclient,
-		name:      name,
-		namespace: ns,
-		eventCh:   make(chan *clusterEvent, 100),
-		stopCh:    make(chan struct{}),
-		spec:      spec,
-		status:    &Status{},
+		logger:      lg,
+		debugLogger: debug.New(cl.Name),
+		config:      config,
+		cluster:     cl,
+		eventCh:     make(chan *clusterEvent, 100),
+		stopCh:      make(chan struct{}),
+		status:      cl.Status.Copy(),
+		gc:          garbagecollection.New(config.KubeCli, cl.Namespace),
 	}
-	if isNewCluster {
-		err := c.createServices()
-		if err != nil {
-			// TODO: do not panic!
-			panic("todo:" + err.Error())
-		}
-	}
+
 	wg.Add(1)
-	go c.run(stopC, wg)
+	go func() {
+		defer wg.Done()
+
+		if err := c.setup(); err != nil {
+			c.logger.Errorf("cluster failed to setup: %v", err)
+			if c.status.Phase != spec.ClusterPhaseFailed {
+				c.status.SetReason(err.Error())
+				c.status.SetPhase(spec.ClusterPhaseFailed)
+				if err := c.updateCRStatus(); err != nil {
+					c.logger.Errorf("failed to update cluster phase (%v): %v", spec.ClusterPhaseFailed, err)
+				}
+			}
+			return
+		}
+		c.run(stopC)
+	}()
 
 	return c
+}
+
+func (c *Cluster) setup() error {
+	err := c.cluster.Spec.Validate()
+	if err != nil {
+		return fmt.Errorf("invalid cluster spec: %v", err)
+	}
+
+	var shouldCreateCluster bool
+	switch c.status.Phase {
+	case spec.ClusterPhaseNone:
+		shouldCreateCluster = true
+	case spec.ClusterPhaseCreating:
+		return errCreatedCluster
+	case spec.ClusterPhaseRunning:
+		shouldCreateCluster = false
+
+	default:
+		return fmt.Errorf("unexpected cluster phase: %s", c.status.Phase)
+	}
+
+	if c.isSecureClient() {
+		d, err := kubernetesutil.GetTLSDataFromSecret(c.config.KubeCli, c.cluster.Namespace, c.cluster.Spec.TLS.Static.OperatorSecret)
+		if err != nil {
+			return err
+		}
+		c.tlsConfig, err = natsutil.NewTLSConfig(d.CertData, d.KeyData, d.CAData)
+		if err != nil {
+			return err
+		}
+	}
+
+	if shouldCreateCluster {
+		return c.create()
+	}
+	return nil
+}
+
+func (c *Cluster) create() error {
+	c.status.SetPhase(spec.ClusterPhaseCreating)
+
+	if err := c.updateCRStatus(); err != nil {
+		return fmt.Errorf("cluster create: failed to update cluster phase (%v): %v", spec.ClusterPhaseCreating, err)
+	}
+	c.logClusterCreation()
+
+	c.gc.CollectCluster(c.cluster.Name, c.cluster.UID)
+
+	if err := c.setupServices(); err != nil {
+		return fmt.Errorf("cluster create: fail to create client service LB: %v", err)
+	}
+	return nil
 }
 
 func (c *Cluster) Delete() {
@@ -101,172 +178,192 @@ func (c *Cluster) Delete() {
 func (c *Cluster) send(ev *clusterEvent) {
 	select {
 	case c.eventCh <- ev:
+		l, ecap := len(c.eventCh), cap(c.eventCh)
+		if l > int(float64(ecap)*0.8) {
+			c.logger.Warningf("eventCh buffer is almost full [%d/%d]", l, ecap)
+		}
 	case <-c.stopCh:
-	default:
-		panic("TODO: too many events queued...")
 	}
 }
 
-func (c *Cluster) run(stopC <-chan struct{}, wg *sync.WaitGroup) {
-	needDeleteCluster := true
+func (c *Cluster) run(stopC <-chan struct{}) {
+	clusterFailed := false
 
 	defer func() {
-		if needDeleteCluster {
+		if clusterFailed {
+			c.reportFailedStatus()
+
+			c.logger.Infof("deleting the failed cluster")
 			c.delete()
 		}
+
 		close(c.stopCh)
-		wg.Done()
 	}()
 
+	c.status.SetPhase(spec.ClusterPhaseRunning)
+	if err := c.updateCRStatus(); err != nil {
+		c.logger.Warningf("update initial CR status failed: %v", err)
+	}
+	c.logger.Infof("start running...")
+
+	var rerr error
 	for {
 		select {
 		case <-stopC:
-			needDeleteCluster = false
 			return
 		case event := <-c.eventCh:
 			switch event.typ {
 			case eventModifyCluster:
+				if isSpecEqual(event.cluster.Spec, c.cluster.Spec) {
+					break
+				}
 				// TODO: we can't handle another upgrade while an upgrade is in progress
-				c.logger.Infof("Cluster spec updated from: %+v to: %+v", c.spec, event.spec)
-				c.spec = &event.spec
+				c.logSpecUpdate(event.cluster.Spec)
+
+				c.cluster = event.cluster
+
 			case eventDeleteCluster:
+				c.logger.Infof("cluster is deleted by the user")
+				clusterFailed = true
 				return
+			default:
+				panic("unknown event type" + event.typ)
 			}
-		case <-time.After(5 * time.Second):
-			if c.spec.Paused {
-				c.logger.Infof("NATS operator is paused, skipping reconcilement.")
+
+		case <-time.After(reconcileInterval):
+			start := time.Now()
+
+			if c.cluster.Spec.Paused {
+				c.status.PauseControl()
+				c.logger.Infof("control is paused, skipping reconciliation")
 				continue
+			} else {
+				c.status.Control()
 			}
 
 			running, pending, err := c.pollPods()
 			if err != nil {
-				c.logger.Errorf("Failed to poll pods: %v", err)
+				c.logger.Errorf("fail to poll pods: %v", err)
+				reconcileFailed.WithLabelValues("failed to poll pods").Inc()
 				continue
 			}
+
 			if len(pending) > 0 {
-				c.logger.Infof("Skipping reconcilement: running (%v), pending (%v)", k8sutil.GetPodNames(running), k8sutil.GetPodNames(pending))
+				// Pod startup might take long, e.g. pulling image. It would deterministically become running or succeeded/failed later.
+				c.logger.Infof("skip reconciliation: running (%v), pending (%v)", k8sutil.GetPodNames(running), k8sutil.GetPodNames(pending))
+				reconcileFailed.WithLabelValues("not all pods are running").Inc()
 				continue
 			}
-			if err := c.reconcile(running); err != nil {
-				c.logger.Errorf("Failed reconcilement: %v", err)
+			if len(running) == 0 {
+				c.logger.Error("all NATS pods are dead")
+				break
 			}
+
+			rerr = c.reconcile(running)
+			if rerr != nil {
+				c.logger.Errorf("failed to reconcile: %v", rerr)
+				break
+			}
+
+			reconcileHistogram.WithLabelValues(c.name()).Observe(time.Since(start).Seconds())
+		}
+
+		if rerr != nil {
+			reconcileFailed.WithLabelValues(rerr.Error()).Inc()
+		}
+
+		if isFatalError(rerr) {
+			clusterFailed = true
+			c.status.SetReason(rerr.Error())
+
+			c.logger.Errorf("cluster failed: %v", rerr)
+			return
 		}
 	}
 }
 
-func (c *Cluster) Update(spec *spec.ClusterSpec) {
-	anyInterestedChange := false
-	if (spec.Size != c.spec.Size) || (spec.Paused != c.spec.Paused) {
-		anyInterestedChange = true
+func isSpecEqual(s1, s2 spec.ClusterSpec) bool {
+	if s1.Size != s2.Size || s1.Paused != s2.Paused || s1.Version != s2.Version {
+		return false
 	}
-	if len(spec.Version) == 0 {
-		spec.Version = constants.NatsVersion
-	}
-	if spec.Version != c.spec.Version {
-		anyInterestedChange = true
-	}
-	if anyInterestedChange {
-		c.send(&clusterEvent{
-			typ:  eventModifyCluster,
-			spec: *spec,
-		})
-	}
+	return true
+}
+
+func (c *Cluster) isSecurePeer() bool {
+	return c.cluster.Spec.TLS.IsSecurePeer()
+}
+
+func (c *Cluster) isSecureClient() bool {
+	return c.cluster.Spec.TLS.IsSecureClient()
+}
+
+func (c *Cluster) Update(cl *spec.NatsCluster) {
+	c.send(&clusterEvent{
+		typ:     eventModifyCluster,
+		cluster: cl,
+	})
 }
 
 func (c *Cluster) delete() {
-	c.logger.Infof("Deleting NATS cluster %q...", c.name)
-
-	option := k8sapi.ListOptions{
-		LabelSelector: labels.SelectorFromSet(map[string]string{
-			"app":          "nats",
-			"nats_cluster": c.name,
-		}),
-	}
-
-	pods, err := c.kclient.Pods(c.namespace).List(option)
-	if err != nil {
-		panic(err)
-	}
-	for i := range pods.Items {
-		if err := c.removePod(pods.Items[i].Name); err != nil {
-			panic(err)
-		}
-	}
-
-	err = c.deleteServices()
-	if err != nil {
-		// todo: do not panic!
-		panic("todo:" + err.Error())
-	}
-
-	c.logger.Infof("Successfully deleted NATS cluster %q.", c.name)
+	c.gc.CollectCluster(c.cluster.Name, garbagecollection.NullUID)
 }
 
-func (c *Cluster) createServices() error {
-	// create management service
-	if _, err := k8sutil.CreateMgmtService(c.kclient, c.name, c.namespace); err != nil {
-		if !k8sutil.IsKubernetesResourceAlreadyExistError(err) {
-			return err
-		}
+func (c *Cluster) setupServices() error {
+	err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner())
+	if err != nil {
+		return err
 	}
-	// create client service
-	if _, err := k8sutil.CreateService(c.kclient, c.name, c.namespace); err != nil {
-		if !k8sutil.IsKubernetesResourceAlreadyExistError(err) {
-			return err
-		}
-	}
-	return nil
+
+	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner())
 }
 
-func (c *Cluster) deleteServices() error {
-	var err error
+func (c *Cluster) createPod() error {
+	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 
-	// delete management service
-	err = k8sutil.DeleteMgmtService(c.kclient, c.name, c.namespace)
-	if err != nil {
-		if !k8sutil.IsKubernetesResourceNotFoundError(err) {
-			return err
-		}
-	}
-	// delete client service
-	err = k8sutil.DeleteService(c.kclient, c.name, c.namespace)
-	if err != nil {
-		if !k8sutil.IsKubernetesResourceNotFoundError(err) {
-			return err
-		}
-	}
-	return nil
-}
+	_, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).Create(pod)
 
-func (c *Cluster) createAndWaitForPod() error {
-	pod := k8sutil.MakePodSpec(c.name, c.spec)
-	return k8sutil.CreateAndWaitPod(c.kclient, c.namespace, pod, 60*time.Second)
+	return err
 }
 
 func (c *Cluster) removePod(name string) error {
-	err := c.kclient.Pods(c.namespace).Delete(name, k8sapi.NewDeleteOptions(0))
+	ns := c.cluster.Namespace
+	opts := metav1.NewDeleteOptions(podTerminationGracePeriod)
+	err := c.config.KubeCli.Core().Pods(ns).Delete(name, opts)
 	if err != nil {
-		if !k8sutil.IsKubernetesResourceNotFoundError(err) {
+		if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
 		}
+		if c.isDebugLoggerEnabled() {
+			c.debugLogger.LogMessage(fmt.Sprintf("pod (%s) not found while trying to delete it", name))
+		}
+	}
+	if c.isDebugLoggerEnabled() {
+		c.debugLogger.LogPodDeletion(name)
 	}
 	return nil
 }
 
-func (c *Cluster) pollPods() ([]*k8sapi.Pod, []*k8sapi.Pod, error) {
-	podList, err := c.kclient.Pods(c.namespace).List(k8sutil.PodListOpt(c.name))
+func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
+	podList, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).List(k8sutil.ClusterListOpt(c.cluster.Name))
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to list running pods for cluster %q: %+v", c.name, err)
+		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
 	}
 
-	var running []*k8sapi.Pod
-	var pending []*k8sapi.Pod
 	for i := range podList.Items {
 		pod := &podList.Items[i]
+		if len(pod.OwnerReferences) < 1 {
+			c.logger.Warningf("pollPods: ignore pod %v: no owner", pod.Name)
+			continue
+		}
+		if pod.OwnerReferences[0].UID != c.cluster.UID {
+			c.logger.Warningf("pollPods: ignore pod %v: owner (%v) is not %v",
+				pod.Name, pod.OwnerReferences[0].UID, c.cluster.UID)
+			continue
+		}
 		switch pod.Status.Phase {
-		case k8sapi.PodRunning:
+		case v1.PodRunning:
 			running = append(running, pod)
-		case k8sapi.PodPending:
+		case v1.PodPending:
 			pending = append(pending, pod)
 		}
 	}
@@ -274,6 +371,101 @@ func (c *Cluster) pollPods() ([]*k8sapi.Pod, []*k8sapi.Pod, error) {
 	return running, pending, nil
 }
 
-func (c *Cluster) upgradeAndWaitForPod(pod *k8sapi.Pod) error {
-	return k8sutil.UpdateAndWaitPod(c.kclient, c.namespace, pod, 60*time.Second)
+func (c *Cluster) updateCRStatus() error {
+	if reflect.DeepEqual(c.cluster.Status, c.status) {
+		return nil
+	}
+
+	newCluster := c.cluster
+	newCluster.Status = c.status
+	newCluster, err := kubernetesutil.UpdateClusterTPRObject(c.config.KubeCli.Core().RESTClient(), c.cluster.Namespace, newCluster)
+	if err != nil {
+		return fmt.Errorf("failed to update CR status: %v", err)
+	}
+
+	c.cluster = newCluster
+
+	return nil
+}
+
+func (c *Cluster) reportFailedStatus() {
+	retryInterval := 5 * time.Second
+
+	f := func() (bool, error) {
+		c.status.SetPhase(spec.ClusterPhaseFailed)
+		err := c.updateCRStatus()
+		if err == nil || kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			return true, nil
+		}
+
+		if !apierrors.IsConflict(err) {
+			c.logger.Warningf("retry report status in %v: fail to update: %v", retryInterval, err)
+			return false, nil
+		}
+
+		cl, err := kubernetesutil.GetClusterTPRObject(c.config.KubeCli.CoreV1().RESTClient(), c.cluster.Namespace, c.cluster.Name)
+		if err != nil {
+			// Update (PUT) will return conflict even if object is deleted since we have UID set in object.
+			// Because it will check UID first and return something like:
+			// "Precondition failed: UID in precondition: 0xc42712c0f0, UID in object meta: ".
+			if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+				return true, nil
+			}
+			c.logger.Warningf("retry report status in %v: fail to get latest version: %v", retryInterval, err)
+			return false, nil
+		}
+		c.cluster = cl
+		return false, nil
+
+	}
+
+	retryutil.Retry(retryInterval, math.MaxInt64, f)
+}
+
+func (c *Cluster) name() string {
+	return c.cluster.GetName()
+}
+
+func (c *Cluster) logClusterCreation() {
+	specBytes, err := json.MarshalIndent(c.cluster.Spec, "", "    ")
+	if err != nil {
+		c.logger.Errorf("failed to marshal cluster spec: %v", err)
+	}
+
+	c.logger.Info("creating cluster with Spec:")
+	for _, m := range strings.Split(string(specBytes), "\n") {
+		c.logger.Info(m)
+	}
+}
+
+func (c *Cluster) logSpecUpdate(newSpec spec.ClusterSpec) {
+	oldSpecBytes, err := json.MarshalIndent(c.cluster.Spec, "", "    ")
+	if err != nil {
+		c.logger.Errorf("failed to marshal cluster spec: %v", err)
+	}
+	newSpecBytes, err := json.MarshalIndent(newSpec, "", "    ")
+	if err != nil {
+		c.logger.Errorf("failed to marshal cluster spec: %v", err)
+	}
+
+	c.logger.Infof("spec update: Old Spec:")
+	for _, m := range strings.Split(string(oldSpecBytes), "\n") {
+		c.logger.Info(m)
+	}
+
+	c.logger.Infof("New Spec:")
+	for _, m := range strings.Split(string(newSpecBytes), "\n") {
+		c.logger.Info(m)
+	}
+
+	if c.isDebugLoggerEnabled() {
+		c.debugLogger.LogClusterSpecUpdate(string(oldSpecBytes), string(newSpecBytes))
+	}
+}
+
+func (c *Cluster) isDebugLoggerEnabled() bool {
+	if c.debugLogger != nil {
+		return true
+	}
+	return false
 }

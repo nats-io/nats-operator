@@ -1,4 +1,4 @@
-// Copyright 2016 The nats-operator Authors
+// Copyright 2017 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controller
+package nats
 
 import (
-	"github.com/pires/nats-operator/pkg/spec"
-
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	"crypto/tls"
 )
 
-type NATSClusterList struct {
-	unversioned.TypeMeta `json:",inline"`
-	// Standard list metadata
-	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata
-	unversioned.ListMeta `json:"metadata,omitempty"`
-	// Items is a list of third party objects
-	Items []spec.NatsCluster `json:"items"`
+// TODO
+func CheckHealth(url string, tc *tls.Config) (bool, error) {
+	return true, nil
 }
