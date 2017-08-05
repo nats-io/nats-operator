@@ -15,7 +15,7 @@
 package constants
 
 const (
-	NatsVersion = "0.9.4"
+	DefaultNatsVersion = "1.0.2"
 
 	ClientPort     = 4222
 	ClusterPort    = 6222

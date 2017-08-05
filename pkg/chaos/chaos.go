@@ -1,4 +1,4 @@
-// Copyright 2016 The nats-operator Authors
+// Copyright 2017 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,18 +20,19 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/time/rate"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/labels"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
 )
 
 // Monkeys knows how to crush pods and nodes.
 type Monkeys struct {
-	k8s *unversioned.Client
+	kubecli kubernetes.Interface
 }
 
-func NewMonkeys(k8s *unversioned.Client) *Monkeys {
-	return &Monkeys{k8s: k8s}
+func NewMonkeys(kubecli kubernetes.Interface) *Monkeys {
+	return &Monkeys{kubecli: kubecli}
 }
 
 type CrashConfig struct {
@@ -50,12 +51,12 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 		burst = 1
 	}
 	limiter := rate.NewLimiter(c.KillRate, burst)
-	ls := c.Selector
+	ls := c.Selector.String()
 	ns := c.Namespace
 	for {
 		err := limiter.Wait(ctx)
 		if err != nil { // user cancellation
-			logrus.Infof("crushPods is canceled for selector %v by the user: %v", ls.String(), err)
+			logrus.Infof("crushPods is canceled for selector %v by the user: %v", ls, err)
 			return
 		}
 
@@ -64,13 +65,13 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 			continue
 		}
 
-		pods, err := m.k8s.Pods(ns).List(api.ListOptions{LabelSelector: ls})
+		pods, err := m.kubecli.CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: ls})
 		if err != nil {
-			logrus.Errorf("failed to list pods for selector %v: %v", ls.String(), err)
+			logrus.Errorf("failed to list pods for selector %v: %v", ls, err)
 			continue
 		}
 		if len(pods.Items) == 0 {
-			logrus.Infof("no pods to kill for selector %v", ls.String())
+			logrus.Infof("no pods to kill for selector %v", ls)
 			continue
 		}
 
@@ -80,7 +81,7 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 			max = kmax
 		}
 
-		logrus.Infof("start to kill %d pods for selector %v", max, ls.String())
+		logrus.Infof("start to kill %d pods for selector %v", max, ls)
 
 		tokills := make(map[string]struct{})
 		for len(tokills) < max {
@@ -88,12 +89,12 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 		}
 
 		for tokill := range tokills {
-			err = m.k8s.Pods(ns).Delete(tokill, api.NewDeleteOptions(0))
+			err = m.kubecli.CoreV1().Pods(ns).Delete(tokill, metav1.NewDeleteOptions(0))
 			if err != nil {
 				logrus.Errorf("failed to kill pod %v: %v", tokill, err)
 				continue
 			}
-			logrus.Infof("killed pod %v for selector %v", tokill, ls.String())
+			logrus.Infof("killed pod %v for selector %v", tokill, ls)
 		}
 	}
 }

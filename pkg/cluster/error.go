@@ -12,9 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+package cluster
+
+import (
+	"github.com/pkg/errors"
+)
 
 var (
-	OperatorVersion = "0.1.0+git"
-	GitSHA          = "Not provided (use ./build instead of go build)"
+	errCreatedCluster = errors.New("cluster failed to be created")
 )
+
+type fatalError struct {
+	reason string
+}
+
+func (fe *fatalError) Error() string {
+	return fe.reason
+}
+
+func newFatalError(reason string) *fatalError {
+	return &fatalError{reason}
+}
+
+func isFatalError(err error) bool {
+	switch errors.Cause(err).(type) {
+	case *fatalError:
+		return true
+	default:
+		return false
+	}
+}

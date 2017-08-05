@@ -25,13 +25,14 @@ import (
 
 	"github.com/pires/nats-operator/pkg/cluster"
 	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/k8sutil"
+	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	"github.com/pires/nats-operator/pkg/util/probe"
 
 	"github.com/Sirupsen/logrus"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	unversionedAPI "k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/client/unversioned"
+
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	kwatch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -39,62 +40,54 @@ const (
 )
 
 var (
-	supportedPVProvisioners = map[string]struct{}{
-		"kubernetes.io/gce-pd":  {},
-		"kubernetes.io/aws-ebs": {},
-	}
-
-	ErrVersionOutdated = errors.New("Requested version is outdated.")
+	ErrVersionOutdated = errors.New("requested version is outdated in apiserver")
 
 	initRetryWaitTime = 30 * time.Second
+
+	// Workaround for watching CR resource.
+	// TODO: remove this to use CR client.
+	KubeHttpCli *http.Client
+	MasterHost  string
 )
 
-type rawEvent struct {
-	Type   string
-	Object json.RawMessage
-}
-
 type Event struct {
-	Type   string
+	Type   kwatch.EventType
 	Object *spec.NatsCluster
 }
 
 type Controller struct {
 	logger *logrus.Entry
-
 	Config
-	clusters    map[string]*cluster.Cluster
-	stopChMap   map[string]chan struct{}
+
+	// TODO: combine the three cluster map.
+	clusters map[string]*cluster.Cluster
+	// Kubernetes resource version of the clusters
+	clusterRVs map[string]string
+	stopChMap  map[string]chan struct{}
+
 	waitCluster sync.WaitGroup
 }
 
 type Config struct {
-	Namespace     string
-	MasterHost    string
-	KubeCli       *unversioned.Client
-	PVProvisioner string
+	Namespace      string
+	ServiceAccount string
+	PVProvisioner  string
+	KubeCli        kubernetes.Interface
+	KubeExtCli     apiextensionsclient.Interface
 }
 
-func (c *Config) validate() error {
-	if _, ok := supportedPVProvisioners[c.PVProvisioner]; !ok {
-		return fmt.Errorf(
-			"persistent volume provisioner %s is not supported: options = %v",
-			c.PVProvisioner, supportedPVProvisioners,
-		)
-	}
+func (c *Config) Validate() error {
 	return nil
 }
 
 func New(cfg Config) *Controller {
-	if err := cfg.validate(); err != nil {
-		panic(err)
-	}
 	return &Controller{
 		logger: logrus.WithField("pkg", "controller"),
 
-		Config:    cfg,
-		clusters:  make(map[string]*cluster.Cluster),
-		stopChMap: map[string]chan struct{}{},
+		Config:     cfg,
+		clusters:   make(map[string]*cluster.Cluster),
+		clusterRVs: make(map[string]string),
+		stopChMap:  map[string]chan struct{}{},
 	}
 }
 
@@ -109,11 +102,13 @@ func (c *Controller) Run() error {
 		if err == nil {
 			break
 		}
-		c.logger.Errorf("NATS operator initialization failed: %v", err)
-		c.logger.Infof("Retrying in %v...", initRetryWaitTime)
+		c.logger.Errorf("initialization failed: %v", err)
+		c.logger.Infof("retry in %v...", initRetryWaitTime)
 		time.Sleep(initRetryWaitTime)
-		// TODO: add max retry?
+		// todo: add max retry?
 	}
+
+	c.logger.Infof("starts running from watch version: %s", watchVersion)
 
 	defer func() {
 		for _, stopC := range c.stopChMap {
@@ -122,107 +117,142 @@ func (c *Controller) Run() error {
 		c.waitCluster.Wait()
 	}()
 
-	eventCh, errCh := c.monitor(watchVersion)
+	probe.SetReady()
+
+	eventCh, errCh := c.watch(watchVersion)
 
 	go func() {
-		for event := range eventCh {
-			clusterName := event.Object.ObjectMeta.Name
-			switch event.Type {
-			case "ADDED":
-				clusterSpec := &event.Object.Spec
+		pt := newPanicTimer(time.Minute, "unexpected long blocking (> 1 Minute) when handling cluster event")
 
-				stopC := make(chan struct{})
-				c.stopChMap[clusterName] = stopC
-
-				nc := cluster.New(c.KubeCli, clusterName, c.Namespace, clusterSpec, stopC, &c.waitCluster)
-				c.clusters[clusterName] = nc
-			case "MODIFIED":
-				if c.clusters[clusterName] == nil {
-					c.logger.Warningf("Ignoring modification event: cluster %q not found (or dead)", clusterName)
-					break
-				}
-				c.clusters[clusterName].Update(&event.Object.Spec)
-			case "DELETED":
-				if c.clusters[clusterName] == nil {
-					c.logger.Warningf("Ignoring deletion event: cluster %q not found (or dead)", clusterName)
-					break
-				}
-				c.clusters[clusterName].Delete()
-				delete(c.clusters, clusterName)
+		for ev := range eventCh {
+			pt.start()
+			if err := c.handleClusterEvent(ev); err != nil {
+				c.logger.Warningf("fail to handle event: %v", err)
 			}
+			pt.stop()
 		}
 	}()
 	return <-errCh
 }
 
+func (c *Controller) handleClusterEvent(event *Event) error {
+	clus := event.Object
+
+	if clus.Status.IsFailed() {
+		clustersFailed.Inc()
+		if event.Type == kwatch.Deleted {
+			delete(c.clusters, clus.Name)
+			delete(c.clusterRVs, clus.Name)
+			return nil
+		}
+		return fmt.Errorf("ignore failed cluster (%s). Please delete its CR", clus.Name)
+	}
+
+	// TODO: add validation to spec update.
+	clus.Spec.Cleanup()
+
+	switch event.Type {
+	case kwatch.Added:
+		if _, ok := c.clusters[clus.Name]; ok {
+			return fmt.Errorf("unsafe state. cluster (%s) was created before but we received event (%s)", clus.Name, event.Type)
+		}
+
+		stopC := make(chan struct{})
+		nc := cluster.New(c.makeClusterConfig(), clus, stopC, &c.waitCluster)
+
+		c.stopChMap[clus.Name] = stopC
+		c.clusters[clus.Name] = nc
+		c.clusterRVs[clus.Name] = clus.ResourceVersion
+
+		clustersCreated.Inc()
+		clustersTotal.Inc()
+
+	case kwatch.Modified:
+		if _, ok := c.clusters[clus.Name]; !ok {
+			return fmt.Errorf("unsafe state. cluster (%s) was never created but we received event (%s)", clus.Name, event.Type)
+		}
+		c.clusters[clus.Name].Update(clus)
+		c.clusterRVs[clus.Name] = clus.ResourceVersion
+		clustersModified.Inc()
+
+	case kwatch.Deleted:
+		if _, ok := c.clusters[clus.Name]; !ok {
+			return fmt.Errorf("unsafe state. cluster (%s) was never created but we received event (%s)", clus.Name, event.Type)
+		}
+		c.clusters[clus.Name].Delete()
+		delete(c.clusters, clus.Name)
+		delete(c.clusterRVs, clus.Name)
+		clustersDeleted.Inc()
+		clustersTotal.Dec()
+	}
+	return nil
+}
+
 func (c *Controller) findAllClusters() (string, error) {
-	c.logger.Info("Retrieving existing NATS clusters...")
-	resp, err := k8sutil.ListClusters(c.MasterHost, c.Namespace, c.KubeCli.RESTClient.Client)
+	c.logger.Info("finding existing clusters...")
+	clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.CoreV1().RESTClient(), c.Config.Namespace)
 	if err != nil {
 		return "", err
 	}
-	d := json.NewDecoder(resp.Body)
-	list := &NATSClusterList{}
-	if err := d.Decode(list); err != nil {
-		return "", err
-	}
-	for _, item := range list.Items {
-		stopC := make(chan struct{})
-		c.stopChMap[item.Name] = stopC
 
-		nc := cluster.Restore(c.KubeCli, item.Name, c.Namespace, &item.Spec, stopC, &c.waitCluster)
-		c.clusters[item.Name] = nc
+	for i := range clusterList.Items {
+		clus := clusterList.Items[i]
+
+		if clus.Status.IsFailed() {
+			c.logger.Infof("ignore failed cluster (%s). Please delete its CR", clus.Name)
+			continue
+		}
+
+		clus.Spec.Cleanup()
+
+		stopC := make(chan struct{})
+		nc := cluster.New(c.makeClusterConfig(), &clus, stopC, &c.waitCluster)
+		c.stopChMap[clus.Name] = stopC
+		c.clusters[clus.Name] = nc
+		c.clusterRVs[clus.Name] = clus.ResourceVersion
 	}
-	return list.ListMeta.ResourceVersion, nil
+
+	return clusterList.ResourceVersion, nil
+}
+
+func (c *Controller) makeClusterConfig() cluster.Config {
+	return cluster.Config{
+		ServiceAccount: c.Config.ServiceAccount,
+		KubeCli:        c.KubeCli,
+	}
 }
 
 func (c *Controller) initResource() (string, error) {
 	watchVersion := "0"
-	err := c.createTPR()
+	err := c.initCRD()
 	if err != nil {
-		if k8sutil.IsKubernetesResourceAlreadyExistError(err) {
+		if kubernetesutil.IsKubernetesResourceAlreadyExistError(err) {
+			// CRD has been initialized before. We need to recover existing cluster.
 			watchVersion, err = c.findAllClusters()
 			if err != nil {
 				return "", err
 			}
 		} else {
-			return "", fmt.Errorf("Failed to create TPR: %v", err)
+			return "", fmt.Errorf("fail to create CRD: %v", err)
 		}
 	}
 
-	// TODO use for streaming
-	//err = k8sutil.CreateStorageClass(c.KubeCli, c.PVProvisioner)
-	//if err != nil {
-	//	if !k8sutil.IsKubernetesResourceAlreadyExistError(err) {
-	//		return "", fmt.Errorf("fail to create storage class: %v", err)
-	//	}
-	//}
 	return watchVersion, nil
 }
 
-func (c *Controller) createTPR() error {
-	tpr := &extensions.ThirdPartyResource{
-		ObjectMeta: k8sapi.ObjectMeta{
-			Name: tprName,
-		},
-		Versions: []extensions.APIVersion{
-			{Name: "v1"},
-		},
-		Description: "Manage NATS clusters",
-	}
-	_, err := c.KubeCli.ThirdPartyResources().Create(tpr)
+func (c *Controller) initCRD() error {
+	err := kubernetesutil.CreateCRD(c.KubeExtCli)
 	if err != nil {
 		return err
 	}
-
-	return k8sutil.WaitTPRReady(c.KubeCli.Client, 3*time.Second, 30*time.Second, c.MasterHost, c.Namespace)
+	return kubernetesutil.WaitCRDReady(c.KubeExtCli)
 }
 
-func (c *Controller) monitor(watchVersion string) (<-chan *Event, <-chan error) {
-	host := c.MasterHost
-	ns := c.Namespace
-	httpClient := c.KubeCli.Client
-
+// watch creates a go routine, and watches the cluster.nats kind resources from
+// the given watch version. It emits events on the resources through the returned
+// event chan. Errors will be reported through the returned error chan. The go routine
+// exits on any error.
+func (c *Controller) watch(watchVersion string) (<-chan *Event, <-chan error) {
 	eventCh := make(chan *Event)
 	// On unexpected error case, controller should exit
 	errCh := make(chan error, 1)
@@ -231,43 +261,58 @@ func (c *Controller) monitor(watchVersion string) (<-chan *Event, <-chan error) 
 		defer close(eventCh)
 
 		for {
-			resp, err := k8sutil.WatchClusters(host, ns, httpClient, watchVersion)
+			resp, err := kubernetesutil.WatchClusters(MasterHost, c.Config.Namespace, KubeHttpCli, watchVersion)
 			if err != nil {
 				errCh <- err
 				return
 			}
-			if resp.StatusCode != 200 {
+			if resp.StatusCode != http.StatusOK {
 				resp.Body.Close()
-				errCh <- errors.New("Invalid status code: " + resp.Status)
+				errCh <- errors.New("invalid status code: " + resp.Status)
 				return
 			}
+
+			c.logger.Infof("start watching at %v", watchVersion)
 
 			decoder := json.NewDecoder(resp.Body)
 			for {
 				ev, st, err := pollEvent(decoder)
-
 				if err != nil {
 					if err == io.EOF { // apiserver will close stream periodically
-						c.logger.Debug("API server closed stream")
+						c.logger.Info("apiserver closed watch stream, retrying after 5s...")
+						time.Sleep(5 * time.Second)
 						break
 					}
 
-					c.logger.Errorf("Received invalid event from API server: %v", err)
+					c.logger.Errorf("received invalid event from API server: %v", err)
 					errCh <- err
 					return
 				}
 
 				if st != nil {
-					if st.Code == http.StatusGone { // event history is outdated
-						errCh <- ErrVersionOutdated // go to recovery path
+					resp.Body.Close()
+
+					if st.Code == http.StatusGone {
+						// event history is outdated.
+						// if nothing has changed, we can go back to watch again.
+						clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.CoreV1().RESTClient(), c.Config.Namespace)
+						if err == nil && !c.isClustersCacheStale(clusterList.Items) {
+							watchVersion = clusterList.ResourceVersion
+							break
+						}
+
+						// if anything has changed (or error on relist), we have to rebuild the state.
+						// go to recovery path
+						errCh <- ErrVersionOutdated
 						return
 					}
-					c.logger.Fatalf("Unexpected status response from API server: %v", st.Message)
+
+					c.logger.Fatalf("unexpected status response from API server: %v", st.Message)
 				}
 
 				c.logger.Debugf("NATS cluster event: %v %v", ev.Type, ev.Object.Spec)
 
-				watchVersion = ev.Object.ObjectMeta.ResourceVersion
+				watchVersion = ev.Object.ResourceVersion
 				eventCh <- ev
 			}
 
@@ -278,32 +323,17 @@ func (c *Controller) monitor(watchVersion string) (<-chan *Event, <-chan error) 
 	return eventCh, errCh
 }
 
-func pollEvent(decoder *json.Decoder) (*Event, *unversionedAPI.Status, error) {
-	re := &rawEvent{}
-	err := decoder.Decode(re)
-	if err != nil {
-		if err == io.EOF {
-			return nil, nil, err
-		}
-		return nil, nil, fmt.Errorf("Failed to decode raw event: %+v", err)
+func (c *Controller) isClustersCacheStale(currentClusters []spec.NatsCluster) bool {
+	if len(c.clusterRVs) != len(currentClusters) {
+		return true
 	}
 
-	if re.Type == "ERROR" {
-		status := &unversionedAPI.Status{}
-		err = json.Unmarshal(re.Object, status)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Failed to decode %+v into unversioned.Status %+v", re.Object, err)
+	for _, cc := range currentClusters {
+		rv, ok := c.clusterRVs[cc.Name]
+		if !ok || rv != cc.ResourceVersion {
+			return true
 		}
-		return nil, status, nil
 	}
 
-	ev := &Event{
-		Type:   re.Type,
-		Object: &spec.NatsCluster{},
-	}
-	err = json.Unmarshal(re.Object, ev.Object)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to unmarshal NATSCluster object from data %+v: %+v", re.Object, err)
-	}
-	return ev, nil, nil
+	return false
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The nats-operator Authors
+// Copyright 2017 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,32 +18,41 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"runtime"
 	"time"
 
 	"github.com/pires/nats-operator/pkg/chaos"
+	"github.com/pires/nats-operator/pkg/client"
 	"github.com/pires/nats-operator/pkg/controller"
-	"github.com/pires/nats-operator/pkg/util/k8sutil"
+	"github.com/pires/nats-operator/pkg/debug"
+	"github.com/pires/nats-operator/pkg/garbagecollection"
+	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	"github.com/pires/nats-operator/pkg/util/probe"
+	"github.com/pires/nats-operator/pkg/util/retryutil"
 	"github.com/pires/nats-operator/version"
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/time/rate"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/leaderelection"
-	"k8s.io/kubernetes/pkg/client/record"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/labels"
+
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/tools/record"
 )
 
 var (
-	pvProvisioner string
-	masterHost    string
-	tlsInsecure   bool
-	certFile      string
-	keyFile       string
-	caFile        string
-	namespace     string
+	namespace  string
+	name       string
+	listenAddr string
+	gcInterval time.Duration
 
 	chaosLevel int
 
@@ -57,102 +66,165 @@ var (
 )
 
 func init() {
-	flag.StringVar(&pvProvisioner, "pv-provisioner", "kubernetes.io/gce-pd", "persistent volume provisioner type")
-	flag.StringVar(&masterHost, "master", "", "API Server addr, e.g. ' - NOT RECOMMENDED FOR PRODUCTION - http://127.0.0.1:8080'. Omit parameter to run in on-cluster mode and utilize the service account token.")
-	flag.StringVar(&certFile, "cert-file", "", " - NOT RECOMMENDED FOR PRODUCTION - Path to public TLS certificate file.")
-	flag.StringVar(&keyFile, "key-file", "", "- NOT RECOMMENDED FOR PRODUCTION - Path to private TLS certificate file.")
-	flag.StringVar(&caFile, "ca-file", "", "- NOT RECOMMENDED FOR PRODUCTION - Path to TLS CA file.")
-	flag.BoolVar(&tlsInsecure, "tls-insecure", false, "- NOT RECOMMENDED FOR PRODUCTION - Don't verify API server's CA certificate.")
+	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
+
+	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8080", "The address on which the HTTP server will listen to")
 	// chaos level will be removed once we have a formal tool to inject failures.
-	flag.IntVar(&chaosLevel, "chaos-level", -1, "DO NOT USE IN PRODUCTION - level of chaos injected into the NATS clusters created by the operator.")
+	flag.IntVar(&chaosLevel, "chaos-level", -1, "DO NOT USE IN PRODUCTION - level of chaos injected into the nats clusters created by the operator.")
 	flag.BoolVar(&printVersion, "version", false, "Show version and quit")
+	flag.DurationVar(&gcInterval, "gc-interval", 10*time.Minute, "GC interval")
 	flag.Parse()
 
-	namespace = os.Getenv("MY_POD_NAMESPACE")
-	if len(namespace) == 0 {
-		namespace = "default"
+	// TODO: remove this and use CR client
+	restCfg, err := kubernetesutil.InClusterConfig()
+	if err != nil {
+		panic(err)
 	}
+	controller.MasterHost = restCfg.Host
+	restcli, _, err := client.New(restCfg)
+	if err != nil {
+		panic(err)
+	}
+	controller.KubeHttpCli = restcli.Client
 }
 
 func main() {
+	namespace = os.Getenv("MY_POD_NAMESPACE")
+	if len(namespace) == 0 {
+		logrus.Fatalf("must set env MY_POD_NAMESPACE")
+	}
+	name = os.Getenv("MY_POD_NAME")
+	if len(name) == 0 {
+		logrus.Fatalf("must set env MY_POD_NAME")
+	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c)
+	go func() {
+		logrus.Infof("received signal: %v", <-c)
+		os.Exit(1)
+	}()
+
 	if printVersion {
-		fmt.Println("nats-operator", version.Version)
+		fmt.Println("nats-operator Version:", version.OperatorVersion)
+		fmt.Println("Git SHA:", version.GitSHA)
+		fmt.Println("Go Version:", runtime.Version())
+		fmt.Printf("Go OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		os.Exit(0)
 	}
 
+	logrus.Infof("nats-operator Version: %v", version.OperatorVersion)
+	logrus.Infof("Git SHA: %s", version.GitSHA)
+	logrus.Infof("Go Version: %s", runtime.Version())
+	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
+
 	id, err := os.Hostname()
 	if err != nil {
-		logrus.Fatalf("Failed to determine hostname: %v", err)
+		logrus.Fatalf("failed to get hostname: %v", err)
+	}
+
+	kubecli := kubernetesutil.MustNewKubeClient()
+
+	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
+	go http.ListenAndServe(listenAddr, nil)
+
+	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
+		namespace,
+		"nats-operator",
+		kubecli.(*kubernetes.Clientset),
+		resourcelock.ResourceLockConfig{
+			Identity:      id,
+			EventRecorder: createRecorder(kubecli, name, namespace),
+		})
+	if err != nil {
+		logrus.Fatalf("error creating lock: %v", err)
 	}
 
 	leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
-		EndpointsMeta: api.ObjectMeta{
-			Namespace: namespace,
-			Name:      "nats-operator",
-		},
-		Client: k8sutil.MustCreateClient(masterHost, tlsInsecure, &restclient.TLSClientConfig{
-			CertFile: certFile,
-			KeyFile:  keyFile,
-			CAFile:   caFile,
-		}),
-		EventRecorder: &record.FakeRecorder{},
-		Identity:      id,
-		LeaseDuration: leaseDuration,
-		RenewDeadline: renewDuration,
-		RetryPeriod:   retryPeriod,
+		Lock:          rl,
+		LeaseDuration: 15 * time.Second,
+		RenewDeadline: 10 * time.Second,
+		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: run,
 			OnStoppedLeading: func() {
-				logrus.Fatalf("Lost leader election.")
+				logrus.Fatalf("leader election lost")
 			},
 		},
 	})
+
 	panic("unreachable")
 }
 
 func run(stop <-chan struct{}) {
+	cfg := newControllerConfig()
+	if err := cfg.Validate(); err != nil {
+		logrus.Fatalf("invalid operator config: %v", err)
+	}
+
+	go periodicFullGC(cfg.KubeCli, cfg.Namespace, gcInterval)
+
+	startChaos(context.Background(), cfg.KubeCli, cfg.Namespace, chaosLevel)
+
 	for {
-		ctx, cancel := context.WithCancel(context.Background())
-
-		cfg := newControllerConfig()
-		startChaos(ctx, cfg.KubeCli, cfg.Namespace, chaosLevel)
-
 		c := controller.New(cfg)
 		err := c.Run()
 		switch err {
 		case controller.ErrVersionOutdated:
 		default:
-			logrus.Fatalf("NATS operator ended with failure: %v", err)
+			logrus.Fatalf("controller Run() ended with failure: %v", err)
 		}
-
-		cancel()
 	}
 }
 
 func newControllerConfig() controller.Config {
-	tlsConfig := restclient.TLSClientConfig{
-		CertFile: certFile,
-		KeyFile:  keyFile,
-		CAFile:   caFile,
+	kubecli := kubernetesutil.MustNewKubeClient()
+
+	serviceAccount, err := getMyPodServiceAccount(kubecli)
+	if err != nil {
+		logrus.Fatalf("fail to get my pod's service account: %v", err)
 	}
-	kubecli := k8sutil.MustCreateClient(masterHost, tlsInsecure, &tlsConfig)
+
 	cfg := controller.Config{
-		MasterHost:    masterHost,
-		PVProvisioner: pvProvisioner,
-		Namespace:     namespace,
-		KubeCli:       kubecli,
+		Namespace:      namespace,
+		ServiceAccount: serviceAccount,
+		KubeCli:        kubecli,
+		KubeExtCli:     kubernetesutil.MustNewKubeExtClient(),
 	}
-	if len(cfg.MasterHost) == 0 {
-		cfg.MasterHost = k8sutil.MustGetInClusterMasterHost()
-	}
+
 	return cfg
 }
 
-func startChaos(ctx context.Context, k8s *unversioned.Client, ns string, chaosLevel int) {
-	m := chaos.NewMonkeys(k8s)
-	ls := labels.SelectorFromSet(map[string]string{
-		"app": "nats",
+func getMyPodServiceAccount(kubecli kubernetes.Interface) (string, error) {
+	var sa string
+	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
+		pod, err := kubecli.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
+			return false, nil
+		}
+		sa = pod.Spec.ServiceAccountName
+		return true, nil
 	})
+	return sa, err
+}
+
+func periodicFullGC(kubecli kubernetes.Interface, ns string, d time.Duration) {
+	gc := garbagecollection.New(kubecli, ns)
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	for {
+		<-timer.C
+		err := gc.FullyCollect()
+		if err != nil {
+			logrus.Warningf("failed to cleanup resources: %v", err)
+		}
+	}
+}
+
+func startChaos(ctx context.Context, kubecli kubernetes.Interface, ns string, chaosLevel int) {
+	m := chaos.NewMonkeys(kubecli)
+	ls := labels.SelectorFromSet(map[string]string{"app": "nats"})
 
 	switch chaosLevel {
 	case 1:
@@ -165,8 +237,10 @@ func startChaos(ctx context.Context, k8s *unversioned.Client, ns string, chaosLe
 			KillProbability: 0.5,
 			KillMax:         1,
 		}
-
-		go m.CrushPods(ctx, c)
+		go func() {
+			time.Sleep(60 * time.Second) // don't start until quorum up
+			m.CrushPods(ctx, c)
+		}()
 
 	case 2:
 		logrus.Info("chaos level = 2: randomly kill at most five NATS pods every 30 seconds at 50%")
@@ -183,4 +257,11 @@ func startChaos(ctx context.Context, k8s *unversioned.Client, ns string, chaosLe
 
 	default:
 	}
+}
+
+func createRecorder(kubecli kubernetes.Interface, name, namespace string) record.EventRecorder {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(logrus.Infof)
+	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubecli.Core().RESTClient()).Events(namespace)})
+	return eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: name})
 }

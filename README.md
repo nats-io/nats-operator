@@ -12,7 +12,7 @@ We do not support backward-compatibility for the alpha releases.
 
 ## Requirements
 
-- Kubernetes 1.4+
+- Kubernetes 1.7+
 
 [k8s-home]: http://kubernetes.io
 

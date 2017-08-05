@@ -15,65 +15,79 @@
 package cluster
 
 import (
-	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/k8sutil"
+	"errors"
+	"fmt"
 
-	"k8s.io/kubernetes/pkg/api"
+	"github.com/pires/nats-operator/pkg/spec"
+	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+
+	"k8s.io/api/core/v1"
 )
 
 // reconcile reconciles cluster current state to desired state specified by spec.
 // - it tries to reconcile the cluster to desired size.
 // - if the cluster needs upgrade, it tries to upgrade existing peers, one by one.
-func (c *Cluster) reconcile(pods []*api.Pod) error {
+func (c *Cluster) reconcile(pods []*v1.Pod) error {
 	c.logger.Debugln("Start reconciling...")
+	defer c.logger.Infoln("Finish reconciling")
+
 	var err error
 
+	spec := c.cluster.Spec
+
 	switch {
-	case len(pods) != c.spec.Size:
+	case len(pods) != spec.Size:
 		err = c.reconcileSize(pods)
-	case needsUpgrade(pods, c.spec):
-		c.status.upgradeVersionTo(c.spec.Version)
-		err = c.reconcileUpgrade(pods, c.spec)
+	case needsUpgrade(pods, spec):
+		c.status.UpgradeVersionTo(spec.Version)
+		err = c.reconcileUpgrade(pods, spec)
 	}
 
-	c.logger.Debugln("Finished reconciling.")
 	return err
 }
 
 // reconcileSize reconciles the size of cluster.
-func (c *Cluster) reconcileSize(pods []*api.Pod) error {
-	c.logger.Warningf("Cluster size needs reconciling: expected %d, has %d", c.spec.Size, len(pods))
+func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
+	spec := c.cluster.Spec
+
+	c.logger.Warningf("Cluster size needs reconciling: expected %d, has %d", spec.Size, len(pods))
 	// do we need to add or remove pods?
-	if len(pods) < c.spec.Size {
-		if err := c.createAndWaitForPod(); err != nil {
+	currentClusterSize := len(pods)
+	if currentClusterSize < spec.Size {
+		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
+		if err := c.createPod(); err != nil {
 			return err
 		}
-	} else if len(pods) > c.spec.Size {
-		if err := c.removePod(pods[len(pods)-1].Name); err != nil {
+	} else if len(pods) > spec.Size {
+		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
+		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
 			c.logger.Error(err)
 		}
 	}
 
+	c.status.SetVersion(spec.Version)
+	c.status.SetReadyCondition()
+
 	return nil
 }
 
-func (c *Cluster) reconcileUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) error {
+func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) error {
 	c.logger.Warningf("Cluster version doesn't match, reconciling...")
 	pod := pickPodToUpgrade(pods, cs.Version)
-	k8sutil.SetNATSVersion(pod, cs.Version)
-	return c.upgradeAndWaitForPod(pod)
+	kubernetesutil.SetNATSVersion(pod, cs.Version)
+	return c.upgradePod(pod)
 }
 
 // needsUpgrade determines whether cluster needs upgrade or not.
-func needsUpgrade(pods []*api.Pod, cs *spec.ClusterSpec) bool {
+func needsUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) bool {
 	return len(pods) == cs.Size && pickPodToUpgrade(pods, cs.Version) != nil
 }
 
 // pickExistingPeer selects the first pod, if any, which version doesn't
 // correspond to desired version.
-func pickPodToUpgrade(pods []*api.Pod, newVersion string) *api.Pod {
+func pickPodToUpgrade(pods []*v1.Pod, newVersion string) *v1.Pod {
 	for _, pod := range pods {
-		if k8sutil.GetNATSVersion(pod) != newVersion {
+		if kubernetesutil.GetNATSVersion(pod) != newVersion {
 			return pod
 		}
 	}

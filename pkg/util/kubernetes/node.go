@@ -12,9 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+package kubernetes
 
-var (
-	OperatorVersion = "0.1.0+git"
-	GitSHA          = "Not provided (use ./build instead of go build)"
+import (
+	"k8s.io/api/core/v1"
 )
+
+// IsNodeReady checks if the Node condition is ready.
+func IsNodeReady(n v1.Node) bool {
+	for _, cd := range n.Status.Conditions {
+		if cd.Type == v1.NodeReady {
+			return cd.Status == v1.ConditionTrue
+		}
+	}
+
+	return false
+}

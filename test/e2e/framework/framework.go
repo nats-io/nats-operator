@@ -16,22 +16,31 @@ package framework
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/util/k8sutil"
+	"github.com/pires/nats-operator/pkg/client"
+	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	"github.com/pires/nats-operator/pkg/util/probe"
+	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/pires/nats-operator/test/e2e/e2eutil"
 
 	"github.com/Sirupsen/logrus"
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
+
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var Global *Framework
 
 type Framework struct {
-	KubeClient *unversioned.Client
-	MasterHost string
-	Namespace  *api.Namespace
+	opImage    string
+	KubeClient kubernetes.Interface
+	CRClient   client.NatsClusterCR
+	Namespace  string
 }
 
 // Setup setups a test framework and points "Global" to it.
@@ -45,87 +54,119 @@ func Setup() error {
 	if err != nil {
 		return err
 	}
-	cli, err := unversioned.New(config)
+	cli, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return err
 	}
-	var namespace *api.Namespace
-	if *ns != "default" {
-		namespace, err = cli.Namespaces().Create(&api.Namespace{
-			ObjectMeta: api.ObjectMeta{
-				Name: *ns,
-			},
-		})
-	} else {
-		namespace, err = cli.Namespaces().Get("default")
-	}
+	crClient, err := client.NewCRClient(config)
 	if err != nil {
 		return err
 	}
 
 	Global = &Framework{
-		MasterHost: config.Host,
 		KubeClient: cli,
-		Namespace:  namespace,
+		CRClient:   crClient,
+		Namespace:  *ns,
+		opImage:    *opImage,
 	}
-	return Global.setup(*opImage)
+	return Global.setup()
 }
 
 func Teardown() error {
-	if Global.Namespace.Name != "default" {
-		if err := Global.KubeClient.Namespaces().Delete(Global.Namespace.Name); err != nil {
-			return err
-		}
+	if err := Global.deleteNatsOperator(); err != nil {
+		return err
 	}
 	// TODO: check all deleted and wait
 	Global = nil
-	logrus.Info("e2e teardown successful")
+	logrus.Info("e2e teardown successfully")
 	return nil
 }
 
-func (f *Framework) setup(opImage string) error {
-	if err := f.setupOperator(opImage); err != nil {
-		logrus.Errorf("Failed to setup NATS operator: %v", err)
-		return err
+func (f *Framework) setup() error {
+	if err := f.SetupNatsOperator(); err != nil {
+		return fmt.Errorf("failed to setup NATS operator: %v", err)
 	}
+	logrus.Info("NATS operator created successfully")
+
 	logrus.Info("e2e setup successfully")
 	return nil
 }
 
-func (f *Framework) setupOperator(opImage string) error {
-	logrus.Info("Creating NATS operator...")
+func (f *Framework) SetupNatsOperator() error {
+	// TODO: unify this and the yaml file in example/
+	cmd := []string{"/usr/local/bin/nats-operator"}
 
-	pod := &api.Pod{
-		ObjectMeta: api.ObjectMeta{
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:   "nats-operator",
 			Labels: map[string]string{"name": "nats-operator"},
 		},
-		Spec: api.PodSpec{
-			Containers: []api.Container{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
 				{
 					Name:            "nats-operator",
-					Image:           opImage,
-					ImagePullPolicy: api.PullAlways,
-					Env: []api.EnvVar{
+					Image:           f.opImage,
+					ImagePullPolicy: v1.PullAlways,
+					Command:         cmd,
+					Env: []v1.EnvVar{
 						{
 							Name:      "MY_POD_NAMESPACE",
-							ValueFrom: &api.EnvVarSource{FieldRef: &api.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
+							ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
 						},
+						{
+							Name:      "MY_POD_NAME",
+							ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.name"}},
+						},
+					},
+					ReadinessProbe: &v1.Probe{
+						Handler: v1.Handler{
+							HTTPGet: &v1.HTTPGetAction{
+								Path: probe.HTTPReadyzEndpoint,
+								Port: intstr.IntOrString{Type: intstr.Int, IntVal: 8080},
+							},
+						},
+						InitialDelaySeconds: 3,
+						PeriodSeconds:       3,
+						FailureThreshold:    3,
 					},
 				},
 			},
+			RestartPolicy: v1.RestartPolicyNever,
 		},
 	}
 
-	err := k8sutil.CreateAndWaitPod(f.KubeClient, f.Namespace.Name, pod, 60*time.Second)
+	p, err := kubernetesutil.CreateAndWaitPod(f.KubeClient, f.Namespace, pod, 60*time.Second)
 	if err != nil {
 		return err
 	}
-	err = k8sutil.WaitTPRReady(f.KubeClient.Client, 5*time.Second, 60*time.Second, f.MasterHost, f.Namespace.Name)
-	if err != nil {
-		return err
-	}
+	logrus.Infof("NATS operator pod is running on node (%s)", p.Spec.NodeName)
 
-	logrus.Info("NATS operator created successfully")
+	return e2eutil.WaitUntilOperatorReady(f.KubeClient, f.Namespace, "nats-operator")
+}
+
+func (f *Framework) DeleteNatsOperatorCompletely() error {
+	err := f.deleteNatsOperator()
+	if err != nil {
+		return err
+	}
+	// On k8s 1.6.1, grace period isn't accurate. It took ~10s for operator pod to completely disappear.
+	// We work around by increasing the wait time. Revisit this later.
+	err = retryutil.Retry(5*time.Second, 6, func() (bool, error) {
+		_, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get("nats-operator", metav1.GetOptions{})
+		if err == nil {
+			return false, nil
+		}
+		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			return true, nil
+		}
+		return false, err
+	})
+	if err != nil {
+		return fmt.Errorf("fail to wait NATS operator pod gone from API: %v", err)
+	}
 	return nil
+}
+
+func (f *Framework) deleteNatsOperator() error {
+	return f.KubeClient.CoreV1().Pods(f.Namespace).Delete("nats-operator", metav1.NewDeleteOptions(1))
 }
