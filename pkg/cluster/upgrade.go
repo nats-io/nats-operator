@@ -29,7 +29,7 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 
 	ns := c.cluster.Namespace
 
-	pod, err := c.config.KubeCli.CoreV1().Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
+	pod, err := c.config.KubeCli.Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("fail to get pod (%s): %v", oldPod.GetName(), err)
 	}
@@ -44,7 +44,7 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 		return fmt.Errorf("error creating patch: %v", err)
 	}
 
-	_, err = c.config.KubeCli.CoreV1().Pods(ns).Patch(pod.GetName(), types.StrategicMergePatchType, patchdata)
+	_, err = c.config.KubeCli.Pods(ns).Patch(pod.GetName(), types.StrategicMergePatchType, patchdata)
 	if err != nil {
 		return fmt.Errorf("fail to update the NATS member (%s): %v", pod.GetName(), err)
 	}

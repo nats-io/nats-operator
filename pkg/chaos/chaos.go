@@ -23,15 +23,15 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 // Monkeys knows how to crush pods and nodes.
 type Monkeys struct {
-	kubecli kubernetes.Interface
+	kubecli corev1client.CoreV1Interface
 }
 
-func NewMonkeys(kubecli kubernetes.Interface) *Monkeys {
+func NewMonkeys(kubecli corev1client.CoreV1Interface) *Monkeys {
 	return &Monkeys{kubecli: kubecli}
 }
 
@@ -65,7 +65,7 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 			continue
 		}
 
-		pods, err := m.kubecli.CoreV1().Pods(ns).List(metav1.ListOptions{LabelSelector: ls})
+		pods, err := m.kubecli.Pods(ns).List(metav1.ListOptions{LabelSelector: ls})
 		if err != nil {
 			logrus.Errorf("failed to list pods for selector %v: %v", ls, err)
 			continue
@@ -89,7 +89,7 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 		}
 
 		for tokill := range tokills {
-			err = m.kubecli.CoreV1().Pods(ns).Delete(tokill, metav1.NewDeleteOptions(0))
+			err = m.kubecli.Pods(ns).Delete(tokill, metav1.NewDeleteOptions(0))
 			if err != nil {
 				logrus.Errorf("failed to kill pod %v: %v", tokill, err)
 				continue

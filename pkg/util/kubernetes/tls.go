@@ -18,7 +18,7 @@ import (
 	natsutil "github.com/pires/nats-operator/pkg/util/nats"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 type TLSData struct {
@@ -27,8 +27,8 @@ type TLSData struct {
 	CAData   []byte
 }
 
-func GetTLSDataFromSecret(kubecli kubernetes.Interface, ns, se string) (*TLSData, error) {
-	secret, err := kubecli.CoreV1().Secrets(ns).Get(se, metav1.GetOptions{})
+func GetTLSDataFromSecret(kubecli corev1client.CoreV1Interface, ns, se string) (*TLSData, error) {
+	secret, err := kubecli.Secrets(ns).Get(se, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

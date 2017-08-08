@@ -33,8 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	cappsv1beta1 "k8s.io/client-go/kubernetes/typed/apps/v1beta1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
 )
@@ -72,14 +73,14 @@ func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
 	return p
 }
 
-func createService(kubecli kubernetes.Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference) error {
+func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference) error {
 	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports)
 	addOwnerRefToObject(svc.GetObjectMeta(), owner)
-	_, err := kubecli.CoreV1().Services(ns).Create(svc)
+	_, err := kubecli.Services(ns).Create(svc)
 	return err
 }
 
-func CreateClientService(kubecli kubernetes.Interface, clusterName, ns string, owner metav1.OwnerReference) error {
+func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
 	ports := []v1.ServicePort{{
 		Name:       "client",
 		Port:       constants.ClientPort,
@@ -94,7 +95,7 @@ func ManagementServiceName(clusterName string) string {
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
-func CreateMgmtService(kubecli kubernetes.Interface, clusterName, ns string, owner metav1.OwnerReference) error {
+func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
 	ports := []v1.ServicePort{
 		{
 			Name:       "cluster",
@@ -114,8 +115,8 @@ func CreateMgmtService(kubecli kubernetes.Interface, clusterName, ns string, own
 
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
-func CreateAndWaitPod(kubecli kubernetes.Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
-	_, err := kubecli.CoreV1().Pods(ns).Create(pod)
+func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
+	_, err := kubecli.Pods(ns).Create(pod)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +124,7 @@ func CreateAndWaitPod(kubecli kubernetes.Interface, ns string, pod *v1.Pod, time
 	interval := 5 * time.Second
 	var retPod *v1.Pod
 	err = retryutil.Retry(interval, int(timeout/(interval)), func() (bool, error) {
-		retPod, err = kubecli.CoreV1().Pods(ns).Get(pod.Name, metav1.GetOptions{})
+		retPod, err = kubecli.Pods(ns).Get(pod.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -217,12 +218,12 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	return pod
 }
 
-func MustNewKubeClient() kubernetes.Interface {
+func MustNewKubeClient() corev1client.CoreV1Interface {
 	cfg, err := InClusterConfig()
 	if err != nil {
 		panic(err)
 	}
-	return kubernetes.NewForConfigOrDie(cfg)
+	return corev1client.NewForConfigOrDie(cfg)
 }
 
 func InClusterConfig() (*rest.Config, error) {
@@ -290,8 +291,8 @@ func cloneDeployment(d *appsv1beta1.Deployment) *appsv1beta1.Deployment {
 	return cd.(*appsv1beta1.Deployment)
 }
 
-func PatchDeployment(kubecli kubernetes.Interface, namespace, name string, updateFunc func(*appsv1beta1.Deployment)) error {
-	od, err := kubecli.AppsV1beta1().Deployments(namespace).Get(name, metav1.GetOptions{})
+func PatchDeployment(kubecli cappsv1beta1.AppsV1beta1Interface, namespace, name string, updateFunc func(*appsv1beta1.Deployment)) error {
+	od, err := kubecli.Deployments(namespace).Get(name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -301,7 +302,7 @@ func PatchDeployment(kubecli kubernetes.Interface, namespace, name string, updat
 	if err != nil {
 		return err
 	}
-	_, err = kubecli.AppsV1beta1().Deployments(namespace).Patch(name, types.StrategicMergePatchType, patchData)
+	_, err = kubecli.Deployments(namespace).Patch(name, types.StrategicMergePatchType, patchData)
 	return err
 }
 

@@ -40,9 +40,8 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
@@ -131,7 +130,7 @@ func main() {
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
 		namespace,
 		"nats-operator",
-		kubecli.(*kubernetes.Clientset),
+		kubecli,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: createRecorder(kubecli, name, namespace),
@@ -195,10 +194,10 @@ func newControllerConfig() controller.Config {
 	return cfg
 }
 
-func getMyPodServiceAccount(kubecli kubernetes.Interface) (string, error) {
+func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
 	var sa string
 	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
-		pod, err := kubecli.CoreV1().Pods(namespace).Get(name, metav1.GetOptions{})
+		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
 		if err != nil {
 			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
 			return false, nil
@@ -209,7 +208,7 @@ func getMyPodServiceAccount(kubecli kubernetes.Interface) (string, error) {
 	return sa, err
 }
 
-func periodicFullGC(kubecli kubernetes.Interface, ns string, d time.Duration) {
+func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
 	gc := garbagecollection.New(kubecli, ns)
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -222,7 +221,7 @@ func periodicFullGC(kubecli kubernetes.Interface, ns string, d time.Duration) {
 	}
 }
 
-func startChaos(ctx context.Context, kubecli kubernetes.Interface, ns string, chaosLevel int) {
+func startChaos(ctx context.Context, kubecli corev1client.CoreV1Interface, ns string, chaosLevel int) {
 	m := chaos.NewMonkeys(kubecli)
 	ls := labels.SelectorFromSet(map[string]string{"app": "nats"})
 
@@ -259,9 +258,9 @@ func startChaos(ctx context.Context, kubecli kubernetes.Interface, ns string, ch
 	}
 }
 
-func createRecorder(kubecli kubernetes.Interface, name, namespace string) record.EventRecorder {
+func createRecorder(kubecli corev1client.CoreV1Interface, name, namespace string) record.EventRecorder {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(logrus.Infof)
-	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(kubecli.Core().RESTClient()).Events(namespace)})
+	eventBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: corev1client.New(kubecli.RESTClient()).Events(namespace)})
 	return eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: name})
 }

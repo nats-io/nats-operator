@@ -23,7 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
+	appsv1beta1 "k8s.io/client-go/kubernetes/typed/apps/v1beta1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -35,11 +36,12 @@ var pkgLogger = logrus.WithField("pkg", "gc")
 type GC struct {
 	logger *logrus.Entry
 
-	kubecli kubernetes.Interface
-	ns      string
+	kubecli            corev1client.CoreV1Interface
+	kubecliAppsv1beta1 appsv1beta1.AppsV1beta1Interface
+	ns                 string
 }
 
-func New(kubecli kubernetes.Interface, ns string) *GC {
+func New(kubecli corev1client.CoreV1Interface, ns string) *GC {
 	return &GC{
 		logger:  pkgLogger,
 		kubecli: kubecli,
@@ -56,7 +58,7 @@ func (gc *GC) CollectCluster(cluster string, clusterUID types.UID) {
 // FullyCollect collects resources that were created before,
 // but does not belong to any current running clusters.
 func (gc *GC) FullyCollect() error {
-	clusters, err := kubernetesutil.GetClusterList(gc.kubecli.CoreV1().RESTClient(), gc.ns)
+	clusters, err := kubernetesutil.GetClusterList(gc.kubecli.RESTClient(), gc.ns)
 	if err != nil {
 		return err
 	}
@@ -89,7 +91,7 @@ func (gc *GC) collectResources(option metav1.ListOptions, runningSet map[types.U
 }
 
 func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	pods, err := gc.kubecli.CoreV1().Pods(gc.ns).List(option)
+	pods, err := gc.kubecli.Pods(gc.ns).List(option)
 	if err != nil {
 		return err
 	}
@@ -102,7 +104,7 @@ func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bo
 		// Pods failed due to liveness probe are also collected
 		if !runningSet[p.OwnerReferences[0].UID] || p.Status.Phase == v1.PodFailed {
 			// kill bad pods without grace period to kill it immediately
-			err = gc.kubecli.CoreV1().Pods(gc.ns).Delete(p.GetName(), metav1.NewDeleteOptions(0))
+			err = gc.kubecli.Pods(gc.ns).Delete(p.GetName(), metav1.NewDeleteOptions(0))
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
@@ -113,7 +115,7 @@ func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bo
 }
 
 func (gc *GC) collectServices(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	srvs, err := gc.kubecli.CoreV1().Services(gc.ns).List(option)
+	srvs, err := gc.kubecli.Services(gc.ns).List(option)
 	if err != nil {
 		return err
 	}
@@ -124,7 +126,7 @@ func (gc *GC) collectServices(option metav1.ListOptions, runningSet map[types.UI
 			continue
 		}
 		if !runningSet[srv.OwnerReferences[0].UID] {
-			err = gc.kubecli.CoreV1().Services(gc.ns).Delete(srv.GetName(), nil)
+			err = gc.kubecli.Services(gc.ns).Delete(srv.GetName(), nil)
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
@@ -136,7 +138,7 @@ func (gc *GC) collectServices(option metav1.ListOptions, runningSet map[types.UI
 }
 
 func (gc *GC) collectDeployment(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	ds, err := gc.kubecli.AppsV1beta1().Deployments(gc.ns).List(option)
+	ds, err := gc.kubecliAppsv1beta1.Deployments(gc.ns).List(option)
 	if err != nil {
 		return err
 	}
@@ -147,7 +149,7 @@ func (gc *GC) collectDeployment(option metav1.ListOptions, runningSet map[types.
 			continue
 		}
 		if !runningSet[d.OwnerReferences[0].UID] {
-			err = gc.kubecli.AppsV1beta1().Deployments(gc.ns).Delete(d.GetName(), kubernetesutil.CascadeDeleteOptions(0))
+			err = gc.kubecliAppsv1beta1.Deployments(gc.ns).Delete(d.GetName(), kubernetesutil.CascadeDeleteOptions(0))
 			if err != nil {
 				if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 					return err
