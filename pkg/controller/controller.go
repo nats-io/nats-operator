@@ -32,7 +32,7 @@ import (
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kwatch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -72,7 +72,7 @@ type Config struct {
 	Namespace      string
 	ServiceAccount string
 	PVProvisioner  string
-	KubeCli        kubernetes.Interface
+	KubeCli        corev1client.CoreV1Interface
 	KubeExtCli     apiextensionsclient.Interface
 }
 
@@ -190,7 +190,7 @@ func (c *Controller) handleClusterEvent(event *Event) error {
 
 func (c *Controller) findAllClusters() (string, error) {
 	c.logger.Info("finding existing clusters...")
-	clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.CoreV1().RESTClient(), c.Config.Namespace)
+	clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.RESTClient(), c.Config.Namespace)
 	if err != nil {
 		return "", err
 	}
@@ -295,7 +295,7 @@ func (c *Controller) watch(watchVersion string) (<-chan *Event, <-chan error) {
 					if st.Code == http.StatusGone {
 						// event history is outdated.
 						// if nothing has changed, we can go back to watch again.
-						clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.CoreV1().RESTClient(), c.Config.Namespace)
+						clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.RESTClient(), c.Config.Namespace)
 						if err == nil && !c.isClustersCacheStale(clusterList.Items) {
 							watchVersion = clusterList.ResourceVersion
 							break

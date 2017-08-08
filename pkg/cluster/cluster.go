@@ -36,7 +36,7 @@ import (
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 var (
@@ -59,7 +59,7 @@ type clusterEvent struct {
 type Config struct {
 	ServiceAccount string
 
-	KubeCli kubernetes.Interface
+	KubeCli corev1client.CoreV1Interface
 }
 
 type Cluster struct {
@@ -320,7 +320,7 @@ func (c *Cluster) setupServices() error {
 func (c *Cluster) createPod() error {
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 
-	_, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).Create(pod)
+	_, err := c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 
 	return err
 }
@@ -328,7 +328,7 @@ func (c *Cluster) createPod() error {
 func (c *Cluster) removePod(name string) error {
 	ns := c.cluster.Namespace
 	opts := metav1.NewDeleteOptions(podTerminationGracePeriod)
-	err := c.config.KubeCli.Core().Pods(ns).Delete(name, opts)
+	err := c.config.KubeCli.Pods(ns).Delete(name, opts)
 	if err != nil {
 		if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
@@ -344,7 +344,7 @@ func (c *Cluster) removePod(name string) error {
 }
 
 func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
-	podList, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
+	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
 	}
@@ -378,7 +378,7 @@ func (c *Cluster) updateCRStatus() error {
 
 	newCluster := c.cluster
 	newCluster.Status = c.status
-	newCluster, err := kubernetesutil.UpdateClusterTPRObject(c.config.KubeCli.Core().RESTClient(), c.cluster.Namespace, newCluster)
+	newCluster, err := kubernetesutil.UpdateClusterTPRObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, newCluster)
 	if err != nil {
 		return fmt.Errorf("failed to update CR status: %v", err)
 	}
@@ -403,7 +403,7 @@ func (c *Cluster) reportFailedStatus() {
 			return false, nil
 		}
 
-		cl, err := kubernetesutil.GetClusterTPRObject(c.config.KubeCli.CoreV1().RESTClient(), c.cluster.Namespace, c.cluster.Name)
+		cl, err := kubernetesutil.GetClusterTPRObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, c.cluster.Name)
 		if err != nil {
 			// Update (PUT) will return conflict even if object is deleted since we have UID set in object.
 			// Because it will check UID first and return something like:
