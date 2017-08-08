@@ -147,7 +147,7 @@ func (gc *GC) collectDeployment(option metav1.ListOptions, runningSet map[types.
 			continue
 		}
 		if !runningSet[d.OwnerReferences[0].UID] {
-			err = gc.kubecli.AppsV1beta1().Deployments(gc.ns).Delete(d.GetName(), k8sutil.CascadeDeleteOptions(0))
+			err = gc.kubecli.AppsV1beta1().Deployments(gc.ns).Delete(d.GetName(), kubernetesutil.CascadeDeleteOptions(0))
 			if err != nil {
 				if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 					return err

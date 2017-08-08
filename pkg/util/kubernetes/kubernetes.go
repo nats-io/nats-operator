@@ -15,6 +15,7 @@
 package kubernetes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -39,7 +40,8 @@ import (
 )
 
 const (
-	versionAnnotationKey = "nats.version"
+	TolerateUnreadyEndpointsAnnotation = "service.alpha.kubernetes.io/tolerate-unready-endpoints"
+	versionAnnotationKey               = "nats.version"
 )
 
 func GetNATSVersion(pod *v1.Pod) string {
@@ -98,7 +100,8 @@ func CreateMgmtService(kubecli kubernetes.Interface, clusterName, ns string, own
 			Name:       "cluster",
 			Port:       constants.ClusterPort,
 			TargetPort: intstr.FromInt(constants.ClusterPort),
-			v1},
+			Protocol:   v1.ProtocolTCP,
+		},
 		{
 			Name:       "monitoring",
 			Port:       constants.MonitoringPort,
@@ -171,7 +174,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(clusterName, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	// TODO add TLS, auth support, debug and tracing
 	args := []string{
 		fmt.Sprintf("--cluster=nats://0.0.0.0:%d", constants.ClusterPort),
@@ -185,35 +188,12 @@ func NewNatsPodSpec(clusterName, cs spec.ClusterSpec, owner metav1.OwnerReferenc
 		"nats_cluster": clusterName,
 	}
 
+	volumes := []v1.Volume{}
+
 	container := containerWithLivenessProbe(natsPodContainer(args, cs.Version), natsLivenessProbe(cs.TLS.IsSecureClient()))
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
-	}
-
-	if cs.TLS.IsSecurePeer() {
-		container.VolumeMounts = append(container.VolumeMounts, v1.VolumeMount{
-			MountPath: peerTLSDir,
-			Name:      peerTLSVolume,
-		})
-		volumes = append(volumes, v1.Volume{Name: peerTLSVolume, VolumeSource: v1.VolumeSource{
-			Secret: &v1.SecretVolumeSource{SecretName: cs.TLS.Static.Member.PeerSecret},
-		}})
-	}
-
-	if cs.TLS.IsSecureClient() {
-		container.VolumeMounts = append(container.VolumeMounts, v1.VolumeMount{
-			MountPath: serverTLSDir,
-			Name:      serverTLSVolume,
-		}, v1.VolumeMount{
-			MountPath: operatorNatsTLSDir,
-			Name:      operatorNatsTLSVolume,
-		})
-		volumes = append(volumes, v1.Volume{Name: serverTLSVolume, VolumeSource: v1.VolumeSource{
-			Secret: &v1.SecretVolumeSource{SecretName: cs.TLS.Static.Member.ServerSecret},
-		}}, v1.Volume{Name: operatorEtcdTLSVolume, VolumeSource: v1.VolumeSource{
-			Secret: &v1.SecretVolumeSource{SecretName: cs.TLS.Static.OperatorSecret},
-		}})
 	}
 
 	pod := &v1.Pod{
@@ -230,7 +210,7 @@ func NewNatsPodSpec(clusterName, cs spec.ClusterSpec, owner metav1.OwnerReferenc
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
-	SetNatsVersion(pod, cs.Version)
+	SetNATSVersion(pod, cs.Version)
 
 	addOwnerRefToObject(pod.GetObjectMeta(), owner)
 
