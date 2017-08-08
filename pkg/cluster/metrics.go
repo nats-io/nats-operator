@@ -19,7 +19,7 @@ import (
 )
 
 var reconcileHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Namespace: "etcd_operator",
+	Namespace: "nats_operator",
 	Subsystem: "cluster",
 	Name:      "reconcile_duration",
 	Help:      "Reconcile duration histogram in second",
@@ -29,7 +29,7 @@ var reconcileHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 )
 
 var reconcileFailed = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "etcd_operator",
+	Namespace: "nats_operator",
 	Subsystem: "cluster",
 	Name:      "reconcile_failed",
 	Help:      "Total number of failed reconciliations",

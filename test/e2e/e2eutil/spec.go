@@ -15,8 +15,6 @@
 package e2eutil
 
 import (
-	"os"
-
 	"github.com/pires/nats-operator/pkg/spec"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +35,7 @@ func NewCluster(genName string, size int) *spec.NatsCluster {
 	}
 }
 
-func ClusterWithVersion(cl *spec.EtcdCluster, version string) *spec.EtcdCluster {
+func ClusterWithVersion(cl *spec.NatsCluster, version string) *spec.NatsCluster {
 	cl.Spec.Version = version
 	return cl
 }

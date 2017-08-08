@@ -18,15 +18,16 @@ import (
 	"encoding/json"
 
 	"github.com/pires/nats-operator/pkg/constants"
+	"github.com/pires/nats-operator/pkg/spec"
 
-	"fmt"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(args []string, version string) v1.Container {
-	c := api.Container{
+	c := v1.Container{
 		Name:  "nats",
 		Image: MakeNATSImage(version),
 		Args:  args,
@@ -121,7 +122,7 @@ func applyPodPolicy(clusterName string, pod *v1.Pod, policy *spec.PodPolicy) {
 
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "nats" {
-			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, policy.EtcdEnv...)
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, policy.NatsEnv...)
 		}
 	}
 }

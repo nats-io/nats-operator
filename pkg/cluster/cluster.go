@@ -53,7 +53,7 @@ const (
 
 type clusterEvent struct {
 	typ     clusterEventType
-	cluster *spec.ClusterSpec
+	cluster *spec.NatsCluster
 }
 
 type Config struct {
@@ -250,7 +250,7 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 
 			if len(pending) > 0 {
 				// Pod startup might take long, e.g. pulling image. It would deterministically become running or succeeded/failed later.
-				c.logger.Infof("skip reconciliation: running (%v), pending (%v)", k8sutil.GetPodNames(running), k8sutil.GetPodNames(pending))
+				c.logger.Infof("skip reconciliation: running (%v), pending (%v)", kubernetesutil.GetPodNames(running), kubernetesutil.GetPodNames(pending))
 				reconcileFailed.WithLabelValues("not all pods are running").Inc()
 				continue
 			}
@@ -344,7 +344,7 @@ func (c *Cluster) removePod(name string) error {
 }
 
 func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
-	podList, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).List(k8sutil.ClusterListOpt(c.cluster.Name))
+	podList, err := c.config.KubeCli.Core().Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
 	}
