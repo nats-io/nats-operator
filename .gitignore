@@ -1,4 +1,6 @@
 ## Go
+bin/*
+!bin/.gitkeep
 _output
 vendor
 
