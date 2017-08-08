@@ -15,9 +15,6 @@
 package cluster
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/pires/nats-operator/pkg/spec"
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 
