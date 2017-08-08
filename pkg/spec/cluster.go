@@ -27,9 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TODO: supports object store like s3
-type StorageType string
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsClusterList struct {
 	metav1.TypeMeta `json:",inline"`
