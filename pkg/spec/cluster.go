@@ -30,7 +30,7 @@ import (
 // TODO: supports object store like s3
 type StorageType string
 
-// NatsClusterList is a list of NATS clusters.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard list metadata
@@ -39,6 +39,9 @@ type NatsClusterList struct {
 	Items           []NatsCluster `json:"items"`
 }
 
+// NatsCluster is a NATS cluster.
+//
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
