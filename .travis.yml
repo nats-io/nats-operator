@@ -10,7 +10,7 @@ before_install:
   - sudo apt-get -y install docker-ce
 
 script:
-  - docker build -t "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}" .
+  - docker build --no-cache -t "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}" .
 
 after_success:
   - if ([[ "${TRAVIS_BRANCH}" == "master" ]] && [[ "${TRAVIS_PULL_REQUEST}" == "false" ]]) || [[ "${TRAVIS_TAG}" != "" ]];
