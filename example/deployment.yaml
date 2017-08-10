@@ -11,10 +11,14 @@ spec:
     spec:
       containers:
       - name: nats-operator
-        image: quay.io/pires/nats-operator:0.1
+        image: quay.io/pires/nats-operator:latest
         imagePullPolicy: Always
         env:
         - name: MY_POD_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
