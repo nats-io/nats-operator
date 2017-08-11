@@ -43,9 +43,10 @@ type GC struct {
 
 func New(kubecli corev1client.CoreV1Interface, ns string) *GC {
 	return &GC{
-		logger:  pkgLogger,
-		kubecli: kubecli,
-		ns:      ns,
+		logger:             pkgLogger,
+		kubecli:            kubecli,
+		kubecliAppsv1beta1: appsv1beta1.New(kubecli.RESTClient()),
+		ns:                 ns,
 	}
 }
 
