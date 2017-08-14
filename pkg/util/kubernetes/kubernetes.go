@@ -199,8 +199,9 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      labels,
-			Annotations: map[string]string{},
+			Labels:       labels,
+			GenerateName: fmt.Sprintf("nats-%s-", clusterName),
+			Annotations:  map[string]string{},
 		},
 		Spec: v1.PodSpec{
 			Containers:    []v1.Container{container},
