@@ -255,7 +255,11 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 				continue
 			}
 			if len(running) == 0 {
-				c.logger.Error("all NATS pods are dead")
+				c.logger.Warning("all NATS pods are dead")
+				rerr = c.reconcile(running)
+				if rerr != nil {
+					c.logger.Errorf("failed to reconcile: %v", rerr)
+				}
 				break
 			}
 
