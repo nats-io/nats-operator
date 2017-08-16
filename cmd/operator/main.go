@@ -210,7 +210,7 @@ func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error
 
 func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
 	gc := garbagecollection.New(kubecli, ns)
-	timer := time.NewTimer(d)
+	timer := time.NewTicker(d)
 	defer timer.Stop()
 	for {
 		<-timer.C
