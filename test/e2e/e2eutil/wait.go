@@ -26,10 +26,9 @@ import (
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
 	"k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 var retryInterval = 10 * time.Second
@@ -46,10 +45,10 @@ func CalculateRestoreWaitTime(needDataClone bool) int {
 	return waitTime
 }
 
-func WaitUntilPodSizeReached(t *testing.T, kubeClient kubernetes.Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
+func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
 	var names []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
-		podList, err := kubeClient.Core().Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
+		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
 		if err != nil {
 			return false, err
 		}
@@ -75,14 +74,14 @@ func WaitUntilPodSizeReached(t *testing.T, kubeClient kubernetes.Interface, size
 	return names, nil
 }
 
-func WaitUntilSizeReached(t *testing.T, kubeClient kubernetes.Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
+func WaitUntilSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
 	return waitSizeReachedWithAccept(t, kubeClient, size, retries, cl)
 }
 
-func WaitSizeAndVersionReached(t *testing.T, kubeClient kubernetes.Interface, version string, size, retries int, cl *spec.NatsCluster) error {
+func WaitSizeAndVersionReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *spec.NatsCluster) error {
 	return retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
 		var names []string
-		podList, err := kubeClient.Core().Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
+		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
 		if err != nil {
 			return false, err
 		}
@@ -115,10 +114,10 @@ func getVersionFromImage(image string) string {
 	return strings.Split(image, ":v")[1]
 }
 
-func waitSizeReachedWithAccept(t *testing.T, kubeClient kubernetes.Interface, size, retries int, cl *spec.NatsCluster, accepts ...acceptFunc) ([]string, error) {
+func waitSizeReachedWithAccept(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster, accepts ...acceptFunc) ([]string, error) {
 	var names []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
-		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.CoreV1().RESTClient(), cl.Namespace, cl.Name)
+		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.RESTClient(), cl.Namespace, cl.Name)
 		if err != nil {
 			return false, err
 		}
@@ -142,10 +141,10 @@ func waitSizeReachedWithAccept(t *testing.T, kubeClient kubernetes.Interface, si
 	return names, nil
 }
 
-func WaitUntilMembersWithNamesDeleted(t *testing.T, kubeClient kubernetes.Interface, retries int, cl *spec.NatsCluster, targetNames ...string) ([]string, error) {
+func WaitUntilMembersWithNamesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, retries int, cl *spec.NatsCluster, targetNames ...string) ([]string, error) {
 	var remaining []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
-		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.CoreV1().RESTClient(), cl.Namespace, cl.Name)
+		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.RESTClient(), cl.Namespace, cl.Name)
 		if err != nil {
 			return false, err
 		}
@@ -179,7 +178,7 @@ func presentIn(a string, list []string) bool {
 	return false
 }
 
-func waitResourcesDeleted(t *testing.T, kubeClient kubernetes.Interface, cl *spec.NatsCluster) error {
+func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
 	undeletedPods, err := WaitPodsDeleted(kubeClient, cl.Namespace, 3, kubernetesutil.ClusterListOpt(cl.Name))
 	if err != nil {
 		if retryutil.IsRetryFailure(err) && len(undeletedPods) > 0 {
@@ -198,7 +197,7 @@ func waitResourcesDeleted(t *testing.T, kubeClient kubernetes.Interface, cl *spe
 	}
 
 	err = retryutil.Retry(retryInterval, 3, func() (done bool, err error) {
-		list, err := kubeClient.CoreV1().Services(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
+		list, err := kubeClient.Services(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
 		if err != nil {
 			return false, err
 		}
@@ -214,7 +213,7 @@ func waitResourcesDeleted(t *testing.T, kubeClient kubernetes.Interface, cl *spe
 	return nil
 }
 
-func WaitPodsWithImageDeleted(kubecli kubernetes.Interface, namespace, image string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
+func WaitPodsWithImageDeleted(kubecli corev1.CoreV1Interface, namespace, image string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
 	return waitPodsDeleted(kubecli, namespace, retries, lo, func(p *v1.Pod) bool {
 		for _, c := range p.Spec.Containers {
 			if c.Image == image {
@@ -225,19 +224,19 @@ func WaitPodsWithImageDeleted(kubecli kubernetes.Interface, namespace, image str
 	})
 }
 
-func WaitPodsDeleted(kubecli kubernetes.Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
+func WaitPodsDeleted(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
 	f := func(p *v1.Pod) bool { return p.DeletionTimestamp != nil }
 	return waitPodsDeleted(kubecli, namespace, retries, lo, f)
 }
 
-func WaitPodsDeletedCompletely(kubecli kubernetes.Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
+func WaitPodsDeletedCompletely(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
 	return waitPodsDeleted(kubecli, namespace, retries, lo)
 }
 
-func waitPodsDeleted(kubecli kubernetes.Interface, namespace string, retries int, lo metav1.ListOptions, filters ...filterFunc) ([]*v1.Pod, error) {
+func waitPodsDeleted(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions, filters ...filterFunc) ([]*v1.Pod, error) {
 	var pods []*v1.Pod
 	err := retryutil.Retry(retryInterval, retries, func() (bool, error) {
-		podList, err := kubecli.CoreV1().Pods(namespace).List(lo)
+		podList, err := kubecli.Pods(namespace).List(lo)
 		if err != nil {
 			return false, err
 		}
@@ -260,13 +259,13 @@ func waitPodsDeleted(kubecli kubernetes.Interface, namespace string, retries int
 }
 
 // WaitUntilOperatorReady will wait until the first pod selected for the label name=nats-operator is ready.
-func WaitUntilOperatorReady(kubecli kubernetes.Interface, namespace, name string) error {
+func WaitUntilOperatorReady(kubecli corev1.CoreV1Interface, namespace, name string) error {
 	var podName string
 	lo := metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(NameLabelSelector(name)).String(),
 	}
 	err := retryutil.Retry(10*time.Second, 6, func() (bool, error) {
-		podList, err := kubecli.CoreV1().Pods(namespace).List(lo)
+		podList, err := kubecli.Pods(namespace).List(lo)
 		if err != nil {
 			return false, err
 		}

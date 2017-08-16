@@ -24,14 +24,13 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
-func DeleteSecrets(kubecli kubernetes.Interface, namespace string, secretNames ...string) error {
+func DeleteSecrets(kubecli corev1.CoreV1Interface, namespace string, secretNames ...string) error {
 	var retErr error
 	for _, sname := range secretNames {
-		err := kubecli.CoreV1().Secrets(namespace).Delete(sname, metav1.NewDeleteOptions(0))
+		err := kubecli.Secrets(namespace).Delete(sname, metav1.NewDeleteOptions(0))
 		if err != nil {
 			retErr = fmt.Errorf("failed to delete secret (%s): %v; %v", sname, err, retErr)
 		}
@@ -39,9 +38,9 @@ func DeleteSecrets(kubecli kubernetes.Interface, namespace string, secretNames .
 	return retErr
 }
 
-func KillMembers(kubecli kubernetes.Interface, namespace string, names ...string) error {
+func KillMembers(kubecli corev1.CoreV1Interface, namespace string, names ...string) error {
 	for _, name := range names {
-		err := kubecli.CoreV1().Pods(namespace).Delete(name, metav1.NewDeleteOptions(0))
+		err := kubecli.Pods(namespace).Delete(name, metav1.NewDeleteOptions(0))
 		if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
 		}

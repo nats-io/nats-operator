@@ -16,7 +16,6 @@ package e2eutil
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -26,7 +25,7 @@ import (
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 func CreateCluster(t *testing.T, crClient client.NatsClusterCR, namespace string, cl *spec.NatsCluster) (*spec.NatsCluster, error) {
@@ -66,7 +65,7 @@ func AtomicUpdateClusterCR(crClient client.NatsClusterCR, name, namespace string
 	return result, err
 }
 
-func DeleteCluster(t *testing.T, crClient client.NatsClusterCR, kubeClient kubernetes.Interface, cl *spec.NatsCluster) error {
+func DeleteCluster(t *testing.T, crClient client.NatsClusterCR, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
 	t.Logf("deleting NATS cluster: %v", cl.Name)
 	err := crClient.Delete(context.TODO(), cl.Namespace, cl.Name)
 	if err != nil {

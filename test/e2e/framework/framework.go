@@ -30,7 +30,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -38,7 +38,7 @@ var Global *Framework
 
 type Framework struct {
 	opImage    string
-	KubeClient kubernetes.Interface
+	KubeClient corev1.CoreV1Interface
 	CRClient   client.NatsClusterCR
 	Namespace  string
 }
@@ -54,7 +54,7 @@ func Setup() error {
 	if err != nil {
 		return err
 	}
-	cli, err := kubernetes.NewForConfig(config)
+	cli, err := corev1.NewForConfig(config)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func (f *Framework) DeleteNatsOperatorCompletely() error {
 	// On k8s 1.6.1, grace period isn't accurate. It took ~10s for operator pod to completely disappear.
 	// We work around by increasing the wait time. Revisit this later.
 	err = retryutil.Retry(5*time.Second, 6, func() (bool, error) {
-		_, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get("nats-operator", metav1.GetOptions{})
+		_, err := f.KubeClient.Pods(f.Namespace).Get("nats-operator", metav1.GetOptions{})
 		if err == nil {
 			return false, nil
 		}
@@ -168,5 +168,5 @@ func (f *Framework) DeleteNatsOperatorCompletely() error {
 }
 
 func (f *Framework) deleteNatsOperator() error {
-	return f.KubeClient.CoreV1().Pods(f.Namespace).Delete("nats-operator", metav1.NewDeleteOptions(1))
+	return f.KubeClient.Pods(f.Namespace).Delete("nats-operator", metav1.NewDeleteOptions(1))
 }
