@@ -36,7 +36,7 @@ func TestCreateCluster(t *testing.T) {
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestPauseControl(t *testing.T) {
 		}
 	}()
 
-	names, err := e2eutil.WaitUntilSizeReached(t, f.KubeClient, 3, 6, testNats)
+	names, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats)
 	if err != nil {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestPauseControl(t *testing.T) {
 		t.Fatalf("failed to resume control: %v", err)
 	}
 
-	if _, err := e2eutil.WaitUntilSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
 		t.Fatalf("failed to resize to 3 members NATS cluster: %v", err)
 	}
 }
