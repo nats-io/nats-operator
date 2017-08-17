@@ -96,7 +96,7 @@ func TestPauseControl(t *testing.T) {
 func TestNatsUpgrade(t *testing.T) {
 	f := framework.Global
 	origNats := e2eutil.NewCluster("test-nats-", 3)
-	origNats = e2eutil.ClusterWithVersion(origNats, "v1.0.0")
+	origNats = e2eutil.ClusterWithVersion(origNats, "1.0.0")
 	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, origNats)
 	if err != nil {
 		t.Fatal(err)
@@ -108,13 +108,13 @@ func TestNatsUpgrade(t *testing.T) {
 		}
 	}()
 
-	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "v1.0.0", 3, 6, testNats)
+	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "1.0.0", 3, 6, testNats)
 	if err != nil {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
 
 	updateFunc := func(cl *spec.NatsCluster) {
-		cl = e2eutil.ClusterWithVersion(cl, "v1.0.2")
+		cl = e2eutil.ClusterWithVersion(cl, "1.0.2")
 	}
 	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
 	if err != nil {
@@ -122,7 +122,7 @@ func TestNatsUpgrade(t *testing.T) {
 	}
 
 	// We have seen in k8s 1.7.1 env it took 35s for the pod to restart with the new image.
-	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "v1.0.2", 3, 10, testNats)
+	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "1.0.2", 3, 10, testNats)
 	if err != nil {
 		t.Fatalf("failed to wait new version NATS cluster: %v", err)
 	}
