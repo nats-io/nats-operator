@@ -86,9 +86,6 @@ func (gc *GC) collectResources(option metav1.ListOptions, runningSet map[types.U
 	if err := gc.collectServices(option, runningSet); err != nil {
 		gc.logger.Errorf("gc services failed: %v", err)
 	}
-	if err := gc.collectDeployment(option, runningSet); err != nil {
-		gc.logger.Errorf("gc deployments failed: %v", err)
-	}
 }
 
 func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bool) error {
@@ -132,31 +129,6 @@ func (gc *GC) collectServices(option metav1.ListOptions, runningSet map[types.UI
 				return err
 			}
 			gc.logger.Infof("deleted service (%v)", srv.GetName())
-		}
-	}
-
-	return nil
-}
-
-func (gc *GC) collectDeployment(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	ds, err := gc.kubecliAppsv1beta1.Deployments(gc.ns).List(option)
-	if err != nil {
-		return err
-	}
-
-	for _, d := range ds.Items {
-		if len(d.OwnerReferences) == 0 {
-			gc.logger.Warningf("failed to GC deployment (%s): no owner", d.GetName())
-			continue
-		}
-		if !runningSet[d.OwnerReferences[0].UID] {
-			err = gc.kubecliAppsv1beta1.Deployments(gc.ns).Delete(d.GetName(), kubernetesutil.CascadeDeleteOptions(0))
-			if err != nil {
-				if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
-					return err
-				}
-			}
-			gc.logger.Infof("deleted deployment (%s)", d.GetName())
 		}
 	}
 
