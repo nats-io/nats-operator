@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	reconcileInterval         = 8 * time.Second
+	reconcileInterval         = 5 * time.Second
 	podTerminationGracePeriod = int64(5)
 )
 
