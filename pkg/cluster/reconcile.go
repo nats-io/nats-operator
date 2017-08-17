@@ -28,19 +28,22 @@ func (c *Cluster) reconcile(pods []*v1.Pod) error {
 	c.logger.Debugln("Start reconciling...")
 	defer c.logger.Infoln("Finish reconciling")
 
-	var err error
-
 	spec := c.cluster.Spec
 
-	switch {
-	case len(pods) != spec.Size:
-		err = c.reconcileSize(pods)
-	case needsUpgrade(pods, spec):
-		c.status.UpgradeVersionTo(spec.Version)
-		err = c.reconcileUpgrade(pods, spec)
+	clusterNeedsResize := len(pods) != spec.Size
+	clusterNedsUpgrade := needsUpgrade(pods, spec)
+
+	if clusterNeedsResize {
+		return c.reconcileSize(pods)
+	}
+	if clusterNedsUpgrade {
+		return c.reconcileUpgrade(pods, spec)
 	}
 
-	return err
+	c.status.SetCurrentVersion(spec.Version)
+	c.status.SetReadyCondition()
+
+	return nil
 }
 
 // reconcileSize reconciles the size of cluster.
@@ -55,15 +58,12 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 		if err := c.createPod(); err != nil {
 			return err
 		}
-	} else if len(pods) > spec.Size {
+	} else if currentClusterSize > spec.Size {
 		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
 		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
-			c.logger.Error(err)
+			return err
 		}
 	}
-
-	c.status.SetVersion(spec.Version)
-	c.status.SetReadyCondition()
 
 	return nil
 }
@@ -80,7 +80,7 @@ func needsUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) bool {
 	return len(pods) == cs.Size && pickPodToUpgrade(pods, cs.Version) != nil
 }
 
-// pickExistingPeer selects the first pod, if any, which version doesn't
+// pickPodToUpgrade selects the first pod, if any, which version doesn't
 // correspond to desired version.
 func pickPodToUpgrade(pods []*v1.Pod, newVersion string) *v1.Pod {
 	for _, pod := range pods {
