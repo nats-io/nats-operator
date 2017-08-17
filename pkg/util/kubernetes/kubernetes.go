@@ -25,16 +25,13 @@ import (
 	"github.com/pires/nats-operator/pkg/spec"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
-	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes/scheme"
-	cappsv1beta1 "k8s.io/client-go/kubernetes/typed/apps/v1beta1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
@@ -282,29 +279,6 @@ func ClonePod(p *v1.Pod) *v1.Pod {
 		panic("cannot deep copy pod")
 	}
 	return np.(*v1.Pod)
-}
-
-func cloneDeployment(d *appsv1beta1.Deployment) *appsv1beta1.Deployment {
-	cd, err := scheme.Scheme.DeepCopy(d)
-	if err != nil {
-		panic("cannot deep copy pod")
-	}
-	return cd.(*appsv1beta1.Deployment)
-}
-
-func PatchDeployment(kubecli cappsv1beta1.AppsV1beta1Interface, namespace, name string, updateFunc func(*appsv1beta1.Deployment)) error {
-	od, err := kubecli.Deployments(namespace).Get(name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	nd := cloneDeployment(od)
-	updateFunc(nd)
-	patchData, err := CreatePatch(od, nd, appsv1beta1.Deployment{})
-	if err != nil {
-		return err
-	}
-	_, err = kubecli.Deployments(namespace).Patch(name, types.StrategicMergePatchType, patchData)
-	return err
 }
 
 func CascadeDeleteOptions(gracePeriodSeconds int64) *metav1.DeleteOptions {
