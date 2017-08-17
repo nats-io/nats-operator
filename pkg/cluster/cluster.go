@@ -254,19 +254,15 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 				reconcileFailed.WithLabelValues("not all pods are running").Inc()
 				continue
 			}
-			if len(running) == 0 {
-				c.logger.Warning("all NATS pods are dead")
-				rerr = c.reconcile(running)
-				if rerr != nil {
-					c.logger.Errorf("failed to reconcile: %v", rerr)
-				}
-				break
-			}
 
 			rerr = c.reconcile(running)
 			if rerr != nil {
 				c.logger.Errorf("failed to reconcile: %v", rerr)
 				break
+			}
+
+			if err := c.updateCRStatus(); err != nil {
+				c.logger.Warningf("periodic update CR status failed: %v", err)
 			}
 
 			reconcileHistogram.WithLabelValues(c.name()).Observe(time.Since(start).Seconds())

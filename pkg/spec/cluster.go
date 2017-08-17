@@ -237,12 +237,11 @@ func (cs *ClusterStatus) Control() {
 	cs.ControlPaused = false
 }
 
-func (cs *ClusterStatus) UpgradeVersionTo(v string) {
+func (cs *ClusterStatus) SetTargetVersion(v string) {
 	cs.TargetVersion = v
 }
 
-func (cs *ClusterStatus) SetVersion(v string) {
-	cs.TargetVersion = ""
+func (cs *ClusterStatus) SetCurrentVersion(v string) {
 	cs.CurrentVersion = v
 }
 
@@ -282,6 +281,7 @@ func (cs *ClusterStatus) AppendUpgradingCondition(to string, member string) {
 func (cs *ClusterStatus) SetReadyCondition() {
 	c := ClusterCondition{
 		Type:           ClusterConditionReady,
+		Reason:         "Current cluster state matches target state.",
 		TransitionTime: time.Now().Format(time.RFC3339),
 	}
 
