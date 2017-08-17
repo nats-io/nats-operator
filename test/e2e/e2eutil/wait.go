@@ -98,7 +98,7 @@ func WaitSizeAndVersionReached(t *testing.T, kubeClient corev1.CoreV1Interface, 
 }
 
 func getVersionFromImage(image string) string {
-	return strings.Split(image, ":v")[1]
+	return strings.Split(image, ":")[1]
 }
 
 func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
