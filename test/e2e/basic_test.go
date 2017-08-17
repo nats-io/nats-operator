@@ -127,3 +127,63 @@ func TestNatsUpgrade(t *testing.T) {
 		t.Fatalf("failed to wait new version NATS cluster: %v", err)
 	}
 }
+
+func TestResizeCluster3To5(t *testing.T) {
+	f := framework.Global
+	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+		t.Fatalf("failed to create NATS cluster with 3 members: %v", err)
+	}
+
+	updateFunc := func(cl *spec.NatsCluster) {
+		cl = e2eutil.ClusterWithSize(cl, 5)
+	}
+	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
+	if err != nil {
+		t.Fatalf("fail to update cluster version: %v", err)
+	}
+
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 5, 6, testNats); err != nil {
+		t.Fatalf("failed to resize NATS cluster to 5 members: %v", err)
+	}
+}
+
+func TestResizeCluster5To3(t *testing.T) {
+	f := framework.Global
+	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 5, 6, testNats); err != nil {
+		t.Fatalf("failed to create NATS cluster with 5 members: %v", err)
+	}
+
+	updateFunc := func(cl *spec.NatsCluster) {
+		cl = e2eutil.ClusterWithSize(cl, 3)
+	}
+	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
+	if err != nil {
+		t.Fatalf("fail to update cluster version: %v", err)
+	}
+
+	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+		t.Fatalf("failed to resize NATS cluster to 3 members: %v", err)
+	}
+}
