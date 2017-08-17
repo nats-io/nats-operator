@@ -35,6 +35,11 @@ func NewCluster(genName string, size int) *spec.NatsCluster {
 	}
 }
 
+func ClusterWithSize(cl *spec.NatsCluster, size int) *spec.NatsCluster {
+	cl.Spec.Size = size
+	return cl
+}
+
 func ClusterWithVersion(cl *spec.NatsCluster, version string) *spec.NatsCluster {
 	cl.Spec.Version = version
 	return cl
