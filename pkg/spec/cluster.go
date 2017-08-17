@@ -188,21 +188,8 @@ type ClusterStatus struct {
 
 	// Size is the current size of the cluster
 	Size int `json:"size"`
-	// Members are the NATS members in the cluster
-	Members MembersStatus `json:"members"`
 	// CurrentVersion is the current cluster version
 	CurrentVersion string `json:"currentVersion"`
-	// TargetVersion is the version the cluster upgrading to.
-	// If the cluster is not upgrading, TargetVersion is empty.
-	TargetVersion string `json:"targetVersion"`
-}
-
-type MembersStatus struct {
-	// Ready are the NATS members that are ready to serve requests
-	// The member names are the same as the NATS pod names
-	Ready []string `json:"ready,omitempty"`
-	// Unready are the NATS members not ready to serve requests
-	Unready []string `json:"unready,omitempty"`
 }
 
 func (cs ClusterStatus) Copy() ClusterStatus {
@@ -235,10 +222,6 @@ func (cs *ClusterStatus) PauseControl() {
 
 func (cs *ClusterStatus) Control() {
 	cs.ControlPaused = false
-}
-
-func (cs *ClusterStatus) SetTargetVersion(v string) {
-	cs.TargetVersion = v
 }
 
 func (cs *ClusterStatus) SetCurrentVersion(v string) {

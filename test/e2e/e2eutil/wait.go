@@ -36,15 +36,6 @@ var retryInterval = 10 * time.Second
 type acceptFunc func(*spec.NatsCluster) bool
 type filterFunc func(*v1.Pod) bool
 
-func CalculateRestoreWaitTime(needDataClone bool) int {
-	waitTime := 24
-	if needDataClone {
-		// Take additional time to clone the data.
-		waitTime += 6
-	}
-	return waitTime
-}
-
 func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
 	var names []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
@@ -72,10 +63,6 @@ func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, si
 		return nil, err
 	}
 	return names, nil
-}
-
-func WaitUntilSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
-	return waitSizeReachedWithAccept(t, kubeClient, size, retries, cl)
 }
 
 func WaitSizeAndVersionReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *spec.NatsCluster) error {
@@ -114,70 +101,6 @@ func getVersionFromImage(image string) string {
 	return strings.Split(image, ":v")[1]
 }
 
-func waitSizeReachedWithAccept(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster, accepts ...acceptFunc) ([]string, error) {
-	var names []string
-	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
-		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.RESTClient(), cl.Namespace, cl.Name)
-		if err != nil {
-			return false, err
-		}
-
-		for _, accept := range accepts {
-			if !accept(currCluster) {
-				return false, nil
-			}
-		}
-
-		names = currCluster.Status.Members.Ready
-		LogfWithTimestamp(t, "waiting size (%d), healthy NATS members: names (%v)", size, names)
-		if len(names) != size {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return names, nil
-}
-
-func WaitUntilMembersWithNamesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, retries int, cl *spec.NatsCluster, targetNames ...string) ([]string, error) {
-	var remaining []string
-	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
-		currCluster, err := kubernetesutil.GetClusterTPRObject(kubeClient.RESTClient(), cl.Namespace, cl.Name)
-		if err != nil {
-			return false, err
-		}
-
-		readyMembers := currCluster.Status.Members.Ready
-		remaining = nil
-		for _, name := range targetNames {
-			if presentIn(name, readyMembers) {
-				remaining = append(remaining, name)
-			}
-		}
-
-		LogfWithTimestamp(t, "waiting on members (%v) to be deleted", remaining)
-		if len(remaining) != 0 {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return remaining, nil
-}
-
-func presentIn(a string, list []string) bool {
-	for _, l := range list {
-		if a == l {
-			return true
-		}
-	}
-	return false
-}
-
 func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
 	undeletedPods, err := WaitPodsDeleted(kubeClient, cl.Namespace, 3, kubernetesutil.ClusterListOpt(cl.Name))
 	if err != nil {
@@ -213,24 +136,9 @@ func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *s
 	return nil
 }
 
-func WaitPodsWithImageDeleted(kubecli corev1.CoreV1Interface, namespace, image string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
-	return waitPodsDeleted(kubecli, namespace, retries, lo, func(p *v1.Pod) bool {
-		for _, c := range p.Spec.Containers {
-			if c.Image == image {
-				return false
-			}
-		}
-		return true
-	})
-}
-
 func WaitPodsDeleted(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
 	f := func(p *v1.Pod) bool { return p.DeletionTimestamp != nil }
 	return waitPodsDeleted(kubecli, namespace, retries, lo, f)
-}
-
-func WaitPodsDeletedCompletely(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions) ([]*v1.Pod, error) {
-	return waitPodsDeleted(kubecli, namespace, retries, lo)
 }
 
 func waitPodsDeleted(kubecli corev1.CoreV1Interface, namespace string, retries int, lo metav1.ListOptions, filters ...filterFunc) ([]*v1.Pod, error) {
