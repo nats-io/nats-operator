@@ -31,7 +31,7 @@ import (
 	natsutil "github.com/pires/nats-operator/pkg/util/nats"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
