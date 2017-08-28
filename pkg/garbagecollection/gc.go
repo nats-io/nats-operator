@@ -17,7 +17,7 @@ package garbagecollection
 import (
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -20,7 +20,7 @@ import (
 
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
 )

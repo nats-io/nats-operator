@@ -34,7 +34,7 @@ import (
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 	"github.com/pires/nats-operator/version"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 
 	"k8s.io/api/core/v1"

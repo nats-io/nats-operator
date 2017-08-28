@@ -28,7 +28,7 @@ import (
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 	"github.com/pires/nats-operator/pkg/util/probe"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kwatch "k8s.io/apimachinery/pkg/watch"

@@ -1,6 +1,6 @@
 [[constraint]]
-  name = "github.com/Sirupsen/logrus"
-  version = "1.0.2"
+  name = "github.com/sirupsen/logrus"
+  version = "1.0.3"
 
 [[constraint]]
   name = "github.com/pkg/errors"
