@@ -1,6 +1,6 @@
-FROM golang:1.8.3-alpine3.6 AS builder
-COPY ./ /go/src/github.com/pires/nats-operator
-WORKDIR /go/src/github.com/pires/nats-operator
+FROM golang:1.9.0-alpine3.6 AS builder
+WORKDIR $GOPATH/src/github.com/pires/nats-operator/
+COPY . .
 RUN apk add --update git
 RUN go get -u github.com/golang/dep/cmd/dep
 RUN dep ensure
