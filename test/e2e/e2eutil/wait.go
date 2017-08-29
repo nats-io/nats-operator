@@ -16,11 +16,14 @@ package e2eutil
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pires/nats-operator/pkg/constants"
 	"github.com/pires/nats-operator/pkg/spec"
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
@@ -28,13 +31,21 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/net"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
-var retryInterval = 10 * time.Second
+var (
+	monitoringPort = strconv.FormatInt(int64(constants.MonitoringPort), 10)
+	retryInterval  = 10 * time.Second
+)
 
 type acceptFunc func(*spec.NatsCluster) bool
 type filterFunc func(*v1.Pod) bool
+
+type routez struct {
+	RoutesCount int `json:"num_routes"`
+}
 
 func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
 	var names []string
@@ -65,7 +76,47 @@ func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, si
 	return names, nil
 }
 
-func WaitSizeAndVersionReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *spec.NatsCluster) error {
+func WaitUntilPodSizeAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
+	var names []string
+	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
+		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
+		if err != nil {
+			return false, err
+		}
+		names = nil
+		var nodeNames []string
+		for i := range podList.Items {
+			pod := &podList.Items[i]
+			if pod.Status.Phase != v1.PodRunning {
+				continue
+			}
+
+			// Check the "/routez" endpoint for the number of established routes.
+			num, err := countRoutes(kubeClient, cl.Namespace, pod.Name)
+			if err != nil {
+				continue
+			}
+			if num != size-1 {
+				LogfWithTimestamp(t, "pod(%v): expected # of routes(%v), current # of routes(%v)", pod.Name, size-1, num)
+				continue
+			}
+
+			names = append(names, pod.Name)
+			nodeNames = append(nodeNames, pod.Spec.NodeName)
+		}
+		LogfWithTimestamp(t, "waiting size (%d) with (%d) routes per pod, NATS pods: names (%v), nodes (%v)", size, size-1, names, nodeNames)
+		if len(names) != size {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+func WaitUntilPodSizeAndVersionAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *spec.NatsCluster) error {
 	return retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
 		var names []string
 		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
@@ -83,6 +134,16 @@ func WaitSizeAndVersionReached(t *testing.T, kubeClient corev1.CoreV1Interface, 
 			containerVersion := getVersionFromImage(pod.Status.ContainerStatuses[0].Image)
 			if containerVersion != version {
 				LogfWithTimestamp(t, "pod(%v): expected version(%v) current version(%v)", pod.Name, version, containerVersion)
+				continue
+			}
+
+			// Check the "/routez" endpoint for the number of established routes.
+			num, err := countRoutes(kubeClient, cl.Namespace, pod.Name)
+			if err != nil {
+				continue
+			}
+			if num != size-1 {
+				LogfWithTimestamp(t, "pod(%v): expected # of routes(%v), current # of routes(%v)", pod.Name, size-1, num)
 				continue
 			}
 
@@ -189,4 +250,29 @@ func WaitUntilOperatorReady(kubecli corev1.CoreV1Interface, namespace, name stri
 		return fmt.Errorf("failed to wait for pod (%v) to become ready: %v", podName, err)
 	}
 	return nil
+}
+
+func countRoutes(kubecli corev1.CoreV1Interface, namespace, name string) (int, error) {
+	// Check the "/routez" endpoint for the number of established routes.
+	b, err := kubecli.
+	    RESTClient().
+		Get().
+		Namespace(namespace).
+		Resource("pods").
+		SubResource("proxy").
+		Name(net.JoinSchemeNamePort("http", name, monitoringPort)).
+		Suffix("/routez").
+		DoRaw()
+	if err != nil {
+		return 0, err
+	}
+
+	var (
+		data routez
+	)
+	if err := json.Unmarshal(b, &data); err != nil {
+		return 0, err
+	}
+
+	return data.RoutesCount, nil
 }
