@@ -36,7 +36,7 @@ func TestCreateCluster(t *testing.T) {
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
 }
@@ -108,7 +108,7 @@ func TestNatsUpgrade(t *testing.T) {
 		}
 	}()
 
-	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "1.0.0", 3, 6, testNats)
+	err = e2eutil.WaitUntilPodSizeAndVersionAndRoutesReached(t, f.KubeClient, "1.0.0", 3, 18, testNats)
 	if err != nil {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestNatsUpgrade(t *testing.T) {
 	}
 
 	// We have seen in k8s 1.7.1 env it took 35s for the pod to restart with the new image.
-	err = e2eutil.WaitSizeAndVersionReached(t, f.KubeClient, "1.0.2", 3, 10, testNats)
+	err = e2eutil.WaitUntilPodSizeAndVersionAndRoutesReached(t, f.KubeClient, "1.0.2", 3, 18, testNats)
 	if err != nil {
 		t.Fatalf("failed to wait new version NATS cluster: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestResizeCluster3To5(t *testing.T) {
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
 		t.Fatalf("failed to create NATS cluster with 3 members: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestResizeCluster3To5(t *testing.T) {
 		t.Fatalf("fail to update cluster version: %v", err)
 	}
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 5, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 5, 12, testNats); err != nil {
 		t.Fatalf("failed to resize NATS cluster to 5 members: %v", err)
 	}
 }
@@ -171,7 +171,7 @@ func TestResizeCluster5To3(t *testing.T) {
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 5, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 5, 12, testNats); err != nil {
 		t.Fatalf("failed to create NATS cluster with 5 members: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestResizeCluster5To3(t *testing.T) {
 		t.Fatalf("fail to update cluster version: %v", err)
 	}
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
+	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
 		t.Fatalf("failed to resize NATS cluster to 3 members: %v", err)
 	}
 }
