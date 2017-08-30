@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pires/nats-operator/pkg/debug/local"
 	"github.com/pires/nats-operator/pkg/spec"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
@@ -28,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // TODO: replace this package with Operator client
@@ -156,9 +158,20 @@ func WaitCRDReady(clientset apiextensionsclient.Interface) error {
 }
 
 func MustNewKubeExtClient() apiextensionsclient.Interface {
-	cfg, err := InClusterConfig()
+	var (
+		cfg *rest.Config
+		err error
+	)
+
+	if len(local.KubeConfigPath) == 0 {
+		cfg, err = InClusterConfig()
+	} else {
+		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+	}
+
 	if err != nil {
 		panic(err)
 	}
+
 	return apiextensionsclient.NewForConfigOrDie(cfg)
 }

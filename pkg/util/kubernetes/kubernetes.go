@@ -35,6 +35,8 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"github.com/pires/nats-operator/pkg/debug/local"
 )
 
 const (
@@ -217,10 +219,21 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 }
 
 func MustNewKubeClient() corev1client.CoreV1Interface {
-	cfg, err := InClusterConfig()
+	var (
+		cfg *rest.Config
+		err error
+	)
+
+	if len(local.KubeConfigPath) == 0 {
+		cfg, err = InClusterConfig()
+	} else {
+		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+	}
+
 	if err != nil {
 		panic(err)
 	}
+
 	return corev1client.NewForConfigOrDie(cfg)
 }
 
