@@ -28,6 +28,7 @@ import (
 	"github.com/pires/nats-operator/pkg/client"
 	"github.com/pires/nats-operator/pkg/controller"
 	"github.com/pires/nats-operator/pkg/debug"
+	"github.com/pires/nats-operator/pkg/debug/local"
 	"github.com/pires/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 	"github.com/pires/nats-operator/pkg/util/probe"
@@ -42,6 +43,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
@@ -60,6 +63,9 @@ var (
 
 func init() {
 	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
+	flag.StringVar(&local.KubeConfigPath, "debug-kube-config-path", "", "the path to the local 'kubectl' config file (only for local debugging)")
+	flag.StringVar(&local.ServiceAccountName, "debug-service-account-name", "default", "the name of the service account which to use (only for local debugging)")
+	flag.StringVar(&local.PodName, "debug-pod-name", "nats-operator-debug", "the name of the pod which to report to EventRecorder (only for local debugging).")
 
 	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8080", "The address on which the HTTP server will listen to")
 	// chaos level will be removed once we have a formal tool to inject failures.
@@ -69,12 +75,24 @@ func init() {
 	flag.Parse()
 
 	// TODO: remove this and use CR client
-	restCfg, err := kubernetesutil.InClusterConfig()
+
+	var (
+		cfg *rest.Config
+		err error
+	)
+
+	if len(local.KubeConfigPath) == 0 {
+		cfg, err = kubernetesutil.InClusterConfig()
+	} else {
+		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+	}
+
 	if err != nil {
 		panic(err)
 	}
-	controller.MasterHost = restCfg.Host
-	restcli, _, err := client.New(restCfg)
+
+	controller.MasterHost = cfg.Host
+	restcli, _, err := client.New(cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -86,9 +104,14 @@ func main() {
 	if len(namespace) == 0 {
 		logrus.Fatalf("must set env MY_POD_NAMESPACE")
 	}
-	name = os.Getenv("MY_POD_NAME")
+
+	if len(local.KubeConfigPath) == 0 {
+		name = os.Getenv("MY_POD_NAME")
+	} else {
+		name = local.PodName
+	}
 	if len(name) == 0 {
-		logrus.Fatalf("must set env MY_POD_NAME")
+		logrus.Fatalf("must set env MY_POD_NAME (or --debug-pod-name for local debugging)")
 	}
 
 	c := make(chan os.Signal, 1)
@@ -173,9 +196,21 @@ func run(stop <-chan struct{}) {
 func newControllerConfig() controller.Config {
 	kubecli := kubernetesutil.MustNewKubeClient()
 
-	serviceAccount, err := getMyPodServiceAccount(kubecli)
-	if err != nil {
-		logrus.Fatalf("fail to get my pod's service account: %v", err)
+	var (
+		err            error
+		serviceAccount string
+	)
+
+	if len(local.KubeConfigPath) == 0 {
+		serviceAccount, err = getMyPodServiceAccount(kubecli)
+		if err != nil {
+		    logrus.Fatalf("fail to get my pod's service account: %v", err)
+		}
+	} else {
+		serviceAccount = local.ServiceAccountName
+		if len(serviceAccount) == 0 {
+			logrus.Fatalf("invalid service account name specified")
+		}
 	}
 
 	cfg := controller.Config{
@@ -188,19 +223,19 @@ func newControllerConfig() controller.Config {
 	return cfg
 }
 
-func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
-	var sa string
-	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
-		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
-		if err != nil {
-			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
-			return false, nil
-		}
-		sa = pod.Spec.ServiceAccountName
-		return true, nil
-	})
-	return sa, err
-}
+ func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
+ 	var sa string
+ 	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
+ 		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
+ 		if err != nil {
+ 			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
+ 			return false, nil
+ 		}
+ 		sa = pod.Spec.ServiceAccountName
+ 		return true, nil
+ 	})
+ 	return sa, err
+ }
 
 func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
 	gc := garbagecollection.New(kubecli, ns)
