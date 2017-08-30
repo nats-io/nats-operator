@@ -44,7 +44,7 @@ type acceptFunc func(*spec.NatsCluster) bool
 type filterFunc func(*v1.Pod) bool
 
 type routez struct {
-	RoutesCount int `json:"num_routes"`
+	RouteCount int `json:"num_routes"`
 }
 
 func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
@@ -274,5 +274,5 @@ func countRoutes(kubecli corev1.CoreV1Interface, namespace, name string) (int, e
 		return 0, err
 	}
 
-	return data.RoutesCount, nil
+	return data.RouteCount, nil
 }

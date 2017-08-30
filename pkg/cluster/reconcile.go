@@ -31,12 +31,12 @@ func (c *Cluster) reconcile(pods []*v1.Pod) error {
 	spec := c.cluster.Spec
 
 	clusterNeedsResize := len(pods) != spec.Size
-	clusterNedsUpgrade := needsUpgrade(pods, spec)
+	clusterNeedsUpgrade := needsUpgrade(pods, spec)
 
 	if clusterNeedsResize {
 		return c.reconcileSize(pods)
 	}
-	if clusterNedsUpgrade {
+	if clusterNeedsUpgrade {
 		return c.reconcileUpgrade(pods, spec)
 	}
 
@@ -72,6 +72,7 @@ func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) error {
 	c.logger.Warningf("Cluster version doesn't match, reconciling...")
 	pod := pickPodToUpgrade(pods, cs.Version)
 	kubernetesutil.SetNATSVersion(pod, cs.Version)
+	c.maybeUpgradeMgmtService()
 	return c.upgradePod(pod)
 }
 

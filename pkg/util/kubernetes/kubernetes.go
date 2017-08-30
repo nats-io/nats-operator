@@ -44,6 +44,13 @@ const (
 	versionAnnotationKey               = "nats.version"
 )
 
+const (
+	LabelAppKey            = "app"
+	LabelAppValue          = "nats"
+	LabelClusterNameKey    = "nats_cluster"
+	LabelClusterVersionKey = "nats_version"
+)
+
 func GetNATSVersion(pod *v1.Pod) string {
 	return pod.Annotations[versionAnnotationKey]
 }
@@ -72,8 +79,8 @@ func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
 	return p
 }
 
-func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference) error {
-	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports)
+func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string) error {
+	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors)
 	addOwnerRefToObject(svc.GetObjectMeta(), owner)
 	_, err := kubecli.Services(ns).Create(svc)
 	return err
@@ -86,7 +93,8 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 		TargetPort: intstr.FromInt(constants.ClientPort),
 		Protocol:   v1.ProtocolTCP,
 	}}
-	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner)
+	selectors := LabelsForCluster(clusterName)
+	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors)
 }
 
 func ManagementServiceName(clusterName string) string {
@@ -94,7 +102,7 @@ func ManagementServiceName(clusterName string) string {
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
-func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
+func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
 	ports := []v1.ServicePort{
 		{
 			Name:       "cluster",
@@ -109,7 +117,9 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, ns str
 			Protocol:   v1.ProtocolTCP,
 		},
 	}
-	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner)
+	selectors := LabelsForCluster(clusterName)
+	selectors[LabelClusterVersionKey] = clusterVersion
+	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors)
 }
 
 // CreateAndWaitPod is an util for testing.
@@ -147,10 +157,10 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	return retPod, nil
 }
 
-func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort) *v1.Service {
+func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string) *v1.Service {
 	labels := map[string]string{
-		"app":          "nats",
-		"nats_cluster": clusterName,
+		LabelAppKey:         LabelAppValue,
+		LabelClusterNameKey: clusterName,
 	}
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -162,7 +172,7 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 		},
 		Spec: v1.ServiceSpec{
 			Ports:     ports,
-			Selector:  labels,
+			Selector:  selectors,
 			ClusterIP: clusterIP,
 		},
 	}
@@ -177,15 +187,17 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	// TODO add TLS, auth support, debug and tracing
 	args := []string{
+		"--debug",
 		fmt.Sprintf("--cluster=nats://0.0.0.0:%d", constants.ClusterPort),
 		fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
-		fmt.Sprintf("--routes=nats://%s:%d", clusterName+"-mgmt", constants.ClusterPort),
+		fmt.Sprintf("--routes=nats://%s:%d", ManagementServiceName(clusterName), constants.ClusterPort),
 		// TODO cs.TLS.IsSecureClient and cs.TLS.IsSecurePeer
 	}
 
 	labels := map[string]string{
-		"app":          "nats",
-		"nats_cluster": clusterName,
+		LabelAppKey:            "nats",
+		LabelClusterNameKey:    clusterName,
+		LabelClusterVersionKey: cs.Version,
 	}
 
 	volumes := []v1.Volume{}
@@ -269,8 +281,8 @@ func ClusterListOpt(clusterName string) metav1.ListOptions {
 
 func LabelsForCluster(clusterName string) map[string]string {
 	return map[string]string{
-		"nats_cluster": clusterName,
-		"app":          "nats",
+		LabelAppKey:         LabelAppValue,
+		LabelClusterNameKey: clusterName,
 	}
 }
 
@@ -292,6 +304,14 @@ func ClonePod(p *v1.Pod) *v1.Pod {
 		panic("cannot deep copy pod")
 	}
 	return np.(*v1.Pod)
+}
+
+func CloneSvc(s *v1.Service) *v1.Service {
+    ns, err := scheme.Scheme.DeepCopy(s)
+    if err != nil {
+		panic("cannot deep copy svc")
+	}
+	return ns.(*v1.Service)
 }
 
 func CascadeDeleteOptions(gracePeriodSeconds int64) *metav1.DeleteOptions {

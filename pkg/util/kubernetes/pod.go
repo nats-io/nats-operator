@@ -81,7 +81,7 @@ func natsLivenessProbe(isSecure bool) *v1.Probe {
 // PodWithAntiAffinity sets pod anti-affinity with the pods in the same NATS cluster
 func PodWithAntiAffinity(pod *v1.Pod, clusterName string) *v1.Pod {
 	ls := &metav1.LabelSelector{MatchLabels: map[string]string{
-		"nats_cluster": clusterName,
+		LabelClusterNameKey: clusterName,
 	}}
 	return podWithAntiAffinity(pod, ls)
 }

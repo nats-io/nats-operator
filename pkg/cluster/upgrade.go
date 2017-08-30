@@ -37,6 +37,7 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 
 	c.logger.Infof("upgrading the NATS member %v from %s to %s", pod.GetName(), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
 	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version)
+	pod.Labels[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
 	kubernetesutil.SetNATSVersion(pod, c.cluster.Spec.Version)
 
 	patchdata, err := kubernetesutil.CreatePatch(oldpod, pod, v1.Pod{})
@@ -49,5 +50,34 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 		return fmt.Errorf("fail to update the NATS member (%s): %v", pod.GetName(), err)
 	}
 	c.logger.Infof("finished upgrading the NATS member %v", pod.GetName())
+	return nil
+}
+
+func (c *Cluster) maybeUpgradeMgmtService() error {
+	ns := c.cluster.Namespace
+	sn := kubernetesutil.ManagementServiceName(c.cluster.Name)
+
+	svc, err := c.config.KubeCli.Services(ns).Get(sn, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get service (%s): %v", sn, err)
+	}
+	if svc.Spec.Selector[kubernetesutil.LabelClusterVersionKey] == c.cluster.Spec.Version {
+		c.logger.Infof("NATS management service %v has already been updated to %s", svc.GetName(), c.cluster.Spec.Version)
+		return nil
+	}
+	oldsvc := kubernetesutil.CloneSvc(svc)
+
+	svc.Spec.Selector[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
+
+	patchdata, err := kubernetesutil.CreatePatch(oldsvc, svc, v1.Service{})
+	if err != nil {
+		return fmt.Errorf("error creating patch: %v", err)
+	}
+
+	_, err = c.config.KubeCli.Services(ns).Patch(svc.GetName(), types.StrategicMergePatchType, patchdata)
+	if err != nil {
+		return fmt.Errorf("fail to update the NATS management service (%s): %v", svc.GetName(), err)
+	}
+	c.logger.Infof("finished upgrading the NATS management service %v", svc.GetName())
 	return nil
 }
