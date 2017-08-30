@@ -30,10 +30,6 @@ func (fe *fatalError) Error() string {
 	return fe.reason
 }
 
-func newFatalError(reason string) *fatalError {
-	return &fatalError{reason}
-}
-
 func isFatalError(err error) bool {
 	switch errors.Cause(err).(type) {
 	case *fatalError:

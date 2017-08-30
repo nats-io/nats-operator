@@ -165,10 +165,6 @@ type ClusterConditionType string
 const (
 	ClusterConditionReady = "Ready"
 
-	ClusterConditionRemovingDeadMember = "RemovingDeadMember"
-
-	ClusterConditionRecovering = "Recovering"
-
 	ClusterConditionScalingUp   = "ScalingUp"
 	ClusterConditionScalingDown = "ScalingDown"
 
