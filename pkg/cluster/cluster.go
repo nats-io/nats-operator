@@ -378,7 +378,7 @@ func (c *Cluster) updateCRStatus() error {
 
 	newCluster := c.cluster
 	newCluster.Status = c.status
-	newCluster, err := kubernetesutil.UpdateClusterTPRObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, newCluster)
+	newCluster, err := kubernetesutil.UpdateClusterCRDObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, newCluster)
 	if err != nil {
 		return fmt.Errorf("failed to update CR status: %v", err)
 	}
@@ -403,7 +403,7 @@ func (c *Cluster) reportFailedStatus() {
 			return false, nil
 		}
 
-		cl, err := kubernetesutil.GetClusterTPRObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, c.cluster.Name)
+		cl, err := kubernetesutil.GetClusterCRDObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, c.cluster.Name)
 		if err != nil {
 			// Update (PUT) will return conflict even if object is deleted since we have UID set in object.
 			// Because it will check UID first and return something like:
