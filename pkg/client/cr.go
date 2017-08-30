@@ -19,7 +19,6 @@ import (
 	"errors"
 
 	"github.com/pires/nats-operator/pkg/spec"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -44,18 +43,6 @@ type natsClusterCR struct {
 	client     *rest.RESTClient
 	crScheme   *runtime.Scheme
 	paramCodec runtime.ParameterCodec
-}
-
-func MustNewCRInCluster() NatsClusterCR {
-	cfg, err := kubernetesutil.InClusterConfig()
-	if err != nil {
-		panic(err)
-	}
-	cli, err := NewCRClient(cfg)
-	if err != nil {
-		panic(err)
-	}
-	return cli
 }
 
 func NewCRClient(cfg *rest.Config) (NatsClusterCR, error) {
