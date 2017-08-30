@@ -35,10 +35,6 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
-const (
-	tprName = "management.nats.io"
-)
-
 var (
 	ErrVersionOutdated = errors.New("requested version is outdated in apiserver")
 

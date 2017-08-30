@@ -26,7 +26,6 @@ import (
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -60,7 +59,7 @@ func listClustersURI(ns string) string {
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural)
 }
 
-func GetClusterTPRObject(restcli rest.Interface, ns, name string) (*spec.NatsCluster, error) {
+func GetClusterCRDObject(restcli rest.Interface, ns, name string) (*spec.NatsCluster, error) {
 	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural, name)
 	b, err := restcli.Get().RequestURI(uri).DoRaw()
 	if err != nil {
@@ -69,32 +68,7 @@ func GetClusterTPRObject(restcli rest.Interface, ns, name string) (*spec.NatsClu
 	return readClusterCR(b)
 }
 
-// AtomicUpdateClusterTPRObject will get the latest result of a cluster,
-// let user modify it, and update the cluster with modified result
-// The entire process would be retried if there is a conflict of resource version
-func AtomicUpdateClusterTPRObject(restcli rest.Interface, name, namespace string, maxRetries int, updateFunc NatsClusterCRUpdateFunc) (*spec.NatsCluster, error) {
-	var updatedCluster *spec.NatsCluster
-	err := retryutil.Retry(1*time.Second, maxRetries, func() (done bool, err error) {
-		currCluster, err := GetClusterTPRObject(restcli, namespace, name)
-		if err != nil {
-			return false, err
-		}
-
-		updateFunc(currCluster)
-
-		updatedCluster, err = UpdateClusterTPRObject(restcli, namespace, currCluster)
-		if err != nil {
-			if apierrors.IsConflict(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
-	})
-	return updatedCluster, err
-}
-
-func UpdateClusterTPRObject(restcli rest.Interface, ns string, c *spec.NatsCluster) (*spec.NatsCluster, error) {
+func UpdateClusterCRDObject(restcli rest.Interface, ns string, c *spec.NatsCluster) (*spec.NatsCluster, error) {
 	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural, c.Name)
 	b, err := restcli.Put().RequestURI(uri).Body(c).DoRaw()
 	if err != nil {
