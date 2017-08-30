@@ -314,7 +314,7 @@ func (c *Cluster) setupServices() error {
 		return err
 	}
 
-	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner())
+	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
 }
 
 func (c *Cluster) createPod() error {
