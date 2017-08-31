@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/pires/nats-operator/pkg/constants"
+	"github.com/pires/nats-operator/pkg/debug/local"
 	"github.com/pires/nats-operator/pkg/spec"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
@@ -36,7 +37,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"github.com/pires/nats-operator/pkg/debug/local"
 )
 
 const (
@@ -71,7 +71,7 @@ func GetPodNames(pods []*v1.Pod) []string {
 }
 
 func MakeNATSImage(version string) string {
-	return fmt.Sprintf("nats:%v", version)
+	return fmt.Sprintf("quay.io/pires/docker-nats:%v", version)
 }
 
 func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
@@ -79,8 +79,8 @@ func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
 	return p
 }
 
-func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string) error {
-	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors)
+func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string, tolerateUnready bool) error {
+	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors, tolerateUnready)
 	addOwnerRefToObject(svc.GetObjectMeta(), owner)
 	_, err := kubecli.Services(ns).Create(svc)
 	return err
@@ -94,7 +94,7 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 		Protocol:   v1.ProtocolTCP,
 	}}
 	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors)
+	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors, false)
 }
 
 func ManagementServiceName(clusterName string) string {
@@ -119,7 +119,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
-	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors)
+	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
 // CreateAndWaitPod is an util for testing.
@@ -157,18 +157,22 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	return retPod, nil
 }
 
-func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string) *v1.Service {
+func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string, tolerateUnready bool) *v1.Service {
 	labels := map[string]string{
 		LabelAppKey:         LabelAppValue,
 		LabelClusterNameKey: clusterName,
 	}
+
+	annotations := make(map[string]string)
+	if tolerateUnready == true {
+		annotations[TolerateUnreadyEndpointsAnnotation] = "true"
+	}
+
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   svcName,
-			Labels: labels,
-			Annotations: map[string]string{
-				TolerateUnreadyEndpointsAnnotation: "true",
-			},
+			Name:        svcName,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: v1.ServiceSpec{
 			Ports:     ports,
@@ -185,15 +189,6 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
 func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
-	// TODO add TLS, auth support, debug and tracing
-	args := []string{
-		"--debug",
-		fmt.Sprintf("--cluster=nats://0.0.0.0:%d", constants.ClusterPort),
-		fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
-		fmt.Sprintf("--routes=nats://%s:%d", ManagementServiceName(clusterName), constants.ClusterPort),
-		// TODO cs.TLS.IsSecureClient and cs.TLS.IsSecurePeer
-	}
-
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -202,7 +197,9 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	volumes := []v1.Volume{}
 
-	container := containerWithLivenessProbe(natsPodContainer(args, cs.Version), natsLivenessProbe(cs.TLS.IsSecureClient()))
+	container := natsPodContainer(clusterName, cs.Version)
+	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
+	container = containerWithReadinessProbe(container, natsReadinessProbe(clusterName))
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
