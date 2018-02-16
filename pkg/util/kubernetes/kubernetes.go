@@ -114,8 +114,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Name:       "monitoring",
 			Port:       constants.MonitoringPort,
 			TargetPort: intstr.FromInt(constants.MonitoringPort),
-			Protocol:   v1.ProtocolTCP,
-		},
+			Protocol:   v1.ProtocolTCP,		},
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
@@ -304,8 +303,8 @@ func ClonePod(p *v1.Pod) *v1.Pod {
 }
 
 func CloneSvc(s *v1.Service) *v1.Service {
-    ns, err := scheme.Scheme.DeepCopy(s)
-    if err != nil {
+	ns, err := scheme.Scheme.DeepCopy(s)
+	if err != nil {
 		panic("cannot deep copy svc")
 	}
 	return ns.(*v1.Service)
