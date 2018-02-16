@@ -71,7 +71,7 @@ func GetPodNames(pods []*v1.Pod) []string {
 }
 
 func MakeNATSImage(version string) string {
-	return fmt.Sprintf("quay.io/pires/docker-nats:%v", version)
+	return fmt.Sprintf("nats:%v", version)
 }
 
 func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
@@ -198,7 +198,6 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
-	container = containerWithReadinessProbe(container, natsReadinessProbe(clusterName))
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
