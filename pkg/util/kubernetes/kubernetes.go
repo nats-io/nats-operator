@@ -15,10 +15,13 @@
 package kubernetes
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/constants"
@@ -94,11 +97,11 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 		Protocol:   v1.ProtocolTCP,
 	}}
 	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors, false)
+	return createService(kubecli, clusterName+"-client", clusterName, ns, "", ports, owner, selectors, false)
 }
 
 func ManagementServiceName(clusterName string) string {
-	return clusterName + "-mgmt"
+	return clusterName
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
@@ -114,7 +117,8 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Name:       "monitoring",
 			Port:       constants.MonitoringPort,
 			TargetPort: intstr.FromInt(constants.MonitoringPort),
-			Protocol:   v1.ProtocolTCP,		},
+			Protocol:   v1.ProtocolTCP,
+		},
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
@@ -187,7 +191,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference, clusterNames []string) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -203,13 +207,28 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
 
+	// Unique name for the pod here instead of via `GenerateName`
+	number, _ := rand.Int(rand.Reader, big.NewInt(1000))
+	name := fmt.Sprintf("nats-%d", number)
+
+	cmd := []string{"/gnatsd", "-m", "8222", "--cluster", "nats://0.0.0.0:6222"}
+
+	if len(clusterNames) > 0 {
+		routes := strings.Join(clusterNames, ",")
+		cmd = append(cmd, "--routes", routes)
+	}
+
+	container.Command = cmd
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:       labels,
-			GenerateName: fmt.Sprintf("nats-%s-", clusterName),
-			Annotations:  map[string]string{},
+			Name:        name,
+			Labels:      labels,
+			Annotations: map[string]string{},
 		},
 		Spec: v1.PodSpec{
+			Hostname:      name,
+			Subdomain:     clusterName,
 			Containers:    []v1.Container{container},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,

@@ -15,9 +15,10 @@
 package cluster
 
 import (
+	"fmt"
+
 	"github.com/nats-io/nats-operator/pkg/spec"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-
 	"k8s.io/api/core/v1"
 )
 
@@ -55,9 +56,21 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 	currentClusterSize := len(pods)
 	if currentClusterSize < spec.Size {
 		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
-		if err := c.createPod(); err != nil {
+
+		// Generate a static list of the NATS server peers from the expected A records
+		// generated for the headless service in order to form a cluster.
+		// New nodes when scaling up get the full list, and nodes with an older static list
+		// get the fresh route updates via the INFO based auto discovery.
+		clusterNames := []string{}
+		for _, pod := range pods {
+			// TODO: Use the provided namespace for managing the created pods,
+			// and container port for the configuration.
+			clusterNames = append(clusterNames, fmt.Sprintf("nats://%s.%s.default.svc.cluster.local:6222", pod.ObjectMeta.Name, c.cluster.Name))
+		}
+		if err := c.createPod(clusterNames); err != nil {
 			return err
 		}
+
 	} else if currentClusterSize > spec.Size {
 		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
 		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
