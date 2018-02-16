@@ -31,12 +31,12 @@ func natsPodContainer(clusterName, version string) v1.Container {
 	// TODO add TLS, auth support, debug and tracing
 	c := v1.Container{
 		Env: []v1.EnvVar{
-		    {
-				Name: "SVC",
+			{
+				Name:  "SVC",
 				Value: ManagementServiceName(clusterName),
 			},
 			{
-				Name: "EXTRA",
+				Name:  "EXTRA",
 				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
 			},
 		},
