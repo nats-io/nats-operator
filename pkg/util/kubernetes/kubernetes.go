@@ -198,7 +198,6 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
-	container = containerWithReadinessProbe(container, natsReadinessProbe(clusterName))
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
