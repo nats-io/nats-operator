@@ -1,9 +1,12 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: nats-operator
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      name: nats-operator
   template:
     metadata:
       labels:
