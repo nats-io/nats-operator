@@ -67,10 +67,10 @@ type ClusterSpec struct {
 	// The operator will eventually make the cluster version
 	// equal to the expected version.
 	//
-	// The version must follow the [semver]( http://semver.org) format, for example "1.0.2".
+	// The version must follow the [semver]( http://semver.org) format, for example "1.0.4".
 	// Only NATS released versions are supported: https://github.com/nats-io/gnatsd/releases
 	//
-	// If version is not set, default is "1.0.2".
+	// If version is not set, default is "1.0.4".
 	Version string `json:"version"`
 
 	// Paused is to pause the control of the operator for the cluster.
@@ -81,8 +81,31 @@ type ClusterSpec struct {
 	// Updating Pod does not take effect on any existing NATS pods.
 	Pod *PodPolicy `json:"pod,omitempty"`
 
-	// NATS cluster TLS configuration
-	TLS *TLSPolicy `json:"TLS,omitempty"`
+	// TLS is the configuration to secure the cluster.
+	TLS *TLSConfig `json:"tls,omitempty"`
+
+	// Logging is the configuration for logging level in server.
+	Logging *LoggingConfig `json:"logging,omitempty"`
+}
+
+// TLSConfig is the optional TLS configuration for the cluster.
+type TLSConfig struct {
+	// ServerSecret is the secret containing the certificates
+	// to secure the port to which the clients connect.
+	ServerSecret string `json:"serverSecret,omitempty"`
+
+	// RoutesSecret is the secret containing the certificates
+	// to secure the port to which cluster routes connect.
+	RoutesSecret string `json:"routesSecret,omitempty"`
+}
+
+// LoggingConfig allows customizing logging for the server.
+type LoggingConfig struct {
+	// Debug enables output of debugging logs.
+	Debug bool `json:"debug,omitempty"`
+
+	// Trace enables output of trace logs.
+	Trace bool `json:"trace,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
@@ -117,12 +140,6 @@ type PodPolicy struct {
 }
 
 func (c *ClusterSpec) Validate() error {
-	if c.TLS != nil {
-		if err := c.TLS.Validate(); err != nil {
-			return err
-		}
-	}
-
 	if c.Pod != nil {
 		for k := range c.Pod.Labels {
 			if k == "app" || strings.HasPrefix(k, "nats_") {

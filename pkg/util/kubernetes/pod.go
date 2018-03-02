@@ -16,11 +16,9 @@ package kubernetes
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/pires/nats-operator/pkg/constants"
 	"github.com/pires/nats-operator/pkg/spec"
-
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -28,18 +26,7 @@ import (
 
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(clusterName, version string) v1.Container {
-	// TODO add TLS, auth support, debug and tracing
 	c := v1.Container{
-		Env: []v1.EnvVar{
-		    {
-				Name: "SVC",
-				Value: ManagementServiceName(clusterName),
-			},
-			{
-				Name: "EXTRA",
-				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
-			},
-		},
 		Name:  "nats",
 		Image: MakeNATSImage(version),
 		Ports: []v1.ContainerPort{
@@ -69,17 +56,12 @@ func containerWithLivenessProbe(c v1.Container, lp *v1.Probe) v1.Container {
 	return c
 }
 
-func containerWithReadinessProbe(c v1.Container, rp *v1.Probe) v1.Container {
-	c.ReadinessProbe = rp
-	return c
-}
-
 func containerWithRequirements(c v1.Container, r v1.ResourceRequirements) v1.Container {
 	c.Resources = r
 	return c
 }
 
-func natsLivenessProbe(isSecure bool) *v1.Probe {
+func natsLivenessProbe() *v1.Probe {
 	return &v1.Probe{
 		Handler: v1.Handler{
 			HTTPGet: &v1.HTTPGetAction{
@@ -90,24 +72,6 @@ func natsLivenessProbe(isSecure bool) *v1.Probe {
 		TimeoutSeconds:      10,
 		PeriodSeconds:       60,
 		FailureThreshold:    3,
-	}
-}
-
-func natsReadinessProbe(clusterName string) *v1.Probe {
-	return &v1.Probe{
-		Handler: v1.Handler{
-			Exec: &v1.ExecAction{
-				Command: []string{
-					"/route_checker",
-					"-lookup",
-					ManagementServiceName(clusterName),
-				},
-			},
-		},
-		InitialDelaySeconds: 0,
-		TimeoutSeconds:      1,
-		PeriodSeconds:       3,
-		FailureThreshold:    1,
 	}
 }
 
