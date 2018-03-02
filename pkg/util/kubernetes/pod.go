@@ -69,17 +69,12 @@ func containerWithLivenessProbe(c v1.Container, lp *v1.Probe) v1.Container {
 	return c
 }
 
-func containerWithReadinessProbe(c v1.Container, rp *v1.Probe) v1.Container {
-	c.ReadinessProbe = rp
-	return c
-}
-
 func containerWithRequirements(c v1.Container, r v1.ResourceRequirements) v1.Container {
 	c.Resources = r
 	return c
 }
 
-func natsLivenessProbe(isSecure bool) *v1.Probe {
+func natsLivenessProbe() *v1.Probe {
 	return &v1.Probe{
 		Handler: v1.Handler{
 			HTTPGet: &v1.HTTPGetAction{
@@ -90,24 +85,6 @@ func natsLivenessProbe(isSecure bool) *v1.Probe {
 		TimeoutSeconds:      10,
 		PeriodSeconds:       60,
 		FailureThreshold:    3,
-	}
-}
-
-func natsReadinessProbe(clusterName string) *v1.Probe {
-	return &v1.Probe{
-		Handler: v1.Handler{
-			Exec: &v1.ExecAction{
-				Command: []string{
-					"/route_checker",
-					"-lookup",
-					ManagementServiceName(clusterName),
-				},
-			},
-		},
-		InitialDelaySeconds: 0,
-		TimeoutSeconds:      1,
-		PeriodSeconds:       3,
-		FailureThreshold:    1,
 	}
 }
 

@@ -28,11 +28,8 @@ import (
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	"github.com/nats-io/nats-operator/pkg/spec"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	natsutil "github.com/nats-io/nats-operator/pkg/util/nats"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,17 +133,6 @@ func (c *Cluster) setup() error {
 
 	default:
 		return fmt.Errorf("unexpected cluster phase: %s", c.status.Phase)
-	}
-
-	if c.isSecureClient() {
-		d, err := kubernetesutil.GetTLSDataFromSecret(c.config.KubeCli, c.cluster.Namespace, c.cluster.Spec.TLS.Static.OperatorSecret)
-		if err != nil {
-			return err
-		}
-		c.tlsConfig, err = natsutil.NewTLSConfig(d.CertData, d.KeyData, d.CAData)
-		if err != nil {
-			return err
-		}
 	}
 
 	if shouldCreateCluster {
@@ -287,14 +273,6 @@ func isSpecEqual(s1, s2 spec.ClusterSpec) bool {
 		return false
 	}
 	return true
-}
-
-func (c *Cluster) isSecurePeer() bool {
-	return c.cluster.Spec.TLS.IsSecurePeer()
-}
-
-func (c *Cluster) isSecureClient() bool {
-	return c.cluster.Spec.TLS.IsSecureClient()
 }
 
 func (c *Cluster) Update(cl *spec.NatsCluster) {
