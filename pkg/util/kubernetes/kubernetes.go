@@ -124,6 +124,30 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
+// addTLSConfig fills in the TLS configuration to be used in the config map.
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.TLS == nil {
+		return
+	}
+
+	serverCertsMountPath := "/etc/nats-server-tls-certs"
+	routesCertsMountPath := "/etc/nats-routes-tls-certs"
+	if cs.TLS.ServerSecret != "" {
+		sconfig.TLS = &natsconf.TLSConfig{
+			CAFile:   serverCertsMountPath + "/ca.pem",
+			CertFile: serverCertsMountPath + "/server.pem",
+			KeyFile:  serverCertsMountPath + "/server-key.pem",
+		}
+	}
+	if cs.TLS.RoutesSecret != "" {
+		sconfig.Cluster.TLS = &natsconf.TLSConfig{
+			CAFile:   routesCertsMountPath + "/ca.pem",
+			CertFile: routesCertsMountPath + "/route.pem",
+			KeyFile:  routesCertsMountPath + "/route-key.pem",
+		}
+	}
+}
+
 // CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
 func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
 	sconfig := &natsconf.ServerConfig{
@@ -133,6 +157,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Port: int(constants.ClusterPort),
 		},
 	}
+	addTLSConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -179,6 +204,8 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Routes: routes,
 		},
 	}
+	addTLSConfig(sconfig, cluster)
+
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
@@ -339,7 +366,6 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe())
-	container.VolumeMounts = volumeMounts
 
 	// In case TLS was enabled as part of the NATS cluster
 	// configuration then should include the configuration here.
@@ -360,6 +386,7 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
+	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
