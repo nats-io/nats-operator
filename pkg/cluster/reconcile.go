@@ -54,13 +54,16 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 	currentClusterSize := len(pods)
 	if currentClusterSize < spec.Size {
 		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
-		pod, err := c.createPod()
+		_, err := c.createPod()
 		if err != nil {
 			return err
 		}
 
 		// Update config map to include the new route.
-		c.logger.Debugf("POD: %+v", pod)
+		err = c.updateConfigMap()
+		if err != nil {
+			c.logger.Warningf("error update the shared config map: %s", err)
+		}
 
 	} else if currentClusterSize > spec.Size {
 		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
