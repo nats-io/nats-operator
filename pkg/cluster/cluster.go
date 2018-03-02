@@ -305,6 +305,10 @@ func (c *Cluster) setupConfigMap() error {
 	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
 }
 
+func (c *Cluster) updateConfigMap() error {
+	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+}
+
 func (c *Cluster) createPod() (*v1.Pod, error) {
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 

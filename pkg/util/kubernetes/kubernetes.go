@@ -153,6 +153,51 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	return err
 }
 
+// UpdateConfigMap applies the new configuration of the cluster,
+// such as modifying the routes available in the cluster.
+func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	// List all available pods then generate the routes
+	// for the NATS cluster.
+	routes := make([]string, 0)
+	podList, err := kubecli.Pods(ns).List(ClusterListOpt(clusterName))
+	if err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
+			pod.Name, clusterName, ns, constants.ClusterPort)
+		routes = append(routes, route)
+	}
+
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Debug:    true,
+		Trace:    true,
+		Cluster: &natsconf.ClusterConfig{
+			Port:   int(constants.ClusterPort),
+			Routes: routes,
+		},
+	}
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": string(rawConfig),
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err = kubecli.ConfigMaps(ns).Update(cm)
+	return err
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
