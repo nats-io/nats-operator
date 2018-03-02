@@ -297,12 +297,10 @@ func (c *Cluster) setupServices() error {
 	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
 }
 
-func (c *Cluster) createPod(clusterNames []string) error {
-	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner(), clusterNames)
+func (c *Cluster) createPod() (*v1.Pod, error) {
+	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 
-	_, err := c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
-
-	return err
+	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
 
 func (c *Cluster) removePod(name string) error {
