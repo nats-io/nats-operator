@@ -308,7 +308,7 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
-	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
+	container = containerWithLivenessProbe(container, natsLivenessProbe())
 	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {

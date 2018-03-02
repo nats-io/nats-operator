@@ -80,9 +80,6 @@ type ClusterSpec struct {
 	//
 	// Updating Pod does not take effect on any existing NATS pods.
 	Pod *PodPolicy `json:"pod,omitempty"`
-
-	// NATS cluster TLS configuration
-	TLS *TLSPolicy `json:"TLS,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
@@ -117,12 +114,6 @@ type PodPolicy struct {
 }
 
 func (c *ClusterSpec) Validate() error {
-	if c.TLS != nil {
-		if err := c.TLS.Validate(); err != nil {
-			return err
-		}
-	}
-
 	if c.Pod != nil {
 		for k := range c.Pod.Labels {
 			if k == "app" || strings.HasPrefix(k, "nats_") {
