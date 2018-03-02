@@ -15,13 +15,10 @@
 package kubernetes
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/constants"
@@ -34,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -191,13 +189,15 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference, clusterNames []string) *v1.Pod {
+func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
 		LabelClusterVersionKey: cs.Version,
 	}
 
+	// Mount the config map that ought to have been created
+	// for the pods in the cluster.
 	volumes := []v1.Volume{}
 
 	container := natsPodContainer(clusterName, cs.Version)
@@ -206,16 +206,13 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
+	name := UniquePodName()
 
-	// Unique name for the pod here instead of via `GenerateName`
-	number, _ := rand.Int(rand.Reader, big.NewInt(1000))
-	name := fmt.Sprintf("nats-%d", number)
-
-	cmd := []string{"/gnatsd", "-m", "8222", "--cluster", "nats://0.0.0.0:6222"}
-
-	if len(clusterNames) > 0 {
-		routes := strings.Join(clusterNames, ",")
-		cmd = append(cmd, "--routes", routes)
+	// Rely on the shared configuration map for configuring the cluster.
+	cmd := []string{
+		"/gnatsd",
+		"-c",
+		"/etc/nats-config/nats.conf",
 	}
 
 	container.Command = cmd
@@ -336,4 +333,9 @@ func mergeLabels(l1, l2 map[string]string) {
 		}
 		l1[k] = v
 	}
+}
+
+// UniquePodName generates a unique name for the Pod.
+func UniquePodName() string {
+	return fmt.Sprintf("nats-%s", k8srand.String(10))
 }

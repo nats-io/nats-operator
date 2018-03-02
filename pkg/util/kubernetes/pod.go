@@ -16,11 +16,9 @@ package kubernetes
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/spec"
-
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -28,18 +26,7 @@ import (
 
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(clusterName, version string) v1.Container {
-	// TODO add TLS, auth support, debug and tracing
 	c := v1.Container{
-		Env: []v1.EnvVar{
-			{
-				Name:  "SVC",
-				Value: ManagementServiceName(clusterName),
-			},
-			{
-				Name:  "EXTRA",
-				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
-			},
-		},
 		Name:  "nats",
 		Image: MakeNATSImage(version),
 		Ports: []v1.ContainerPort{

@@ -80,6 +80,20 @@ type ClusterSpec struct {
 	//
 	// Updating Pod does not take effect on any existing NATS pods.
 	Pod *PodPolicy `json:"pod,omitempty"`
+
+	// TLS is the configuration to secure the cluster.
+	TLS *TLSConfig `json:"tls,omitempty"`
+}
+
+// TLSConfig is the optional TLS configuration for the cluster.
+type TLSConfig struct {
+	// ServerSecret is the secret containing the certificates
+	// to secure the port to which the clients connect.
+	ServerSecret string `json:"serverSecret,omitempty"`
+
+	// RoutesSecret is the secret containing the certificates
+	// to secure the port to which cluster routes connect.
+	RoutesSecret string `json:"routesSecret,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
