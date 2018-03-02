@@ -199,6 +199,26 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 	}
 }
 
+func newNatsConfigMapVolume(clusterName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-config",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: clusterName,
+				},
+			},
+		},
+	}
+}
+
+func newNatsConfigMapVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-config",
+		MountPath: "/etc/nats-config",
+	}
+}
+
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 	o.SetOwnerReferences(append(o.GetOwnerReferences(), r))
 }
@@ -213,10 +233,18 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	// Mount the config map that ought to have been created
 	// for the pods in the cluster.
-	volumes := []v1.Volume{}
+	volumes := make([]v1.Volume, 0)
+	volumeMounts := make([]v1.VolumeMount, 0)
+
+	// ConfigMap: Volume declaration for the Pod and Container.
+	volume := newNatsConfigMapVolume(clusterName)
+	volumes = append(volumes, volume)
+	volumeMount := newNatsConfigMapVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe())
+	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
@@ -246,6 +274,7 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 			Volumes:       volumes,
 		},
 	}
+	pod.Spec.Volumes = volumes
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
