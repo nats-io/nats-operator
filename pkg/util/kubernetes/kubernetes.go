@@ -96,11 +96,11 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 		Protocol:   v1.ProtocolTCP,
 	}}
 	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, clusterName+"-client", clusterName, ns, "", ports, owner, selectors, false)
+	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors, false)
 }
 
 func ManagementServiceName(clusterName string) string {
-	return clusterName
+	return clusterName + "-routes"
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
@@ -189,7 +189,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 	for _, pod := range podList.Items {
-		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
+		route := fmt.Sprintf("nats://%s.%s-routes.%s.svc:%d",
 			pod.Name, clusterName, ns, constants.ClusterPort)
 		routes = append(routes, route)
 	}
@@ -410,7 +410,7 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 		},
 		Spec: v1.PodSpec{
 			Hostname:      name,
-			Subdomain:     clusterName,
+			Subdomain:     clusterName + "-routes",
 			Containers:    []v1.Container{container},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
