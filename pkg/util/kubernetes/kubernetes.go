@@ -148,6 +148,15 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 	}
 }
 
+func addLoggingConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.Logging == nil {
+		return
+	}
+
+	sconfig.Debug = cs.Logging.Debug
+	sconfig.Trace = cs.Logging.Trace
+}
+
 // CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
 func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
 	sconfig := &natsconf.ServerConfig{
@@ -158,6 +167,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		},
 	}
 	addTLSConfig(sconfig, cluster)
+	addLoggingConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -197,14 +207,13 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
-		Debug:    true,
-		Trace:    true,
 		Cluster: &natsconf.ClusterConfig{
 			Port:   int(constants.ClusterPort),
 			Routes: routes,
 		},
 	}
 	addTLSConfig(sconfig, cluster)
+	addLoggingConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
