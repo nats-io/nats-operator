@@ -123,6 +123,22 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
+// CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
+func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": "",
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err := kubecli.ConfigMaps(ns).Create(cm)
+	return err
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
@@ -169,7 +185,7 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 		annotations[TolerateUnreadyEndpointsAnnotation] = "true"
 	}
 
-	svc := &v1.Service{
+	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        svcName,
 			Labels:      labels,
@@ -181,7 +197,6 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 			ClusterIP: clusterIP,
 		},
 	}
-	return svc
 }
 
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
