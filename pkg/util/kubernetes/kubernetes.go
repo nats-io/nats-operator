@@ -1,4 +1,4 @@
-// Copyright 2017 The nats-operator Authors
+// Copyright 2017-2018 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pires/nats-operator/pkg/conf"
 	"github.com/pires/nats-operator/pkg/constants"
 	"github.com/pires/nats-operator/pkg/debug/local"
 	"github.com/pires/nats-operator/pkg/spec"
@@ -125,17 +126,30 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 
 // CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
 func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port: int(constants.ClusterPort),
+		},
+	}
+
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterName,
 		},
 		Data: map[string]string{
-			"nats.conf": "",
+			"nats.conf": string(rawConfig),
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
 
-	_, err := kubecli.ConfigMaps(ns).Create(cm)
+	_, err = kubecli.ConfigMaps(ns).Create(cm)
 	return err
 }
 
