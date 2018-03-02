@@ -154,8 +154,12 @@ func (c *Cluster) create() error {
 	c.gc.CollectCluster(c.cluster.Name, c.cluster.UID)
 
 	if err := c.setupServices(); err != nil {
-		return fmt.Errorf("cluster create: fail to create client service LB: %v", err)
+		return fmt.Errorf("cluster create: fail to create client service LB: %s", err)
 	}
+	if err := c.setupConfigMap(); err != nil {
+		return fmt.Errorf("cluster create: fail to create shared config map: %s", err)
+	}
+
 	return nil
 }
 
@@ -295,6 +299,10 @@ func (c *Cluster) setupServices() error {
 	}
 
 	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
+}
+
+func (c *Cluster) setupConfigMap() error {
+	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
 }
 
 func (c *Cluster) createPod() (*v1.Pod, error) {
