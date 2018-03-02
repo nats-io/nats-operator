@@ -219,6 +219,42 @@ func newNatsConfigMapVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsServerSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-server",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsServerSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-server",
+		MountPath: "/etc/nats-server-tls-certs",
+	}
+}
+
+func newNatsRoutesSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-routes",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsRoutesSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-routes",
+		MountPath: "/etc/nats-routes-tls-certs",
+	}
+}
+
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 	o.SetOwnerReferences(append(o.GetOwnerReferences(), r))
 }
@@ -245,6 +281,26 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe())
 	container.VolumeMounts = volumeMounts
+
+	// In case TLS was enabled as part of the NATS cluster
+	// configuration then should include the configuration here.
+	if cs.TLS != nil {
+		if cs.TLS.ServerSecret != "" {
+			volume = newNatsServerSecretVolume(cs.TLS.ServerSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsServerSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+
+		if cs.TLS.RoutesSecret != "" {
+			volume = newNatsRoutesSecretVolume(cs.TLS.RoutesSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsRoutesSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+	}
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
