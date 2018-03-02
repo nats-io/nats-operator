@@ -1,4 +1,4 @@
-// Copyright 2017 The nats-operator Authors
+// Copyright 2017-2018 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pires/nats-operator/pkg/conf"
 	"github.com/pires/nats-operator/pkg/constants"
 	"github.com/pires/nats-operator/pkg/debug/local"
 	"github.com/pires/nats-operator/pkg/spec"
@@ -31,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -71,7 +73,7 @@ func GetPodNames(pods []*v1.Pod) []string {
 }
 
 func MakeNATSImage(version string) string {
-	return fmt.Sprintf("quay.io/pires/docker-nats:%v", version)
+	return fmt.Sprintf("nats:%v", version)
 }
 
 func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
@@ -98,7 +100,7 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 }
 
 func ManagementServiceName(clusterName string) string {
-	return clusterName + "-mgmt"
+	return clusterName + "-routes"
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
@@ -120,6 +122,116 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
+}
+
+// addTLSConfig fills in the TLS configuration to be used in the config map.
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.TLS == nil {
+		return
+	}
+
+	serverCertsMountPath := "/etc/nats-server-tls-certs"
+	routesCertsMountPath := "/etc/nats-routes-tls-certs"
+	if cs.TLS.ServerSecret != "" {
+		sconfig.TLS = &natsconf.TLSConfig{
+			CAFile:   serverCertsMountPath + "/ca.pem",
+			CertFile: serverCertsMountPath + "/server.pem",
+			KeyFile:  serverCertsMountPath + "/server-key.pem",
+		}
+	}
+	if cs.TLS.RoutesSecret != "" {
+		sconfig.Cluster.TLS = &natsconf.TLSConfig{
+			CAFile:   routesCertsMountPath + "/ca.pem",
+			CertFile: routesCertsMountPath + "/route.pem",
+			KeyFile:  routesCertsMountPath + "/route-key.pem",
+		}
+	}
+}
+
+func addLoggingConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.Logging == nil {
+		return
+	}
+
+	sconfig.Debug = cs.Logging.Debug
+	sconfig.Trace = cs.Logging.Trace
+}
+
+// CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
+func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port: int(constants.ClusterPort),
+		},
+	}
+	addTLSConfig(sconfig, cluster)
+	addLoggingConfig(sconfig, cluster)
+
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": string(rawConfig),
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err = kubecli.ConfigMaps(ns).Create(cm)
+	return err
+}
+
+// UpdateConfigMap applies the new configuration of the cluster,
+// such as modifying the routes available in the cluster.
+func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	// List all available pods then generate the routes
+	// for the NATS cluster.
+	routes := make([]string, 0)
+	podList, err := kubecli.Pods(ns).List(ClusterListOpt(clusterName))
+	if err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		route := fmt.Sprintf("nats://%s.%s-routes.%s.svc:%d",
+			pod.Name, clusterName, ns, constants.ClusterPort)
+		routes = append(routes, route)
+	}
+
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port:   int(constants.ClusterPort),
+			Routes: routes,
+		},
+	}
+	addTLSConfig(sconfig, cluster)
+	addLoggingConfig(sconfig, cluster)
+
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": string(rawConfig),
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err = kubecli.ConfigMaps(ns).Update(cm)
+	return err
 }
 
 // CreateAndWaitPod is an util for testing.
@@ -168,7 +280,7 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 		annotations[TolerateUnreadyEndpointsAnnotation] = "true"
 	}
 
-	svc := &v1.Service{
+	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        svcName,
 			Labels:      labels,
@@ -180,7 +292,62 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 			ClusterIP: clusterIP,
 		},
 	}
-	return svc
+}
+
+func newNatsConfigMapVolume(clusterName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-config",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: clusterName,
+				},
+			},
+		},
+	}
+}
+
+func newNatsConfigMapVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-config",
+		MountPath: "/etc/nats-config",
+	}
+}
+
+func newNatsServerSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-server",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsServerSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-server",
+		MountPath: "/etc/nats-server-tls-certs",
+	}
+}
+
+func newNatsRoutesSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-routes",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsRoutesSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-routes",
+		MountPath: "/etc/nats-routes-tls-certs",
+	}
 }
 
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
@@ -195,28 +362,70 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 		LabelClusterVersionKey: cs.Version,
 	}
 
-	volumes := []v1.Volume{}
+	// Mount the config map that ought to have been created
+	// for the pods in the cluster.
+	volumes := make([]v1.Volume, 0)
+	volumeMounts := make([]v1.VolumeMount, 0)
+
+	// ConfigMap: Volume declaration for the Pod and Container.
+	volume := newNatsConfigMapVolume(clusterName)
+	volumes = append(volumes, volume)
+	volumeMount := newNatsConfigMapVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
-	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
-	container = containerWithReadinessProbe(container, natsReadinessProbe(clusterName))
+	container = containerWithLivenessProbe(container, natsLivenessProbe())
+
+	// In case TLS was enabled as part of the NATS cluster
+	// configuration then should include the configuration here.
+	if cs.TLS != nil {
+		if cs.TLS.ServerSecret != "" {
+			volume = newNatsServerSecretVolume(cs.TLS.ServerSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsServerSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+
+		if cs.TLS.RoutesSecret != "" {
+			volume = newNatsRoutesSecretVolume(cs.TLS.RoutesSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsRoutesSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+	}
+	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
+	name := UniquePodName()
+
+	// Rely on the shared configuration map for configuring the cluster.
+	cmd := []string{
+		"/gnatsd",
+		"-c",
+		"/etc/nats-config/nats.conf",
+	}
+
+	container.Command = cmd
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:       labels,
-			GenerateName: fmt.Sprintf("nats-%s-", clusterName),
-			Annotations:  map[string]string{},
+			Name:        name,
+			Labels:      labels,
+			Annotations: map[string]string{},
 		},
 		Spec: v1.PodSpec{
+			Hostname:      name,
+			Subdomain:     clusterName + "-routes",
 			Containers:    []v1.Container{container},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
 		},
 	}
+	pod.Spec.Volumes = volumes
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
@@ -304,8 +513,8 @@ func ClonePod(p *v1.Pod) *v1.Pod {
 }
 
 func CloneSvc(s *v1.Service) *v1.Service {
-    ns, err := scheme.Scheme.DeepCopy(s)
-    if err != nil {
+	ns, err := scheme.Scheme.DeepCopy(s)
+	if err != nil {
 		panic("cannot deep copy svc")
 	}
 	return ns.(*v1.Service)
@@ -319,4 +528,9 @@ func mergeLabels(l1, l2 map[string]string) {
 		}
 		l1[k] = v
 	}
+}
+
+// UniquePodName generates a unique name for the Pod.
+func UniquePodName() string {
+	return fmt.Sprintf("nats-%s", k8srand.String(10))
 }

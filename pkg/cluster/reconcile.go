@@ -26,7 +26,7 @@ import (
 // - if the cluster needs upgrade, it tries to upgrade existing peers, one by one.
 func (c *Cluster) reconcile(pods []*v1.Pod) error {
 	c.logger.Debugln("Start reconciling...")
-	defer c.logger.Infoln("Finish reconciling")
+	defer c.logger.Debugln("Finish reconciling")
 
 	spec := c.cluster.Spec
 
@@ -50,14 +50,22 @@ func (c *Cluster) reconcile(pods []*v1.Pod) error {
 func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 	spec := c.cluster.Spec
 
-	c.logger.Warningf("Cluster size needs reconciling: expected %d, has %d", spec.Size, len(pods))
-	// do we need to add or remove pods?
+	c.logger.Infof("Cluster size needs reconciling: expected %d, has %d", spec.Size, len(pods))
+
 	currentClusterSize := len(pods)
 	if currentClusterSize < spec.Size {
 		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
-		if err := c.createPod(); err != nil {
+		_, err := c.createPod()
+		if err != nil {
 			return err
 		}
+
+		// Update config map to include the new route.
+		err = c.updateConfigMap()
+		if err != nil {
+			c.logger.Warningf("error update the shared config map: %s", err)
+		}
+
 	} else if currentClusterSize > spec.Size {
 		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
 		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {

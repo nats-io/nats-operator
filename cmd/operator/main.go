@@ -204,7 +204,7 @@ func newControllerConfig() controller.Config {
 	if len(local.KubeConfigPath) == 0 {
 		serviceAccount, err = getMyPodServiceAccount(kubecli)
 		if err != nil {
-		    logrus.Fatalf("fail to get my pod's service account: %v", err)
+			logrus.Fatalf("fail to get my pod's service account: %v", err)
 		}
 	} else {
 		serviceAccount = local.ServiceAccountName
@@ -223,19 +223,19 @@ func newControllerConfig() controller.Config {
 	return cfg
 }
 
- func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
- 	var sa string
- 	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
- 		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
- 		if err != nil {
- 			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
- 			return false, nil
- 		}
- 		sa = pod.Spec.ServiceAccountName
- 		return true, nil
- 	})
- 	return sa, err
- }
+func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
+	var sa string
+	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
+		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
+		if err != nil {
+			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
+			return false, nil
+		}
+		sa = pod.Spec.ServiceAccountName
+		return true, nil
+	})
+	return sa, err
+}
 
 func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
 	gc := garbagecollection.New(kubecli, ns)

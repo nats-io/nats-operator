@@ -28,7 +28,6 @@ import (
 	"github.com/pires/nats-operator/pkg/garbagecollection"
 	"github.com/pires/nats-operator/pkg/spec"
 	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	natsutil "github.com/pires/nats-operator/pkg/util/nats"
 	"github.com/pires/nats-operator/pkg/util/retryutil"
 
 	"github.com/sirupsen/logrus"
@@ -138,17 +137,6 @@ func (c *Cluster) setup() error {
 		return fmt.Errorf("unexpected cluster phase: %s", c.status.Phase)
 	}
 
-	if c.isSecureClient() {
-		d, err := kubernetesutil.GetTLSDataFromSecret(c.config.KubeCli, c.cluster.Namespace, c.cluster.Spec.TLS.Static.OperatorSecret)
-		if err != nil {
-			return err
-		}
-		c.tlsConfig, err = natsutil.NewTLSConfig(d.CertData, d.KeyData, d.CAData)
-		if err != nil {
-			return err
-		}
-	}
-
 	if shouldCreateCluster {
 		return c.create()
 	}
@@ -166,8 +154,12 @@ func (c *Cluster) create() error {
 	c.gc.CollectCluster(c.cluster.Name, c.cluster.UID)
 
 	if err := c.setupServices(); err != nil {
-		return fmt.Errorf("cluster create: fail to create client service LB: %v", err)
+		return fmt.Errorf("cluster create: fail to create client service LB: %s", err)
 	}
+	if err := c.setupConfigMap(); err != nil {
+		return fmt.Errorf("cluster create: fail to create shared config map: %s", err)
+	}
+
 	return nil
 }
 
@@ -289,14 +281,6 @@ func isSpecEqual(s1, s2 spec.ClusterSpec) bool {
 	return true
 }
 
-func (c *Cluster) isSecurePeer() bool {
-	return c.cluster.Spec.TLS.IsSecurePeer()
-}
-
-func (c *Cluster) isSecureClient() bool {
-	return c.cluster.Spec.TLS.IsSecureClient()
-}
-
 func (c *Cluster) Update(cl *spec.NatsCluster) {
 	c.send(&clusterEvent{
 		typ:     eventModifyCluster,
@@ -317,12 +301,18 @@ func (c *Cluster) setupServices() error {
 	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
 }
 
-func (c *Cluster) createPod() error {
+func (c *Cluster) setupConfigMap() error {
+	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+}
+
+func (c *Cluster) updateConfigMap() error {
+	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+}
+
+func (c *Cluster) createPod() (*v1.Pod, error) {
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 
-	_, err := c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
-
-	return err
+	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
 
 func (c *Cluster) removePod(name string) error {
