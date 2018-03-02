@@ -83,6 +83,9 @@ type ClusterSpec struct {
 
 	// TLS is the configuration to secure the cluster.
 	TLS *TLSConfig `json:"tls,omitempty"`
+
+	// Logging is the configuration for logging level in server.
+	Logging *LoggingConfig `json:"logging,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -94,6 +97,15 @@ type TLSConfig struct {
 	// RoutesSecret is the secret containing the certificates
 	// to secure the port to which cluster routes connect.
 	RoutesSecret string `json:"routesSecret,omitempty"`
+}
+
+// LoggingConfig allows customizing logging for the server.
+type LoggingConfig struct {
+	// Debug enables output of debugging logs.
+	Debug bool `json:"debug,omitempty"`
+
+	// Trace enables output of trace logs.
+	Trace bool `json:"trace,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
