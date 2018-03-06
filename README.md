@@ -1,10 +1,6 @@
 # NATS Operator
 
-<<<<<<< HEAD
 [![Build Status](https://travis-ci.org/nats-io/nats-operator.svg?branch=master)](https://travis-ci.org/nats-io/nats-operator)
-=======
-[![Build Status](https://travis-ci.org/wallyqs/nats-operator-dev.svg?branch=master)](https://travis-ci.org/wallyqs/nats-operator-dev)
->>>>>>> README updates
 
 NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
 
@@ -17,11 +13,11 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 ## Getting Started
 
-The current version of the operator creates a CustomResourceDefinition
-under the `nats.io` API group, to which you can make requests to
-create NATS clusters.
+The current version of the operator creates a `NatsCluster`
+CustomResourceDefinition (CRD) under the `nats.io` API group,
+to which you can make requests to create NATS clusters.
 
-To install:
+To add the NatsCluster and NATS Operator to your cluster:
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/example/deployment.yaml
