@@ -30,7 +30,7 @@ var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	AddToScheme   = SchemeBuilder.AddToScheme
 
-	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha2"}
+	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1beta1"}
 	CRDName            = CRDResourcePlural + "." + groupName
 )
 
