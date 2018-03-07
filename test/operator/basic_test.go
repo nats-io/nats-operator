@@ -74,7 +74,7 @@ type clients struct {
 func newKubeClients() (*clients, error) {
 	var err error
 	var cfg *k8srestapi.Config
-	if kubeconfig := os.Getenv("KUBERNETES_CONFIG_PATH"); kubeconfig != "" {
+	if kubeconfig := os.Getenv("KUBERNETES_CONFIG_FILE"); kubeconfig != "" {
 		cfg, err = k8sclientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 	kc, err := k8sclient.NewForConfig(cfg)
