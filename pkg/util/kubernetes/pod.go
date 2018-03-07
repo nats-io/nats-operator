@@ -93,24 +93,6 @@ func natsLivenessProbe(isSecure bool) *v1.Probe {
 	}
 }
 
-func natsReadinessProbe(clusterName string) *v1.Probe {
-	return &v1.Probe{
-		Handler: v1.Handler{
-			Exec: &v1.ExecAction{
-				Command: []string{
-					"/route_checker",
-					"-lookup",
-					ManagementServiceName(clusterName),
-				},
-			},
-		},
-		InitialDelaySeconds: 0,
-		TimeoutSeconds:      1,
-		PeriodSeconds:       3,
-		FailureThreshold:    1,
-	}
-}
-
 // PodWithAntiAffinity sets pod anti-affinity with the pods in the same NATS cluster
 func PodWithAntiAffinity(pod *v1.Pod, clusterName string) *v1.Pod {
 	ls := &metav1.LabelSelector{MatchLabels: map[string]string{
