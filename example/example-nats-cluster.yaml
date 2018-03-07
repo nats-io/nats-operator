@@ -1,7 +1,11 @@
-apiVersion: "nats.io/v1alpha1"
+apiVersion: "nats.io/v1beta1"
 kind: "NatsCluster"
 metadata:
-  name: "example-nats-1"
+  name: "example-nats-cluster-1"
 spec:
+  # Number of nodes in the cluster
   size: 3
-  version: "1.0.2"
+
+  # Must use 1.0.4 in order to allow waiting for the A record
+  # from nodes in the cluster to be ready
+  version: "1.0.4"
