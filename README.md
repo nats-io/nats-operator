@@ -55,6 +55,115 @@ NAME                   AGE
 example-nats-cluster   1s
 ```
 
+## Connecting to your NATS cluster
+
+The NATS operator will create two different services for your cluster,
+one is a headless service that is used for internal communication between
+the nodes in the cluster.
+
+For example, the following manifest will create a `NatsCluster` CRD named `nats`:
+
+```yaml
+apiVersion: "nats.io/v1beta1"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+
+  # Must use 1.0.4 in order to allow waiting for the A record
+  # from nodes in the cluster to be ready
+  version: "1.0.4"
+```
+
+This will create a `nats` service and along with a headless service named `nats-routes`:
+
+```sh
+$ kubectl get svc -l nats_cluster=nats
+NAME          TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)             AGE
+nats          ClusterIP   10.110.87.40   <none>        4222/TCP            5m
+nats-routes   ClusterIP   None           <none>        6222/TCP,8222/TCP   5m
+```
+
+From your application, you can connect to one of the NATS clusters by using the `nats` service:
+
+```
+$ kubectl run -i --tty busybox-nats --image=busybox --restart=Never -- sh
+
+$ nslookup nats.default.svc
+Server:    10.96.0.10
+Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+
+Name:      nats.default.svc
+Address 1: 10.110.87.40 nats.default.svc.cluster.local
+```
+
+The `nats-routes` headless service will bind an A record to each one 
+of the pods that exist in the cluster.
+
+```
+$ nslookup nats-routes.default.svc
+Server:    10.96.0.10
+Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+
+Name:      nats-routes.default.svc
+Address 1: 172.17.0.10 nats-bx0qb1s1jg.nats-routes.default.svc.cluster.local
+Address 2: 172.17.0.12 nats-mnmsjdw21s.nats-routes.default.svc.cluster.local
+Address 3: 172.17.0.9 nats-8tlrb638qk.nats-routes.default.svc.cluster.local
+```
+
+### TLS support
+
+By using a pair of opaque secrets (one for the clients and then another for the routes),
+it is possible to set TLS for the communication between the clients and also for the
+transport between the routes:
+
+```yaml
+apiVersion: "nats.io/v1beta1"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+
+  # Must use 1.0.4 in order to allow waiting for the A record
+  # from nodes in the cluster to be ready
+  version: "1.0.4"
+
+  # Optionally toggle debug/trace
+  logging:
+    debug: true
+    trace: true
+
+  tls:
+    # Certificates to secure the NATS client connections:
+    serverSecret: "nats-clients-tls"
+
+    # Certificates to secure the routes.
+    routesSecret: "nats-routes-tls"
+```
+
+In order for TLS to be properly established between the nodes, it is 
+necessary to create a wildcard certificate that matches the subdomain
+created for the service from the clients and the one for the routes.
+
+The `serverSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
+for the CA, server private and public key respectively.
+
+```
+$ kubectl create secret generic nats-routes-tls --from-file=ca.pem --from-file=route-key.pem --from-file=route.pem
+```
+
+Similarly, the `clientSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
+for the CA, server private key and public key used to secure the connection
+with the clients.
+
+```
+$ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
+```
+
 ## Development
 
 ### Building the Docker Image
