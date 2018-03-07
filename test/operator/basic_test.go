@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/client"
-	"github.com/pires/nats-operator/pkg/controller"
+	"github.com/nats-io/nats-operator/pkg/client"
+	"github.com/nats-io/nats-operator/pkg/controller"
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -74,7 +74,7 @@ type clients struct {
 func newKubeClients() (*clients, error) {
 	var err error
 	var cfg *k8srestapi.Config
-	if kubeconfig := os.Getenv("KUBERNETES_CONFIG_PATH"); kubeconfig != "" {
+	if kubeconfig := os.Getenv("KUBERNETES_CONFIG_FILE"); kubeconfig != "" {
 		cfg, err = k8sclientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 	kc, err := k8sclient.NewForConfig(cfg)
