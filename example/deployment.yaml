@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
       - name: nats-operator
-        image: quay.io/pires/nats-operator:latest
+        image: nats-io/nats-operator:latest
         imagePullPolicy: Always
         env:
         - name: MY_POD_NAMESPACE

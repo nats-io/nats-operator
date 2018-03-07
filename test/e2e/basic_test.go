@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/test/e2e/e2eutil"
-	"github.com/pires/nats-operator/test/e2e/framework"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
+	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
 
 func TestCreateCluster(t *testing.T) {

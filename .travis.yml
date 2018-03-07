@@ -10,11 +10,11 @@ before_install:
   - sudo apt-get -y install docker-ce
 
 script:
-  - docker build --no-cache -t "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}" .
+  - docker build --no-cache -t "nats-io/nats-operator:${TRAVIS_TAG:-latest}" .
 
 after_success:
   - if ([[ "${TRAVIS_BRANCH}" == "master" ]] && [[ "${TRAVIS_PULL_REQUEST}" == "false" ]]) || [[ "${TRAVIS_TAG}" != "" ]];
     then
         docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" quay.io;
-        docker push "quay.io/pires/nats-operator:${TRAVIS_TAG:-latest}";
+        docker push "nats-io/nats-operator:${TRAVIS_TAG:-latest}";
     fi

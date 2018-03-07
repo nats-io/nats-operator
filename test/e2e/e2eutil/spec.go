@@ -15,7 +15,7 @@
 package e2eutil
 
 import (
-	"github.com/pires/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/spec"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

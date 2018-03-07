@@ -18,8 +18,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/pires/nats-operator/pkg/constants"
-	"github.com/pires/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/spec"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

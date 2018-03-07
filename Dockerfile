@@ -1,5 +1,5 @@
 FROM golang:1.9.0-alpine3.6 AS builder
-WORKDIR $GOPATH/src/github.com/pires/nats-operator/
+WORKDIR $GOPATH/src/github.com/nats-io/nats-operator/
 COPY . .
 RUN apk add --update git
 RUN go get -u github.com/golang/dep/cmd/dep

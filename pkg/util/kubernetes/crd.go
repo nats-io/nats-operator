@@ -20,9 +20,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/debug/local"
-	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"

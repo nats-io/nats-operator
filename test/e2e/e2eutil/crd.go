@@ -19,10 +19,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/client"
-	"github.com/pires/nats-operator/pkg/spec"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/client"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"

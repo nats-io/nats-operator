@@ -18,7 +18,7 @@ import (
 	"os"
 	"path"
 
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 
 	"github.com/sirupsen/logrus"
 

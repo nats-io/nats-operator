@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/pires/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/spec"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"

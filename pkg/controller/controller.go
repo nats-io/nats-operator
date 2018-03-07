@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/cluster"
-	"github.com/pires/nats-operator/pkg/spec"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	"github.com/pires/nats-operator/pkg/util/probe"
+	"github.com/nats-io/nats-operator/pkg/cluster"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/pkg/util/probe"
 
 	"github.com/sirupsen/logrus"
 
