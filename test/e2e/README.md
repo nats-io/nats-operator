@@ -12,5 +12,5 @@ Prerequisites:
 e2e tests are written as go tests. All go test techniques applies, e.g. picking what to run, timeout length.
 Let's say I want to run all tests in "test/e2e/":
 ```
-$ go test -v ./test/e2e/ --kubeconfig "$HOME/.kube/config" --operator-image=quay.io/pires/nats-operator
+$ go test -v ./test/e2e/ --kubeconfig "$HOME/.kube/config" --operator-image=nats-io/nats-operator
 ```

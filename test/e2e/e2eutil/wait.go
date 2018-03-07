@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/constants"
-	"github.com/pires/nats-operator/pkg/spec"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

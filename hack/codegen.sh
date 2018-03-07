@@ -20,7 +20,7 @@ BIN_DIR="${ROOT_DIR}/bin"
 DEEPCOPY_GEN_BIN="${BIN_DIR}/deepcopy-gen"
 GENGO_PACKAGE="github.com/kubernetes/gengo"
 
-PACKAGE="github.com/pires/nats-operator"
+PACKAGE="github.com/nats-io/nats-operator"
 
 function build_deepcopy_gen {
     go build \

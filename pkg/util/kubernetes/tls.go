@@ -15,7 +15,7 @@
 package kubernetes
 
 import (
-	natsutil "github.com/pires/nats-operator/pkg/util/nats"
+	natsutil "github.com/nats-io/nats-operator/pkg/util/nats"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"

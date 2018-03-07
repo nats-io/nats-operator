@@ -17,7 +17,7 @@ package cluster
 import (
 	"fmt"
 
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

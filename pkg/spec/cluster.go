@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/constants"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

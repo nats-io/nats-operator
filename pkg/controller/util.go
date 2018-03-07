@@ -20,7 +20,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/spec"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwatch "k8s.io/apimachinery/pkg/watch"

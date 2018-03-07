@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/client"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	"github.com/pires/nats-operator/pkg/util/probe"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
-	"github.com/pires/nats-operator/test/e2e/e2eutil"
+	"github.com/nats-io/nats-operator/pkg/client"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/pkg/util/probe"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
 
 	"github.com/sirupsen/logrus"
 
@@ -46,7 +46,7 @@ type Framework struct {
 // Setup setups a test framework and points "Global" to it.
 func Setup() error {
 	kubeconfig := flag.String("kubeconfig", "", "kube config path, e.g. $HOME/.kube/config")
-	opImage := flag.String("operator-image", "", "operator image, e.g. quay.io/pires/nats-operator")
+	opImage := flag.String("operator-image", "", "operator image, e.g. nats-io/nats-operator")
 	ns := flag.String("namespace", "default", "e2e test namespace")
 	flag.Parse()
 

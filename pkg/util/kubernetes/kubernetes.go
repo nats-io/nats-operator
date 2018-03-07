@@ -21,10 +21,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/constants"
-	"github.com/pires/nats-operator/pkg/debug/local"
-	"github.com/pires/nats-operator/pkg/spec"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -71,7 +71,7 @@ func GetPodNames(pods []*v1.Pod) []string {
 }
 
 func MakeNATSImage(version string) string {
-	return fmt.Sprintf("quay.io/pires/docker-nats:%v", version)
+	return fmt.Sprintf("nats:%v", version)
 }
 
 func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {

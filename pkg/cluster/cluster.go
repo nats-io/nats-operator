@@ -24,12 +24,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pires/nats-operator/pkg/debug"
-	"github.com/pires/nats-operator/pkg/garbagecollection"
-	"github.com/pires/nats-operator/pkg/spec"
-	kubernetesutil "github.com/pires/nats-operator/pkg/util/kubernetes"
-	natsutil "github.com/pires/nats-operator/pkg/util/nats"
-	"github.com/pires/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/debug"
+	"github.com/nats-io/nats-operator/pkg/garbagecollection"
+	"github.com/nats-io/nats-operator/pkg/spec"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	natsutil "github.com/nats-io/nats-operator/pkg/util/nats"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	"github.com/sirupsen/logrus"
 
