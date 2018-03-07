@@ -184,7 +184,7 @@ func run(stop <-chan struct{}) {
 
 	for {
 		c := controller.New(cfg)
-		err := c.Run()
+		err := c.Run(context.TODO())
 		switch err {
 		case controller.ErrVersionOutdated:
 		default:

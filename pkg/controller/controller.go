@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,7 +88,7 @@ func New(cfg Config) *Controller {
 	}
 }
 
-func (c *Controller) Run() error {
+func (c *Controller) Run(ctx context.Context) error {
 	var (
 		watchVersion string
 		err          error
@@ -128,7 +129,13 @@ func (c *Controller) Run() error {
 			pt.stop()
 		}
 	}()
-	return <-errCh
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
 }
 
 func (c *Controller) handleClusterEvent(event *Event) error {
