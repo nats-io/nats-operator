@@ -8,7 +8,7 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 ## Requirements
 
-- Kubernetes v1.7+
+- Kubernetes v1.8+
 - NATS Server v1.0.4+
 
 ## Getting Started
