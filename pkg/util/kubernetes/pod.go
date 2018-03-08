@@ -31,12 +31,12 @@ func natsPodContainer(clusterName, version string) v1.Container {
 	// TODO add TLS, auth support, debug and tracing
 	c := v1.Container{
 		Env: []v1.EnvVar{
-		    {
-				Name: "SVC",
+			{
+				Name:  "SVC",
 				Value: ManagementServiceName(clusterName),
 			},
 			{
-				Name: "EXTRA",
+				Name:  "EXTRA",
 				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
 			},
 		},
@@ -90,24 +90,6 @@ func natsLivenessProbe(isSecure bool) *v1.Probe {
 		TimeoutSeconds:      10,
 		PeriodSeconds:       60,
 		FailureThreshold:    3,
-	}
-}
-
-func natsReadinessProbe(clusterName string) *v1.Probe {
-	return &v1.Probe{
-		Handler: v1.Handler{
-			Exec: &v1.ExecAction{
-				Command: []string{
-					"/route_checker",
-					"-lookup",
-					ManagementServiceName(clusterName),
-				},
-			},
-		},
-		InitialDelaySeconds: 0,
-		TimeoutSeconds:      1,
-		PeriodSeconds:       3,
-		FailureThreshold:    1,
 	}
 }
 
