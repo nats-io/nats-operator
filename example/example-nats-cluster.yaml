@@ -4,4 +4,4 @@ metadata:
   name: "example-nats-1"
 spec:
   size: 3
-  version: "1.0.2"
+  version: "1.0.4"
