@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
 	"github.com/nats-io/nats-operator/pkg/spec"
@@ -31,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -114,7 +116,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Name:       "monitoring",
 			Port:       constants.MonitoringPort,
 			TargetPort: intstr.FromInt(constants.MonitoringPort),
-			Protocol:   v1.ProtocolTCP,		},
+			Protocol:   v1.ProtocolTCP},
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
@@ -156,6 +158,105 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	return retPod, nil
 }
 
+// CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
+func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port: int(constants.ClusterPort),
+		},
+	}
+
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": string(rawConfig),
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err = kubecli.ConfigMaps(ns).Create(cm)
+	return err
+}
+
+// UpdateConfigMap applies the new configuration of the cluster,
+// such as modifying the routes available in the cluster.
+func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+	// List all available pods then generate the routes
+	// for the NATS cluster.
+	routes := make([]string, 0)
+	podList, err := kubecli.Pods(ns).List(ClusterListOpt(clusterName))
+	if err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		// Skip pods that have failed
+		switch pod.Status.Phase {
+		case "Failed":
+			continue
+		}
+
+		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
+			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
+		routes = append(routes, route)
+	}
+
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port:   int(constants.ClusterPort),
+			Routes: routes,
+		},
+	}
+
+	rawConfig, err := natsconf.Marshal(sconfig)
+	if err != nil {
+		return err
+	}
+
+	cm := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterName,
+		},
+		Data: map[string]string{
+			"nats.conf": string(rawConfig),
+		},
+	}
+	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+
+	_, err = kubecli.ConfigMaps(ns).Update(cm)
+	return err
+}
+
+func newNatsConfigMapVolume(clusterName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-config",
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{
+					Name: clusterName,
+				},
+			},
+		},
+	}
+}
+
+func newNatsConfigMapVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-config",
+		MountPath: "/etc/nats-config",
+	}
+}
+
 func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string, tolerateUnready bool) *v1.Service {
 	labels := map[string]string{
 		LabelAppKey:         LabelAppValue,
@@ -194,27 +295,49 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 		LabelClusterVersionKey: cs.Version,
 	}
 
-	volumes := []v1.Volume{}
+	// Mount the config map that ought to have been created
+	// for the pods in the cluster.
+	volumes := make([]v1.Volume, 0)
+	volumeMounts := make([]v1.VolumeMount, 0)
+
+	// ConfigMap: Volume declaration for the Pod and Container.
+	volume := newNatsConfigMapVolume(clusterName)
+	volumes = append(volumes, volume)
+	volumeMount := newNatsConfigMapVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
+	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
+	name := UniquePodName()
+
+	// Rely on the shared configuration map for configuring the cluster.
+	cmd := []string{
+		"/gnatsd",
+		"-c",
+		"/etc/nats-config/nats.conf",
+	}
+	container.Command = cmd
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:       labels,
-			GenerateName: fmt.Sprintf("nats-%s-", clusterName),
-			Annotations:  map[string]string{},
+			Name:        name,
+			Labels:      labels,
+			Annotations: map[string]string{},
 		},
 		Spec: v1.PodSpec{
+			Hostname:      name,
+			Subdomain:     ManagementServiceName(clusterName),
 			Containers:    []v1.Container{container},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
 		},
 	}
+	pod.Spec.Volumes = volumes
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
@@ -317,4 +440,9 @@ func mergeLabels(l1, l2 map[string]string) {
 		}
 		l1[k] = v
 	}
+}
+
+// UniquePodName generates a unique name for the Pod.
+func UniquePodName() string {
+	return fmt.Sprintf("nats-%s", k8srand.String(10))
 }

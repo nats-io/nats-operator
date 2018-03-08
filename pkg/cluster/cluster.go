@@ -168,6 +168,9 @@ func (c *Cluster) create() error {
 	if err := c.setupServices(); err != nil {
 		return fmt.Errorf("cluster create: fail to create client service LB: %v", err)
 	}
+	if err := c.setupConfigMap(); err != nil {
+		return fmt.Errorf("cluster create: fail to create shared config map: %s", err)
+	}
 	return nil
 }
 
@@ -317,12 +320,18 @@ func (c *Cluster) setupServices() error {
 	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
 }
 
-func (c *Cluster) createPod() error {
+func (c *Cluster) setupConfigMap() error {
+	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+}
+
+func (c *Cluster) updateConfigMap() error {
+	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+}
+
+func (c *Cluster) createPod() (*v1.Pod, error) {
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 
-	_, err := c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
-
-	return err
+	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
 
 func (c *Cluster) removePod(name string) error {
