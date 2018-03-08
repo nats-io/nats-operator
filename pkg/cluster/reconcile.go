@@ -61,7 +61,7 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 		}
 		err = c.updateConfigMap()
 		if err != nil {
-			c.logger.Warningf("error update the shared config map: %s", err)
+			c.logger.Warningf("error updating the shared config map: %s", err)
 		}
 
 	} else if currentClusterSize > spec.Size {
