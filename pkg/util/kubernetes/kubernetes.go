@@ -114,8 +114,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Name:       "monitoring",
 			Port:       constants.MonitoringPort,
 			TargetPort: intstr.FromInt(constants.MonitoringPort),
-			Protocol:   v1.ProtocolTCP,
-		},
+			Protocol:   v1.ProtocolTCP,		},
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
@@ -199,7 +198,6 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 
 	container := natsPodContainer(clusterName, cs.Version)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
-	container = containerWithReadinessProbe(container, natsReadinessProbe(clusterName))
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
@@ -304,8 +302,8 @@ func ClonePod(p *v1.Pod) *v1.Pod {
 }
 
 func CloneSvc(s *v1.Service) *v1.Service {
-    ns, err := scheme.Scheme.DeepCopy(s)
-    if err != nil {
+	ns, err := scheme.Scheme.DeepCopy(s)
+	if err != nil {
 		panic("cannot deep copy svc")
 	}
 	return ns.(*v1.Service)
