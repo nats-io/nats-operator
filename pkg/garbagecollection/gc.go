@@ -86,6 +86,9 @@ func (gc *GC) collectResources(option metav1.ListOptions, runningSet map[types.U
 	if err := gc.collectServices(option, runningSet); err != nil {
 		gc.logger.Errorf("gc services failed: %v", err)
 	}
+	if err := gc.collectConfigMaps(option, runningSet); err != nil {
+		gc.logger.Errorf("gc configmap failed: %v", err)
+	}
 }
 
 func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bool) error {
@@ -109,6 +112,29 @@ func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bo
 			gc.logger.Infof("deleted pod (%v)", p.GetName())
 		}
 	}
+	return nil
+}
+
+func (gc *GC) collectConfigMaps(option metav1.ListOptions, runningSet map[types.UID]bool) error {
+	srvs, err := gc.kubecli.ConfigMaps(gc.ns).List(option)
+	if err != nil {
+		return err
+	}
+
+	for _, srv := range srvs.Items {
+		if len(srv.OwnerReferences) == 0 {
+			gc.logger.Warningf("failed to check service %s: no owner", srv.GetName())
+			continue
+		}
+		if !runningSet[srv.OwnerReferences[0].UID] {
+			err = gc.kubecli.ConfigMaps(gc.ns).Delete(srv.GetName(), nil)
+			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+				return err
+			}
+			gc.logger.Infof("deleted configmap (%v)", srv.GetName())
+		}
+	}
+
 	return nil
 }
 
