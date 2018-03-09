@@ -124,6 +124,30 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
+// addTLSConfig fills in the TLS configuration to be used in the config map.
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.TLS == nil {
+		return
+	}
+
+	serverCertsMountPath := "/etc/nats-server-tls-certs"
+	routesCertsMountPath := "/etc/nats-routes-tls-certs"
+	if cs.TLS.ServerSecret != "" {
+		sconfig.TLS = &natsconf.TLSConfig{
+			CAFile:   serverCertsMountPath + "/ca.pem",
+			CertFile: serverCertsMountPath + "/server.pem",
+			KeyFile:  serverCertsMountPath + "/server-key.pem",
+		}
+	}
+	if cs.TLS.RoutesSecret != "" {
+		sconfig.Cluster.TLS = &natsconf.TLSConfig{
+			CAFile:   routesCertsMountPath + "/ca.pem",
+			CertFile: routesCertsMountPath + "/route.pem",
+			KeyFile:  routesCertsMountPath + "/route-key.pem",
+		}
+	}
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
@@ -168,6 +192,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Port: int(constants.ClusterPort),
 		},
 	}
+	addTLSConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -218,6 +243,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Routes: routes,
 		},
 	}
+	addTLSConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
