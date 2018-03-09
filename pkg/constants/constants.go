@@ -17,7 +17,45 @@ package constants
 const (
 	DefaultNatsVersion = "1.0.2"
 
-	ClientPort     = 4222
-	ClusterPort    = 6222
+	// ClientPort is the port for the clients.
+	ClientPort = 4222
+
+	// ClusterPort is the port for server routes.
+	ClusterPort = 6222
+
+	// MonitoringPort is the port for the server monitoring endpoint.
 	MonitoringPort = 8222
+
+	// ConfigMapVolumeName is the name of the volume use for the shared config map.
+	ConfigMapVolumeName = "nats-config"
+
+	// ConfigMapMountPath is the path on which the shared ConfigMap
+	// for the NATS cluster will be located.
+	ConfigMapMountPath = "/etc/nats-config"
+
+	// ConfigFileName is the name of the config file used by the NATS server.
+	ConfigFileName = "nats.conf"
+
+	// ConfigFilePath is the absolute path to the NATS config file.
+	ConfigFilePath = ConfigMapMountPath + "/" + ConfigFileName
+
+	// ServerSecretVolumeName is the name of the volume used for the server certs.
+	ServerSecretVolumeName = "server-tls-certs"
+
+	// ServerCertsMountPath is the path where the server certificates
+	// to secure clients connections are located.
+	ServerCertsMountPath = "/etc/nats-server-tls-certs"
+	ServerCAFilePath     = ServerCertsMountPath + "/ca.pem"
+	ServerCertFilePath   = ServerCertsMountPath + "/server.pem"
+	ServerKeyFilePath    = ServerCertsMountPath + "/server-key.pem"
+
+	// RoutesSecretVolumeName is the name of the volume used for the routes certs.
+	RoutesSecretVolumeName = "routes-tls-certs"
+
+	// RoutesCertsMountPath is the path where the certificates
+	// to secure routes connections are located.
+	RoutesCertsMountPath = "/etc/nats-routes-tls-certs"
+	RoutesCAFilePath     = RoutesCertsMountPath + "/ca.pem"
+	RoutesCertFilePath   = RoutesCertsMountPath + "/route.pem"
+	RoutesKeyFilePath    = RoutesCertsMountPath + "/route-key.pem"
 )
