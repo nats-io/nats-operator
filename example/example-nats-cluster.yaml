@@ -1,4 +1,4 @@
-apiVersion: "nats.io/v1alpha1"
+apiVersion: "nats.io/v1beta1"
 kind: "NatsCluster"
 metadata:
   name: "example-nats-1"

@@ -36,7 +36,7 @@ responsible of assembling the cluster and replacing pods in case of failures.
 
 ```
 echo '
-apiVersion: "nats.io/v1alpha1"
+apiVersion: "nats.io/v1beta1"
 kind: "NatsCluster"
 metadata:
   name: "example-nats-cluster"
