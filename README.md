@@ -55,6 +55,49 @@ NAME                   AGE
 example-nats-cluster   1s
 ```
 
+### TLS support
+
+By using a pair of opaque secrets (one for the clients and then another for the routes),
+it is possible to set TLS for the communication between the clients and also for the
+transport between the routes:
+
+```yaml
+apiVersion: "nats.io/v1beta1"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+  version: "1.0.4"
+
+  tls:
+    # Certificates to secure the NATS client connections:
+    serverSecret: "nats-clients-tls"
+
+    # Certificates to secure the routes.
+    routesSecret: "nats-routes-tls"
+```
+
+In order for TLS to be properly established between the nodes, it is 
+necessary to create a wildcard certificate that matches the subdomain
+created for the service from the clients and the one for the routes.
+
+The `serverSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
+for the CA, server private and public key respectively.
+
+```
+$ kubectl create secret generic nats-routes-tls --from-file=ca.pem --from-file=route-key.pem --from-file=route.pem
+```
+
+Similarly, the `clientSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
+for the CA, server private key and public key used to secure the connection
+with the clients.
+
+```
+$ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
+```
+
 ## Development
 
 ### Building the Docker Image
