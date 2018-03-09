@@ -15,7 +15,7 @@
 package constants
 
 const (
-	DefaultNatsVersion = "1.0.2"
+	DefaultNatsVersion = "1.0.4"
 
 	// ClientPort is the port for the clients.
 	ClientPort = 4222
