@@ -130,20 +130,18 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 		return
 	}
 
-	serverCertsMountPath := "/etc/nats-server-tls-certs"
-	routesCertsMountPath := "/etc/nats-routes-tls-certs"
 	if cs.TLS.ServerSecret != "" {
 		sconfig.TLS = &natsconf.TLSConfig{
-			CAFile:   serverCertsMountPath + "/ca.pem",
-			CertFile: serverCertsMountPath + "/server.pem",
-			KeyFile:  serverCertsMountPath + "/server-key.pem",
+			CAFile:   constants.ServerCAFilePath,
+			CertFile: constants.ServerCertFilePath,
+			KeyFile:  constants.ServerKeyFilePath,
 		}
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
-			CAFile:   routesCertsMountPath + "/ca.pem",
-			CertFile: routesCertsMountPath + "/route.pem",
-			KeyFile:  routesCertsMountPath + "/route-key.pem",
+			CAFile:   constants.ServerCAFilePath,
+			CertFile: constants.ServerCertFilePath,
+			KeyFile:  constants.ServerKeyFilePath,
 		}
 	}
 }
@@ -204,7 +202,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Name: clusterName,
 		},
 		Data: map[string]string{
-			"nats.conf": string(rawConfig),
+			constants.ConfigFileName: string(rawConfig),
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
@@ -255,7 +253,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Name: clusterName,
 		},
 		Data: map[string]string{
-			"nats.conf": string(rawConfig),
+			constants.ConfigFileName: string(rawConfig),
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
@@ -266,7 +264,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 
 func newNatsConfigMapVolume(clusterName string) v1.Volume {
 	return v1.Volume{
-		Name: "nats-config",
+		Name: constants.ConfigMapVolumeName,
 		VolumeSource: v1.VolumeSource{
 			ConfigMap: &v1.ConfigMapVolumeSource{
 				LocalObjectReference: v1.LocalObjectReference{
@@ -279,8 +277,8 @@ func newNatsConfigMapVolume(clusterName string) v1.Volume {
 
 func newNatsConfigMapVolumeMount() v1.VolumeMount {
 	return v1.VolumeMount{
-		Name:      "nats-config",
-		MountPath: "/etc/nats-config",
+		Name:      constants.ConfigMapVolumeName,
+		MountPath: constants.ConfigMapMountPath,
 	}
 }
 
@@ -312,7 +310,7 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 
 func newNatsServerSecretVolume(secretName string) v1.Volume {
 	return v1.Volume{
-		Name: "nats-server",
+		Name: constants.ServerSecretVolumeName,
 		VolumeSource: v1.VolumeSource{
 			Secret: &v1.SecretVolumeSource{
 				SecretName: secretName,
@@ -323,14 +321,14 @@ func newNatsServerSecretVolume(secretName string) v1.Volume {
 
 func newNatsServerSecretVolumeMount() v1.VolumeMount {
 	return v1.VolumeMount{
-		Name:      "nats-server",
-		MountPath: "/etc/nats-server-tls-certs",
+		Name:      constants.ServerSecretVolumeName,
+		MountPath: constants.ServerCertsMountPath,
 	}
 }
 
 func newNatsRoutesSecretVolume(secretName string) v1.Volume {
 	return v1.Volume{
-		Name: "nats-routes",
+		Name: constants.RoutesSecretVolumeName,
 		VolumeSource: v1.VolumeSource{
 			Secret: &v1.SecretVolumeSource{
 				SecretName: secretName,
@@ -341,8 +339,8 @@ func newNatsRoutesSecretVolume(secretName string) v1.Volume {
 
 func newNatsRoutesSecretVolumeMount() v1.VolumeMount {
 	return v1.VolumeMount{
-		Name:      "nats-routes",
-		MountPath: "/etc/nats-routes-tls-certs",
+		Name:      constants.RoutesSecretVolumeName,
+		MountPath: constants.RoutesCertsMountPath,
 	}
 }
 
@@ -402,7 +400,7 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	cmd := []string{
 		"/gnatsd",
 		"-c",
-		"/etc/nats-config/nats.conf",
+		constants.ConfigFilePath,
 	}
 	container.Command = cmd
 
