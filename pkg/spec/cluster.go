@@ -81,8 +81,19 @@ type ClusterSpec struct {
 	// Updating Pod does not take effect on any existing NATS pods.
 	Pod *PodPolicy `json:"pod,omitempty"`
 
-	// NATS cluster TLS configuration
-	TLS *TLSPolicy `json:"TLS,omitempty"`
+	// TLS is the configuration to secure the cluster.
+	TLS *TLSConfig `json:"tls,omitempty"`
+}
+
+// TLSConfig is the optional TLS configuration for the cluster.
+type TLSConfig struct {
+	// ServerSecret is the secret containing the certificates
+	// to secure the port to which the clients connect.
+	ServerSecret string `json:"serverSecret,omitempty"`
+
+	// RoutesSecret is the secret containing the certificates
+	// to secure the port to which cluster routes connect.
+	RoutesSecret string `json:"routesSecret,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
@@ -117,12 +128,6 @@ type PodPolicy struct {
 }
 
 func (c *ClusterSpec) Validate() error {
-	if c.TLS != nil {
-		if err := c.TLS.Validate(); err != nil {
-			return err
-		}
-	}
-
 	if c.Pod != nil {
 		for k := range c.Pod.Labels {
 			if k == "app" || strings.HasPrefix(k, "nats_") {

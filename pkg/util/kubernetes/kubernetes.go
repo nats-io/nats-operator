@@ -124,6 +124,30 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
+// addTLSConfig fills in the TLS configuration to be used in the config map.
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+	if cs.TLS == nil {
+		return
+	}
+
+	serverCertsMountPath := "/etc/nats-server-tls-certs"
+	routesCertsMountPath := "/etc/nats-routes-tls-certs"
+	if cs.TLS.ServerSecret != "" {
+		sconfig.TLS = &natsconf.TLSConfig{
+			CAFile:   serverCertsMountPath + "/ca.pem",
+			CertFile: serverCertsMountPath + "/server.pem",
+			KeyFile:  serverCertsMountPath + "/server-key.pem",
+		}
+	}
+	if cs.TLS.RoutesSecret != "" {
+		sconfig.Cluster.TLS = &natsconf.TLSConfig{
+			CAFile:   routesCertsMountPath + "/ca.pem",
+			CertFile: routesCertsMountPath + "/route.pem",
+			KeyFile:  routesCertsMountPath + "/route-key.pem",
+		}
+	}
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
@@ -168,6 +192,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Port: int(constants.ClusterPort),
 		},
 	}
+	addTLSConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -218,6 +243,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 			Routes: routes,
 		},
 	}
+	addTLSConfig(sconfig, cluster)
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -284,6 +310,42 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 	return svc
 }
 
+func newNatsServerSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-server",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsServerSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-server",
+		MountPath: "/etc/nats-server-tls-certs",
+	}
+}
+
+func newNatsRoutesSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: "nats-routes",
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsRoutesSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      "nats-routes",
+		MountPath: "/etc/nats-routes-tls-certs",
+	}
+}
+
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 	o.SetOwnerReferences(append(o.GetOwnerReferences(), r))
 }
@@ -308,7 +370,27 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
-	container = containerWithLivenessProbe(container, natsLivenessProbe(cs.TLS.IsSecureClient()))
+	container = containerWithLivenessProbe(container, natsLivenessProbe())
+
+	// In case TLS was enabled as part of the NATS cluster
+	// configuration then should include the configuration here.
+	if cs.TLS != nil {
+		if cs.TLS.ServerSecret != "" {
+			volume = newNatsServerSecretVolume(cs.TLS.ServerSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsServerSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+
+		if cs.TLS.RoutesSecret != "" {
+			volume = newNatsRoutesSecretVolume(cs.TLS.RoutesSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsRoutesSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+	}
 	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
