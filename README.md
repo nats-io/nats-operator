@@ -9,7 +9,6 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 ## Requirements
 
 - Kubernetes v1.8+
-- NATS Server v1.0.4+
 
 ## Getting Started
 
@@ -36,7 +35,7 @@ responsible of assembling the cluster and replacing pods in case of failures.
 
 ```
 echo '
-apiVersion: "nats.io/v1beta1"
+apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:
   name: "example-nats-cluster"
@@ -62,7 +61,7 @@ it is possible to set TLS for the communication between the clients and also for
 transport between the routes:
 
 ```yaml
-apiVersion: "nats.io/v1beta1"
+apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:
   name: "nats"
