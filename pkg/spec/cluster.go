@@ -83,6 +83,9 @@ type ClusterSpec struct {
 
 	// TLS is the configuration to secure the cluster.
 	TLS *TLSConfig `json:"tls,omitempty"`
+
+	// Auth is the configuration to set permissions for users.
+	Auth *AuthConfig `json:"auth,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -125,6 +128,15 @@ type PodPolicy struct {
 	// bad environment variables are provided.
 	// This field cannot be updated.
 	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
+}
+
+// AuthConfig is the authorization configuration for
+// user permissions in the cluster.
+type AuthConfig struct {
+	ClientsAuthSecret  string `json:"clientsAuthSecret,omitempty"`
+	ClientsAuthTimeout int    `json:"clientsAuthTimeout,omitempty"`
+	RoutesAuthSecret   string `json:"routesAuthSecret,omitempty"`
+	RoutesAuthTimeout  int    `json:"routesAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {
