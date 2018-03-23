@@ -56,6 +56,44 @@ NAME                   AGE
 example-nats-cluster   1s
 ```
 
+### RBAC support
+
+If you have RBAC enabled (for example in GKE), you can run:
+
+```
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/example/deployment-rbac.yaml
+```
+
+Then this will deploy a `nats-operator` on the `nats-io` namespace.
+
+```
+$ kubectl -n nats-io logs deployment/nats-operator
+time="2018-03-23T00:45:49Z" level=info msg="nats-operator Version: 0.2.0-v1alpha2+git"
+time="2018-03-23T00:45:49Z" level=info msg="Git SHA: 4040d87"
+time="2018-03-23T00:45:49Z" level=info msg="Go Version: go1.9"
+time="2018-03-23T00:45:49Z" level=info msg="Go OS/Arch: linux/amd64"
+```
+
+Note that the NATS operator only monitors the `NatsCluster` resources
+which are created in the namespace where it was deployed, so if you
+want to create a cluster you have to specify the same one as the
+operator:
+
+```
+$ kubectl -n nats-io apply -f example/example-nats-cluster.yaml
+natscluster "example-nats-1" created
+
+$ kubectl -n nats-io get natsclusters
+NAME             AGE
+example-nats-1   6m
+
+$ kubectl -n nats-io get pods -l nats_cluster=example-nats-1
+NAME              READY     STATUS    RESTARTS   AGE
+nats-2jgb0tg3sm   1/1       Running   0          7m
+nats-h8z9dckvfr   1/1       Running   0          7m
+nats-px28gkx5wk   1/1       Running   0          6m
+```
+
 ### TLS support
 
 By using a pair of opaque secrets (one for the clients and then another for the routes),
