@@ -39,10 +39,25 @@ type TLSConfig struct {
 }
 
 type AuthorizationConfig struct {
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Token    string `json:"token,omitempty"`
-	Timeout  int    `json:"timeout,omitempty"`
+	Username           string       `json:"username,omitempty"`
+	Password           string       `json:"password,omitempty"`
+	Token              string       `json:"token,omitempty"`
+	Timeout            int          `json:"timeout,omitempty"`
+	Users              []*User      `json:"users,omitempty"`
+	DefaultPermissions *Permissions `json:"default_permissions,omitempty"`
+}
+
+type User struct {
+	User        string       `json:"user,omitempty"`
+	Password    string       `json:"pass,omitempty"`
+	Permissions *Permissions `json:"pass,omitempty"`
+}
+
+// Permissions are the allowed subjects on a per
+// publish or subscribe basis.
+type Permissions struct {
+	Publish   []string `json:"pub"`
+	Subscribe []string `json:"sub"`
 }
 
 var (
