@@ -135,8 +135,6 @@ type PodPolicy struct {
 type AuthConfig struct {
 	ClientsAuthSecret  string `json:"clientsAuthSecret,omitempty"`
 	ClientsAuthTimeout int    `json:"clientsAuthTimeout,omitempty"`
-	RoutesAuthSecret   string `json:"routesAuthSecret,omitempty"`
-	RoutesAuthTimeout  int    `json:"routesAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {
