@@ -166,6 +166,34 @@ func TestConfMarshal(t *testing.T) {
   }`,
 			err: nil,
 		},
+		{
+			input: &ServerConfig{
+				Port:     4222,
+				HTTPPort: 8222,
+				Authorization: &AuthorizationConfig{
+					DefaultPermissions: &Permissions{
+						Publish:   []string{"PUBLISH.>"},
+						Subscribe: []string{"PUBLISH.*"},
+					},
+				},
+			},
+			output: `"port": 4222
+
+  "http_port": 8222
+
+  "authorization": {
+    "default_permissions": {
+      "publish": [
+        "PUBLISH.>"
+      ]
+
+      "subscribe": [
+        "PUBLISH.*"
+      ]
+    }
+  }`,
+			err: nil,
+		},
 	}
 
 	for _, tt := range tests {

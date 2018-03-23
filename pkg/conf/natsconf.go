@@ -65,11 +65,20 @@ var (
 )
 
 func Marshal(conf *ServerConfig) ([]byte, error) {
-	js, err := json.MarshalIndent(conf, "", "  ")
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(conf)
 	if err != nil {
 		return nil, err
 	}
-	if len(js) < 1 || len(js)-1 <= 1 {
+	buf2 := &bytes.Buffer{}
+	err = json.Indent(buf2, buf.Bytes(), "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	js := buf2.Bytes()
+	if len(js) < 1 || len(js)-2 <= 1 {
 		return nil, ErrInvalidConfig
 	}
 
@@ -77,7 +86,7 @@ func Marshal(conf *ServerConfig) ([]byte, error) {
 	// resulting JSON configuration so gnatsd config parsers
 	// almost treats it as valid config.
 	js = js[1:]
-	js = js[:len(js)-1]
+	js = js[:len(js)-2]
 
 	// Replacing all commas with line breaks still keeps
 	// arrays valid and makes the top level configuration
