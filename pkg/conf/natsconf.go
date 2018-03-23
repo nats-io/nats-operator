@@ -48,16 +48,16 @@ type AuthorizationConfig struct {
 }
 
 type User struct {
-	User        string       `json:"user,omitempty"`
-	Password    string       `json:"pass,omitempty"`
-	Permissions *Permissions `json:"pass,omitempty"`
+	User        string       `json:"username,omitempty"`
+	Password    string       `json:"password,omitempty"`
+	Permissions *Permissions `json:"permissions,omitempty"`
 }
 
 // Permissions are the allowed subjects on a per
 // publish or subscribe basis.
 type Permissions struct {
-	Publish   []string `json:"pub"`
-	Subscribe []string `json:"sub"`
+	Publish   []string `json:"publish,omitempty"`
+	Subscribe []string `json:"subscribe,omitempty"`
 }
 
 var (
