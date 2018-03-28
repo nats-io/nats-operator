@@ -95,7 +95,7 @@ func TestCreateConfigMap(t *testing.T) {
 		},
 		Spec: spec.ClusterSpec{
 			Size:    size,
-			Version: "1.0.4",
+			Version: "1.1.0",
 		},
 	}
 	_, err = cl.ncli.Create(ctx, cluster)

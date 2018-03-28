@@ -70,7 +70,6 @@ type ClusterSpec struct {
 	// The version must follow the [semver]( http://semver.org) format, for example "1.0.4".
 	// Only NATS released versions are supported: https://github.com/nats-io/gnatsd/releases
 	//
-	// If version is not set, default is "1.0.4".
 	Version string `json:"version"`
 
 	// Paused is to pause the control of the operator for the cluster.
