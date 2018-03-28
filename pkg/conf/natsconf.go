@@ -4,7 +4,6 @@ package natsconf
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 )
 
 type ServerConfig struct {
@@ -60,10 +59,8 @@ type Permissions struct {
 	Subscribe []string `json:"subscribe,omitempty"`
 }
 
-var (
-	ErrInvalidConfig = errors.New("natsconf: cannot produce valid config")
-)
-
+// Marshal takes a server configuration and returns its
+// JSON representation in bytes.
 func Marshal(conf *ServerConfig) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	encoder := json.NewEncoder(buf)
@@ -77,21 +74,6 @@ func Marshal(conf *ServerConfig) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	js := buf2.Bytes()
-	if len(js) < 1 || len(js)-2 <= 1 {
-		return nil, ErrInvalidConfig
-	}
 
-	// Slice the initial and final brackets from the
-	// resulting JSON configuration so gnatsd config parsers
-	// almost treats it as valid config.
-	js = js[1:]
-	js = js[:len(js)-2]
-
-	// Replacing all commas with line breaks still keeps
-	// arrays valid and makes the top level configuration
-	// be able to be parsed as gnatsd config.
-	result := bytes.Replace(js, []byte(","), []byte("\n"), -1)
-
-	return result, nil
+	return buf2.Bytes(), nil
 }
