@@ -70,7 +70,6 @@ type ClusterSpec struct {
 	// The version must follow the [semver]( http://semver.org) format, for example "1.0.4".
 	// Only NATS released versions are supported: https://github.com/nats-io/gnatsd/releases
 	//
-	// If version is not set, default is "1.0.4".
 	Version string `json:"version"`
 
 	// Paused is to pause the control of the operator for the cluster.
@@ -83,6 +82,9 @@ type ClusterSpec struct {
 
 	// TLS is the configuration to secure the cluster.
 	TLS *TLSConfig `json:"tls,omitempty"`
+
+	// Auth is the configuration to set permissions for users.
+	Auth *AuthConfig `json:"auth,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -125,6 +127,13 @@ type PodPolicy struct {
 	// bad environment variables are provided.
 	// This field cannot be updated.
 	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
+}
+
+// AuthConfig is the authorization configuration for
+// user permissions in the cluster.
+type AuthConfig struct {
+	ClientsAuthSecret  string `json:"clientsAuthSecret,omitempty"`
+	ClientsAuthTimeout int    `json:"clientsAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {

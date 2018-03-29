@@ -15,6 +15,6 @@
 package version
 
 var (
-	OperatorVersion = "0.2.0-v1alpha2+git"
-	GitSHA          = "Not provided (use ./build instead of go build)"
+	OperatorVersion = "0.2.1-v1alpha2+git"
+	GitSHA          = "Not provided"
 )

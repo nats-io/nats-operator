@@ -146,6 +146,34 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 	}
 }
 
+// addAuthConfig fills the Auth configuration to be used in config map.
+func addAuthConfig(kubecli corev1client.CoreV1Interface, ns string, sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) error {
+	if cs.Auth == nil {
+		return nil
+	}
+	if cs.Auth.ClientsAuthSecret != "" {
+		result, err := kubecli.Secrets(ns).Get(cs.Auth.ClientsAuthSecret, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		var clientAuth *natsconf.AuthorizationConfig
+		for _, v := range result.Data {
+			err := json.Unmarshal(v, &clientAuth)
+			if err != nil {
+				return err
+			}
+			if cs.Auth.ClientsAuthTimeout > 0 {
+				clientAuth.Timeout = cs.Auth.ClientsAuthTimeout
+			}
+			sconfig.Authorization = clientAuth
+			break
+		}
+		return nil
+	}
+	return nil
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
@@ -191,6 +219,10 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		},
 	}
 	addTLSConfig(sconfig, cluster)
+	err := addAuthConfig(kubecli, ns, sconfig, cluster)
+	if err != nil {
+		return err
+	}
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
@@ -242,6 +274,10 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		},
 	}
 	addTLSConfig(sconfig, cluster)
+	err = addAuthConfig(kubecli, ns, sconfig, cluster)
+	if err != nil {
+		return err
+	}
 
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {

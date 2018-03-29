@@ -13,31 +13,36 @@ func TestConfMarshal(t *testing.T) {
 	}{
 		{
 			input:  &ServerConfig{},
-			output: "",
-			err:    ErrInvalidConfig,
+			output: "{}",
+			err:    nil,
 		},
 		{
 			input: &ServerConfig{
 				HTTPPort: 8222,
 			},
-			output: `"http_port": 8222`,
-			err:    nil,
+			output: `{
+  "http_port": 8222
+}`,
+			err: nil,
 		},
 		{
 			input: &ServerConfig{
 				Port: 4222,
 			},
-			output: `"port": 4222`,
-			err:    nil,
+			output: `{
+  "port": 4222
+}`,
+			err: nil,
 		},
 		{
 			input: &ServerConfig{
 				Port:     4222,
 				HTTPPort: 8222,
 			},
-			output: `"port": 4222
-
-  "http_port": 8222`,
+			output: `{
+  "port": 4222,
+  "http_port": 8222
+}`,
 			err: nil,
 		},
 		{
@@ -48,13 +53,13 @@ func TestConfMarshal(t *testing.T) {
 					Port: 6222,
 				},
 			},
-			output: `"port": 4222
-
-  "http_port": 8222
-
+			output: `{
+  "port": 4222,
+  "http_port": 8222,
   "cluster": {
     "port": 6222
-  }`,
+  }
+}`,
 			err: nil,
 		},
 		{
@@ -70,21 +75,18 @@ func TestConfMarshal(t *testing.T) {
 					},
 				},
 			},
-			output: `"port": 4222
-
-  "http_port": 8222
-
+			output: `{
+  "port": 4222,
+  "http_port": 8222,
   "cluster": {
-    "port": 6222
-
+    "port": 6222,
     "routes": [
-      "nats://nats-1.default.svc:6222"
-
-      "nats://nats-2.default.svc:6222"
-
+      "nats://nats-1.default.svc:6222",
+      "nats://nats-2.default.svc:6222",
       "nats://nats-3.default.svc:6222"
     ]
-  }`,
+  }
+}`,
 			err: nil,
 		},
 		{
@@ -102,25 +104,20 @@ func TestConfMarshal(t *testing.T) {
 					},
 				},
 			},
-			output: `"port": 4222
-
-  "http_port": 8222
-
+			output: `{
+  "port": 4222,
+  "http_port": 8222,
   "cluster": {
-    "port": 6222
-
+    "port": 6222,
     "routes": [
-      "nats://nats-1.default.svc:6222"
-
-      "nats://nats-2.default.svc:6222"
-
+      "nats://nats-1.default.svc:6222",
+      "nats://nats-2.default.svc:6222",
       "nats://nats-3.default.svc:6222"
     ]
-  }
-
-  "debug": true
-
-  "trace": true`,
+  },
+  "debug": true,
+  "trace": true
+}`,
 			err: nil,
 		},
 		{
@@ -141,29 +138,50 @@ func TestConfMarshal(t *testing.T) {
 					},
 				},
 			},
-			output: `"port": 4222
-
-  "http_port": 8222
-
+			output: `{
+  "port": 4222,
+  "http_port": 8222,
   "cluster": {
-    "port": 6222
-
+    "port": 6222,
     "routes": [
-      "nats://nats-1.default.svc:6222"
-
-      "nats://nats-2.default.svc:6222"
-
+      "nats://nats-1.default.svc:6222",
+      "nats://nats-2.default.svc:6222",
       "nats://nats-3.default.svc:6222"
-    ]
-
+    ],
     "tls": {
-      "ca_file": "/etc/nats-tls/ca.pem"
-
-      "cert_file": "/etc/nats-tls/server.pem"
-
+      "ca_file": "/etc/nats-tls/ca.pem",
+      "cert_file": "/etc/nats-tls/server.pem",
       "key_file": "/etc/nats-tls/server-key.pem"
     }
-  }`,
+  }
+}`,
+			err: nil,
+		},
+		{
+			input: &ServerConfig{
+				Port:     4222,
+				HTTPPort: 8222,
+				Authorization: &AuthorizationConfig{
+					DefaultPermissions: &Permissions{
+						Publish:   []string{"PUBLISH.>"},
+						Subscribe: []string{"PUBLISH.*"},
+					},
+				},
+			},
+			output: `{
+  "port": 4222,
+  "http_port": 8222,
+  "authorization": {
+    "default_permissions": {
+      "publish": [
+        "PUBLISH.>"
+      ],
+      "subscribe": [
+        "PUBLISH.*"
+      ]
+    }
+  }
+}`,
 			err: nil,
 		},
 	}

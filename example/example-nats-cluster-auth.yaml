@@ -1,0 +1,14 @@
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "example-nats-auth"
+spec:
+  size: 3
+  version: "1.1.0"
+
+  auth:
+    # Definition in JSON of the users permissions
+    clientsAuthSecret: "nats-clients-auth"
+
+    # How long to wait for authentication
+    clientsAuthTimeout: 5

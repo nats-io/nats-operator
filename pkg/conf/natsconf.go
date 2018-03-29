@@ -4,7 +4,6 @@ package natsconf
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 )
 
 type ServerConfig struct {
@@ -39,35 +38,42 @@ type TLSConfig struct {
 }
 
 type AuthorizationConfig struct {
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Token    string `json:"token,omitempty"`
-	Timeout  int    `json:"timeout,omitempty"`
+	Username           string       `json:"username,omitempty"`
+	Password           string       `json:"password,omitempty"`
+	Token              string       `json:"token,omitempty"`
+	Timeout            int          `json:"timeout,omitempty"`
+	Users              []*User      `json:"users,omitempty"`
+	DefaultPermissions *Permissions `json:"default_permissions,omitempty"`
 }
 
-var (
-	ErrInvalidConfig = errors.New("natsconf: cannot produce valid config")
-)
+type User struct {
+	User        string       `json:"username,omitempty"`
+	Password    string       `json:"password,omitempty"`
+	Permissions *Permissions `json:"permissions,omitempty"`
+}
 
+// Permissions are the allowed subjects on a per
+// publish or subscribe basis.
+type Permissions struct {
+	Publish   []string `json:"publish,omitempty"`
+	Subscribe []string `json:"subscribe,omitempty"`
+}
+
+// Marshal takes a server configuration and returns its
+// JSON representation in bytes.
 func Marshal(conf *ServerConfig) ([]byte, error) {
-	js, err := json.MarshalIndent(conf, "", "  ")
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(conf)
 	if err != nil {
 		return nil, err
 	}
-	if len(js) < 1 || len(js)-1 <= 1 {
-		return nil, ErrInvalidConfig
+	buf2 := &bytes.Buffer{}
+	err = json.Indent(buf2, buf.Bytes(), "", "  ")
+	if err != nil {
+		return nil, err
 	}
 
-	// Slice the initial and final brackets from the
-	// resulting JSON configuration so gnatsd config parsers
-	// almost treats it as valid config.
-	js = js[1:]
-	js = js[:len(js)-1]
-
-	// Replacing all commas with line breaks still keeps
-	// arrays valid and makes the top level configuration
-	// be able to be parsed as gnatsd config.
-	result := bytes.Replace(js, []byte(","), []byte("\n"), -1)
-
-	return result, nil
+	return buf2.Bytes(), nil
 }
