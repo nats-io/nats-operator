@@ -224,7 +224,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
-	rawConfig, err := json.Marshal(sconfig)
+	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
-	rawConfig, err := json.Marshal(sconfig)
+	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
 	}
