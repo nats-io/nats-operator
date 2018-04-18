@@ -116,22 +116,22 @@ func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bo
 }
 
 func (gc *GC) collectConfigMaps(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	srvs, err := gc.kubecli.ConfigMaps(gc.ns).List(option)
+	cms, err := gc.kubecli.ConfigMaps(gc.ns).List(option)
 	if err != nil {
 		return err
 	}
 
-	for _, srv := range srvs.Items {
-		if len(srv.OwnerReferences) == 0 {
-			gc.logger.Warningf("failed to check service %s: no owner", srv.GetName())
+	for _, cm := range cms.Items {
+		if len(cm.OwnerReferences) == 0 {
+			gc.logger.Warningf("failed to check service %s: no owner", cm.GetName())
 			continue
 		}
-		if !runningSet[srv.OwnerReferences[0].UID] {
-			err = gc.kubecli.ConfigMaps(gc.ns).Delete(srv.GetName(), nil)
+		if !runningSet[cm.OwnerReferences[0].UID] {
+			err = gc.kubecli.ConfigMaps(gc.ns).Delete(cm.GetName(), nil)
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
-			gc.logger.Infof("deleted configmap (%v)", srv.GetName())
+			gc.logger.Infof("deleted configmap (%v)", cm.GetName())
 		}
 	}
 

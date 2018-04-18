@@ -245,6 +245,13 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
 
 	_, err = kubecli.ConfigMaps(ns).Create(cm)
+	if apierrors.IsAlreadyExists(err) {
+		// Skip in case it was created already and update instead
+		// with the latest configuration.
+		_, err = kubecli.ConfigMaps(ns).Update(cm)
+		return err
+	}
+
 	return err
 }
 
@@ -295,7 +302,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	}
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterName,
+			Name:   clusterName,
 			Labels: labels,
 		},
 		Data: map[string]string{
