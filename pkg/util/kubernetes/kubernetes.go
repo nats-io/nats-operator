@@ -229,9 +229,14 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
+	labels := map[string]string{
+		LabelAppKey:         LabelAppValue,
+		LabelClusterNameKey: clusterName,
+	}
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterName,
+			Name:   clusterName,
+			Labels: labels,
 		},
 		Data: map[string]string{
 			constants.ConfigFileName: string(rawConfig),
@@ -284,9 +289,14 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
+	labels := map[string]string{
+		LabelAppKey:         LabelAppValue,
+		LabelClusterNameKey: clusterName,
+	}
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterName,
+			Labels: labels,
 		},
 		Data: map[string]string{
 			constants.ConfigFileName: string(rawConfig),
