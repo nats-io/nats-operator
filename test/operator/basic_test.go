@@ -138,6 +138,90 @@ func TestCreateConfigMap(t *testing.T) {
 	}
 }
 
+func TestReplacePresentConfigMap(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	runController(ctx, t)
+
+	cl, err := newKubeClients()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wait for the CRD to be registered in the background.
+	time.Sleep(10 * time.Second)
+	name := "test-nats-cluster-2"
+	namespace := "default"
+
+	// Create a configmap with the same name, that will
+	// be replaced with a new one by the operator.
+	cm := &k8sv1.ConfigMap{
+		ObjectMeta: k8smetav1.ObjectMeta{
+			Name: name,
+		},
+		Data: map[string]string{
+			"nats.conf": "port: 4222",
+		},
+	}
+	_, err = cl.kc.ConfigMaps(namespace).Create(cm)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var size = 3
+	cluster := &spec.NatsCluster{
+		TypeMeta: k8smetav1.TypeMeta{
+			Kind:       spec.CRDResourceKind,
+			APIVersion: spec.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: k8smetav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: spec.ClusterSpec{
+			Size:    size,
+			Version: "1.1.0",
+		},
+	}
+	_, err = cl.ncli.Create(ctx, cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the pods to be created
+	params := k8smetav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=nats,nats_cluster=%s", name),
+	}
+	var podList *k8sv1.PodList
+	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+		podList, err = cl.kc.Pods(namespace).List(params)
+		if err != nil {
+			return false, err
+		}
+		if len(podList.Items) < size {
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		t.Errorf("Error waiting for pods to be created: %s", err)
+	}
+
+	cm, err = cl.kc.ConfigMaps(namespace).Get(name, k8smetav1.GetOptions{})
+	if err != nil {
+		t.Errorf("Config map error: %v", err)
+	}
+	conf, ok := cm.Data["nats.conf"]
+	if !ok {
+		t.Error("Config map was missing")
+	}
+	for _, pod := range podList.Items {
+		if !strings.Contains(conf, pod.Name) {
+			t.Errorf("Could not find pod %q in config", pod.Name)
+		}
+	}
+}
+
 type clients struct {
 	kc      k8sclient.CoreV1Interface
 	kcrdc   k8scrdclient.Interface

@@ -100,6 +100,10 @@ func init() {
 }
 
 func main() {
+	formatter := &logrus.TextFormatter{
+		FullTimestamp: true,
+	}
+	logrus.SetFormatter(formatter)
 	namespace = os.Getenv("MY_POD_NAMESPACE")
 	if len(namespace) == 0 {
 		logrus.Fatalf("must set env MY_POD_NAMESPACE")
