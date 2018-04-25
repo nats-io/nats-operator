@@ -72,6 +72,27 @@ func TestCreateTLSSetup(t *testing.T) {
 			return false, nil
 		}
 
+		for _, pod := range podList.Items {
+			sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
+			podName := pod.Name
+			opts := &k8sv1.PodLogOptions{SinceTime: &sinceTime}
+			rc, err := cl.kc.Pods(namespace).GetLogs(podName, opts).Stream()
+			if err != nil {
+				t.Fatalf("Logs request has failed: %v", err)
+			}
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rc)
+			output := buf.String()
+			rc.Close()
+
+			expected := 3
+			got := strings.Count(output, "Route connection created")
+			if got < expected {
+				t.Logf("OUTPUT: %s", output)
+				return false, nil
+			}
+		}
+
 		return true, nil
 	})
 	if err != nil {
@@ -111,7 +132,6 @@ func TestCreateTLSSetup(t *testing.T) {
 		expected := 3
 		got := strings.Count(output, "Route connection created")
 		if got < expected {
-			t.Logf("OUTPUT: %s", output)
 			t.Fatalf("Expected TLS for routes with at least %d connections to be created, got: %d", expected, got)
 		}
 		rc.Close()
