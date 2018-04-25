@@ -77,6 +77,8 @@ func TestCreateTLSSetup(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error waiting for pods to be created: %s", err)
 	}
+	// Give some time for cluster to form
+	time.Sleep(2 * time.Second)
 
 	cm, err := cl.kc.ConfigMaps(namespace).Get(name, k8smetav1.GetOptions{})
 	if err != nil {
@@ -109,6 +111,7 @@ func TestCreateTLSSetup(t *testing.T) {
 		expected := 3
 		got := strings.Count(output, "Route connection created")
 		if got < expected {
+			t.Logf("OUTPUT: %s", output)
 			t.Fatalf("Expected TLS for routes with at least %d connections to be created, got: %d", expected, got)
 		}
 		rc.Close()
