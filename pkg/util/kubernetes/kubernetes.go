@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/conf"
@@ -265,12 +266,15 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	if err != nil {
 		return err
 	}
+	clusterPods := make([]string, 0)
 	for _, pod := range podList.Items {
 		// Skip pods that have failed
 		switch pod.Status.Phase {
 		case "Failed":
 			continue
 		}
+
+		clusterPods = append(clusterPods, pod.Name)
 
 		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
 			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
@@ -307,6 +311,7 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		},
 		Data: map[string]string{
 			constants.ConfigFileName: string(rawConfig),
+			"cluster":                strings.Join(clusterPods, ","),
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
@@ -402,7 +407,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -447,7 +452,6 @@ func NewNatsPodSpec(clusterName string, cs spec.ClusterSpec, owner metav1.OwnerR
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
-	name := UniquePodName()
 
 	// Rely on the shared configuration map for configuring the cluster.
 	cmd := []string{

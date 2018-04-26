@@ -32,6 +32,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
@@ -307,8 +308,56 @@ func (c *Cluster) updateConfigMap() error {
 }
 
 func (c *Cluster) createPod() (*v1.Pod, error) {
-	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+	// Grab the names of the nodes that ought to be in the cluster
+	// and use the first one that is not in the list.
+	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
+	if err != nil {
+		return nil, err
+	}
 
+	var name string
+	if len(podList.Items) < 1 {
+		name = kubernetesutil.UniquePodName()
+		pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+		return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	} else if len(podList.Items) == c.cluster.Spec.Size {
+		// Some of the nodes might be failing but still not create
+		// new ones until old ones are not being observed anymore.
+		return nil, fmt.Errorf("nats: maximum cluster size")
+	}
+
+	cm, err := c.config.KubeCli.ConfigMaps(c.cluster.Namespace).Get(c.cluster.Name, k8smetav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	cNames, ok := cm.Data["cluster"]
+	if !ok {
+		name = kubernetesutil.UniquePodName()
+		pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+		return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	}
+	currentNames := strings.Split(cNames, ",")
+NextName:
+	for _, cName := range currentNames {
+		// Reuse first name not found in the list that was in the config map
+		var found bool
+		for _, p := range podList.Items {
+			if p.Name == cName {
+				found = true
+				continue NextName
+			}
+		}
+		if !found {
+			name = cName
+			break NextName
+		}
+	}
+	if name == "" {
+		name = kubernetesutil.UniquePodName()
+	}
+
+	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
 
