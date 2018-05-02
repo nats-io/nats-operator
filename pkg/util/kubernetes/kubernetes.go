@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/conf"
@@ -266,15 +265,12 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 	if err != nil {
 		return err
 	}
-	clusterPods := make([]string, 0)
 	for _, pod := range podList.Items {
 		// Skip pods that have failed
 		switch pod.Status.Phase {
 		case "Failed":
 			continue
 		}
-
-		clusterPods = append(clusterPods, pod.Name)
 
 		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
 			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
@@ -311,7 +307,6 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		},
 		Data: map[string]string{
 			constants.ConfigFileName: string(rawConfig),
-			"cluster":                strings.Join(clusterPods, ","),
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)

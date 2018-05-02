@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
@@ -308,42 +308,39 @@ func (c *Cluster) updateConfigMap() error {
 }
 
 func (c *Cluster) createPod() (*v1.Pod, error) {
+	var name string
+
 	// Grab the names of the nodes that ought to be in the cluster
 	// and use the first one that is not in the list.
 	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
 	if err != nil {
 		return nil, err
 	}
+	clusterPods := make([]string, 0)
+	for _, pod := range podList.Items {
+		// Skip pods that have failed
+		switch pod.Status.Phase {
+		case "Failed":
+			continue
+		}
+		clusterPods = append(clusterPods, pod.Name)
+	}
 
-	var name string
-	if len(podList.Items) < 1 {
-		name = kubernetesutil.UniquePodName()
-		pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
-		return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
-	} else if len(podList.Items) == c.cluster.Spec.Size {
-		// Some of the nodes might be failing but still not create
+	// Restore from the number of currently available nodes already.
+	// currentNames := strings.Split(cNames, ",")
+	if len(clusterPods) >= c.cluster.Spec.Size {
+		// Some of the nodes might be failing but still skip creating
 		// new ones until old ones are not being observed anymore.
 		return nil, fmt.Errorf("nats: maximum cluster size")
 	}
-
-	cm, err := c.config.KubeCli.ConfigMaps(c.cluster.Namespace).Get(c.cluster.Name, k8smetav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	cNames, ok := cm.Data["cluster"]
-	if !ok {
-		name = kubernetesutil.UniquePodName()
-		pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
-		return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
-	}
-	currentNames := strings.Split(cNames, ",")
 NextName:
-	for _, cName := range currentNames {
+	for i := 1; i <= c.cluster.Spec.Size; i++ {
+		n := strconv.AppendInt([]byte(""), int64(i), 16)
+		cName := fmt.Sprintf("%s-%s", c.cluster.Name, n)
 		// Reuse first name not found in the list that was in the config map
 		var found bool
-		for _, p := range podList.Items {
-			if p.Name == cName {
+		for _, pname := range clusterPods {
+			if pname == cName {
 				found = true
 				continue NextName
 			}
@@ -353,10 +350,6 @@ NextName:
 			break NextName
 		}
 	}
-	if name == "" {
-		name = kubernetesutil.UniquePodName()
-	}
-
 	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
