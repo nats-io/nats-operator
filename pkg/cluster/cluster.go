@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -307,8 +308,49 @@ func (c *Cluster) updateConfigMap() error {
 }
 
 func (c *Cluster) createPod() (*v1.Pod, error) {
-	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+	var name string
 
+	// Grab the names of the nodes that ought to be in the cluster
+	// and use the first one that is not in the list.
+	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
+	if err != nil {
+		return nil, err
+	}
+	clusterPods := make([]string, 0)
+	for _, pod := range podList.Items {
+		// Skip pods that have failed
+		switch pod.Status.Phase {
+		case "Failed":
+			continue
+		}
+		clusterPods = append(clusterPods, pod.Name)
+	}
+
+	// Restore from the number of currently available nodes already.
+	// currentNames := strings.Split(cNames, ",")
+	if len(clusterPods) >= c.cluster.Spec.Size {
+		// Some of the nodes might be failing but still skip creating
+		// new ones until old ones are not being observed anymore.
+		return nil, fmt.Errorf("nats: maximum cluster size")
+	}
+NextName:
+	for i := 1; i <= c.cluster.Spec.Size; i++ {
+		n := strconv.AppendInt([]byte(""), int64(i), 16)
+		cName := fmt.Sprintf("%s-%s", c.cluster.Name, n)
+		// Reuse first name not found in the list that was in the config map
+		var found bool
+		for _, pname := range clusterPods {
+			if pname == cName {
+				found = true
+				continue NextName
+			}
+		}
+		if !found {
+			name = cName
+			break NextName
+		}
+	}
+	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 }
 
