@@ -139,9 +139,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
-			CAFile:   constants.ServerCAFilePath,
-			CertFile: constants.ServerCertFilePath,
-			KeyFile:  constants.ServerKeyFilePath,
+			CAFile:   constants.RoutesCAFilePath,
+			CertFile: constants.RoutesCertFilePath,
+			KeyFile:  constants.RoutesKeyFilePath,
 		}
 	}
 }
