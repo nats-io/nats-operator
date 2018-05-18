@@ -74,6 +74,8 @@ type ClusterSpec struct {
 	//
 	Version string `json:"version"`
 
+	ExporterVersion string `json:"exporterVersion"`
+
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
 
