@@ -1,8 +1,11 @@
 package natsreloader
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -26,9 +29,20 @@ type Config struct {
 // and sends signal on updates.
 type Reloader struct {
 	*Config
+
+	// proc represents the NATS Server process which will
+	// be signaled.
 	proc *os.Process
-	pid  int
+
+	// pid is the last known PID from the NATS Server.
+	pid int
+
+	// quit shutsdown the reloader.
 	quit func()
+
+	// lastAppliedVersion is the last config update
+	// done by the proces..
+	lastAppliedVersion []byte
 }
 
 // Run starts the main loop.
@@ -95,10 +109,32 @@ func (r *Reloader) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case event = <-configWatcher.Events:
-			log.Printf("Event: %+v\n", event)
-			if event.Name != r.ConfigFile || (event.Op != fsnotify.Write && event.Op != fsnotify.Create) {
+			log.Printf("Event: %+v \n", event)
+			// FIXME: This captures all events in the same folder, should
+			// narrow down to updates to the config file involved only.
+			if event.Op != fsnotify.Write && event.Op != fsnotify.Create {
 				continue
 			}
+
+			h := sha256.New()
+			f, err := os.Open(r.ConfigFile)
+			if err != nil {
+				log.Printf("Error: %s\n", err)
+				continue
+			}
+			if _, err := io.Copy(h, f); err != nil {
+				log.Printf("Error: %s\n", err)
+				continue
+			}
+			digest := h.Sum(nil)
+			if r.lastAppliedVersion != nil {
+				if bytes.Equal(r.lastAppliedVersion, digest) {
+					// Skip since no meaningful change
+					continue
+				}
+			}
+			r.lastAppliedVersion = digest
+
 		case err := <-configWatcher.Errors:
 			log.Printf("Error: %s\n", err)
 			continue
