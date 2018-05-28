@@ -32,9 +32,12 @@ func main() {
 	fs.BoolVar(&showVersion, "version", false, "Show version")
 
 	nconfig := &natsreloader.Config{}
-	fs.StringVar(&nconfig.PidFile, "pid", "/tmp/nats.pid", "NATS Server Pid File")
-	fs.StringVar(&nconfig.ConfigFile, "config", "/tmp/nats.conf", "NATS Server Config File")
-	// RetryInterval
+	fs.StringVar(&nconfig.PidFile, "P", "/var/run/nats/gnatsd.pid", "NATS Server Pid File")
+	fs.StringVar(&nconfig.PidFile, "pid", "/var/run/nats/gnatsd.pid", "NATS Server Pid File")
+	fs.StringVar(&nconfig.ConfigFile, "c", "/etc/nats/gnatsd.conf", "NATS Server Config File")
+	fs.StringVar(&nconfig.ConfigFile, "config", "/etc/nats/gnatsd.conf", "NATS Server Config File")
+	fs.IntVar(&nconfig.MaxRetries, "max-retries", 5, "Max attempts to trigger reload")
+	fs.IntVar(&nconfig.RetryWaitSecs, "retry-wait-secs", 2, "Time to back off when reloading fails before retrying")
 
 	fs.Parse(os.Args[1:])
 
@@ -52,9 +55,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Top level context which if canceled stops the main loop.
-	ctx := context.Background()
-
 	// Signal handling.
 	go func() {
 		c := make(chan os.Signal, 1)
@@ -62,12 +62,6 @@ func main() {
 
 		for sig := range c {
 			log.Printf("Trapped \"%v\" signal\n", sig)
-			select {
-			case <-ctx.Done():
-				continue
-			default:
-			}
-
 			switch sig {
 			case syscall.SIGINT:
 				log.Println("Exiting...\n")
@@ -80,9 +74,8 @@ func main() {
 		}
 	}()
 
-	// Run until the context is canceled when quit is called.
 	log.Printf("Starting NATS Server Reloader v%s\n", version.OperatorVersion)
-	err = r.Run(ctx)
+	err = r.Run(context.Background())
 	if err != nil && err != context.Canceled {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		os.Exit(1)
