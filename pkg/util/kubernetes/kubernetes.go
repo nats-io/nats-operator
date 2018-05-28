@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
@@ -547,22 +546,6 @@ func CreatePatch(o, n, datastruct interface{}) ([]byte, error) {
 		return nil, err
 	}
 	return strategicpatch.CreateTwoWayMergePatch(oldData, newData, datastruct)
-}
-
-func ClonePod(p *v1.Pod) *v1.Pod {
-	np, err := scheme.Scheme.DeepCopy(p)
-	if err != nil {
-		panic("cannot deep copy pod")
-	}
-	return np.(*v1.Pod)
-}
-
-func CloneSvc(s *v1.Service) *v1.Service {
-	ns, err := scheme.Scheme.DeepCopy(s)
-	if err != nil {
-		panic("cannot deep copy svc")
-	}
-	return ns.(*v1.Service)
 }
 
 // mergeLables merges l2 into l1. Conflicting label will be skipped.
