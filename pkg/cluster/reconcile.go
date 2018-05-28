@@ -51,7 +51,7 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 	spec := c.cluster.Spec
 
 	c.logger.Infof("Cluster size needs reconciling: expected %d, has %d", spec.Size, len(pods))
-	// do we need to add or remove pods?
+
 	currentClusterSize := len(pods)
 	if currentClusterSize < spec.Size {
 		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
@@ -68,6 +68,10 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
 		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
 			return err
+		}
+		err := c.updateConfigMap()
+		if err != nil {
+			c.logger.Warningf("error updating the shared config map: %s", err)
 		}
 	}
 
