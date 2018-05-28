@@ -334,6 +334,22 @@ func newNatsConfigMapVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsPidFileVolume() v1.Volume {
+	return v1.Volume{
+		Name: constants.PidFileVolumeName,
+		VolumeSource: v1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+		},
+	}
+}
+
+func newNatsPidFileVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.PidFileVolumeName,
+		MountPath: constants.PidFileMountPath,
+	}
+}
+
 func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string, tolerateUnready bool) *v1.Service {
 	labels := map[string]string{
 		LabelAppKey:         LabelAppValue,
@@ -407,9 +423,7 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 		LabelClusterNameKey:    clusterName,
 		LabelClusterVersionKey: cs.Version,
 	}
-
-	// Mount the config map that ought to have been created
-	// for the pods in the cluster.
+	containers := make([]v1.Container, 0)
 	volumes := make([]v1.Volume, 0)
 	volumeMounts := make([]v1.VolumeMount, 0)
 
@@ -417,6 +431,12 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 	volume := newNatsConfigMapVolume(clusterName)
 	volumes = append(volumes, volume)
 	volumeMount := newNatsConfigMapVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
+
+	// Extra mount to share the pid file from server
+	volume = newNatsPidFileVolume()
+	volumes = append(volumes, volume)
+	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	container := natsPodContainer(clusterName, cs.Version)
@@ -452,8 +472,11 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 		"/gnatsd",
 		"-c",
 		constants.ConfigFilePath,
+		"-P",
+		constants.PidFilePath,
 	}
 	container.Command = cmd
+	containers = append(containers, container)
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -464,12 +487,21 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 		Spec: v1.PodSpec{
 			Hostname:      name,
 			Subdomain:     ManagementServiceName(clusterName),
-			Containers:    []v1.Container{container},
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
 		},
 	}
 	pod.Spec.Volumes = volumes
+
+	// Enable PID namespace sharing and attach sidecar that
+	// reloads the server whenever the config file is updated.
+	if cs.Pod != nil && cs.Pod.AllowConfigReload {
+		pod.Spec.ShareProcessNamespace = &[]bool{true}[0]
+		reloaderContainer := natsPodReloaderContainer()
+		reloaderContainer.VolumeMounts = volumeMounts
+		containers = append(containers, reloaderContainer)
+	}
+	pod.Spec.Containers = containers
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 

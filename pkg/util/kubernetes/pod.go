@@ -28,8 +28,7 @@ import (
 
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(clusterName, version string) v1.Container {
-	// TODO add TLS, auth support, debug and tracing
-	c := v1.Container{
+	return v1.Container{
 		Env: []v1.EnvVar{
 			{
 				Name:  "SVC",
@@ -60,8 +59,22 @@ func natsPodContainer(clusterName, version string) v1.Container {
 			},
 		},
 	}
+}
 
-	return c
+// reloaderContainer returns a NATS server pod container spec.
+func natsPodReloaderContainer() v1.Container {
+	return v1.Container{
+		Name:            "pid",
+		Image:           "wallyqs/nats-server-config-reloader:0.2.1-v1alpha2",
+		ImagePullPolicy: "Always",
+		Command: []string{
+			"nats-server-config-reloader",
+			"-config",
+			constants.ConfigFilePath,
+			"-pid",
+			constants.PidFilePath,
+		},
+	}
 }
 
 func containerWithLivenessProbe(c v1.Container, lp *v1.Probe) v1.Container {

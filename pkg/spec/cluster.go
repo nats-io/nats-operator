@@ -123,10 +123,11 @@ type PodPolicy struct {
 	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
 
 	// List of environment variables to set in the NATS container.
-	// This is used to configure NATS process. NATS cluster cannot be created, when
-	// bad environment variables are provided.
-	// This field cannot be updated.
 	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
+
+	// AllowConfigReload attaches a sidecar to each NATS Server
+	// that will signal the server whenever the configuration is updated.
+	AllowConfigReload bool `json:"allowConfigReload,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for
