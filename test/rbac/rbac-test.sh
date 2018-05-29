@@ -10,7 +10,7 @@ minikube status | grep Running && {
 }
 
 # Start minikube with policy enabled
-sudo minikube start  --vm-driver=none --kubernetes-version=v1.10.0 --bootstrapper=localkube --extra-config=apiserver.Authorization.Mode=RBAC
+sudo minikube start  --vm-driver=none --kubernetes-version=v1.10.0 --bootstrapper=localkube --extra-config=apiserver.Authorization.Mode=RBAC --feature-gates=PodShareProcessNamespace=true
 minikube update-context
 
 # Wait once again for cluster to be ready
