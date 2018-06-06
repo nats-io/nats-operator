@@ -126,7 +126,7 @@ func TestConfigMapReload_Servers(t *testing.T) {
 }
 
 func TestConfigMapReload_Auth(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	runController(ctx, t)
 
@@ -188,7 +188,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 			},
 			Auth: &spec.AuthConfig{
 				ClientsAuthSecret:  name,
-				ClientsAuthTimeout: 5,
+				ClientsAuthTimeout: 10,
 			},
 		},
 	}
@@ -243,32 +243,48 @@ func TestConfigMapReload_Auth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(5 * time.Second)
-	{
+
+	// Should poll until pod is available
+	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+		pod2, err := cl.kc.Pods(namespace).Get(opsPodName, k8smetav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if pod2.Status.Phase != k8sv1.PodRunning {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Errorf("Error waiting for pods to be created: %s", err)
+	}
+
+	// Confirm that the pod subscribed successfully, then do a reload
+	// removing its user.
+	err = k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
 		sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
 		opts := &k8sv1.PodLogOptions{
 			SinceTime: &sinceTime,
 		}
 		rc, err := cl.kc.Pods(namespace).GetLogs(opsPodName, opts).Stream()
 		if err != nil {
-			t.Fatalf("Logs request has failed: %v", err)
+			return false, err
 		}
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(rc)
 
 		output := buf.String()
 		if !strings.Contains(output, "Listening on [hello.world]") {
-			t.Fatalf("Logs request has failed: %v", err)
+			return false, nil
 		}
+		return true, nil
+	})
+	if err != nil {
+		t.Errorf("Error waiting for pod state: %s", err)
+	}
 
-		// { "username": "user1", "password": "secret1",
-		//   "permissions": {
-		// 	"publish": ["hello.*"],
-		// 	"subscribe": ["hi.world"]
-		//   }
-		// },
-
-		sec = `{
+	// Remove the user and then current connection will be closed.
+	sec = `{
   "users": [
     { "username": "user2", "password": "secret2" }
   ],
@@ -278,16 +294,14 @@ func TestConfigMapReload_Auth(t *testing.T) {
   }
 }
 `
-		result, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		result.Data["anything"] = []byte(sec)
-		_, err = cl.kc.Secrets(namespace).Update(result)
-		if err != nil {
-			t.Fatal(err)
-		}
-
+	result, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result.Data["anything"] = []byte(sec)
+	_, err = cl.kc.Secrets(namespace).Update(result)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Wait for the pods to be updated with new auth creds.
