@@ -44,7 +44,7 @@ func TestConfigMapReload_Servers(t *testing.T) {
 			Size:    size,
 			Version: "1.1.0",
 			Pod: &spec.PodPolicy{
-				AllowConfigReload: true,
+				EnableConfigReload: true,
 			},
 		},
 	}
@@ -184,7 +184,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 			Size:    size,
 			Version: "1.1.0",
 			Pod: &spec.PodPolicy{
-				AllowConfigReload: true,
+				EnableConfigReload: true,
 			},
 			Auth: &spec.AuthConfig{
 				ClientsAuthSecret:  name,

@@ -71,4 +71,10 @@ const (
 	RoutesCAFilePath     = RoutesCertsMountPath + "/ca.pem"
 	RoutesCertFilePath   = RoutesCertsMountPath + "/route.pem"
 	RoutesKeyFilePath    = RoutesCertsMountPath + "/route-key.pem"
+
+	// Default Docker Images
+	DefaultServerImage = "nats"
+	DefaultReloaderImage = "wallyqs/nats-server-config-reloader"
+	DefaultReloaderImageTag = "0.2.1-v1alpha2"
+	DefaultReloaderImagePullPolicy = "IfNotPresent"
 )

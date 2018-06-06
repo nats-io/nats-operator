@@ -495,9 +495,24 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 
 	// Enable PID namespace sharing and attach sidecar that
 	// reloads the server whenever the config file is updated.
-	if cs.Pod != nil && cs.Pod.AllowConfigReload {
+	if cs.Pod != nil && cs.Pod.EnableConfigReload {
 		pod.Spec.ShareProcessNamespace = &[]bool{true}[0]
-		reloaderContainer := natsPodReloaderContainer()
+
+		// Allow customizing reloader image
+		image := constants.DefaultReloaderImage
+		imageTag := constants.DefaultReloaderImageTag
+		imagePullPolicy := constants.DefaultReloaderImagePullPolicy
+		if cs.Pod.ReloaderImage != "" {
+			image = cs.Pod.ReloaderImage
+		}
+		if cs.Pod.ReloaderImageTag != "" {
+			imageTag = cs.Pod.ReloaderImageTag
+		}
+		if cs.Pod.ReloaderImagePullPolicy != "" {
+			imagePullPolicy = cs.Pod.ReloaderImagePullPolicy
+		}
+
+		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy)
 		reloaderContainer.VolumeMounts = volumeMounts
 		containers = append(containers, reloaderContainer)
 	}

@@ -62,11 +62,11 @@ func natsPodContainer(clusterName, version string) v1.Container {
 }
 
 // reloaderContainer returns a NATS server pod container spec.
-func natsPodReloaderContainer() v1.Container {
+func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
 	return v1.Container{
 		Name:            "reloader",
-		Image:           "wallyqs/nats-server-config-reloader:0.2.1-v1alpha2",
-		ImagePullPolicy: "Always",
+		Image:           fmt.Sprintf("%s:%s", image, tag),
+		ImagePullPolicy: v1.PullPolicy(pullPolicy),
 		Command: []string{
 			"nats-server-config-reloader",
 			"-config",

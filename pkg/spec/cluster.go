@@ -125,9 +125,18 @@ type PodPolicy struct {
 	// List of environment variables to set in the NATS container.
 	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
 
-	// AllowConfigReload attaches a sidecar to each NATS Server
+	// EnableConfigReload attaches a sidecar to each NATS Server
 	// that will signal the server whenever the configuration is updated.
-	AllowConfigReload bool `json:"allowConfigReload,omitempty"`
+	EnableConfigReload bool `json:"enableConfigReload,omitempty"`
+
+	// ReloaderImage is the image to use for the reloader.
+	ReloaderImage string `json:"reloaderImage,omitempty"`
+
+	// ReloaderImageTag is the tag of the reloader image.
+	ReloaderImageTag string `json:"reloaderImageTag,omitempty"`
+
+	// ReloaderImagePullPolicy is the pull policy for the reloader image.
+	ReloaderImagePullPolicy string `json:"reloaderImagePullPolicy,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for
