@@ -59,8 +59,7 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 		if err != nil {
 			return err
 		}
-		err = c.updateConfigMap()
-		if err != nil {
+		if err = c.updateConfigMap(); err != nil {
 			c.logger.Warningf("error updating the shared config map: %s", err)
 		}
 
@@ -69,8 +68,7 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
 			return err
 		}
-		err := c.updateConfigMap()
-		if err != nil {
+		if err := c.updateConfigMap(); err != nil {
 			c.logger.Warningf("error updating the shared config map: %s", err)
 		}
 	}
