@@ -228,7 +228,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 				{
 					Name:            opsPodName,
 					Image:           "wallyqs/nats-ops:latest",
-					ImagePullPolicy: k8sv1.PullAlways,
+					ImagePullPolicy: k8sv1.PullIfNotPresent,
 					Command: []string{
 						"nats-sub",
 						"-s",
@@ -261,7 +261,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 
 	// Confirm that the pod subscribed successfully, then do a reload
 	// removing its user.
-	err = k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
 		sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
 		opts := &k8sv1.PodLogOptions{
 			SinceTime: &sinceTime,
@@ -274,14 +274,12 @@ func TestConfigMapReload_Auth(t *testing.T) {
 		buf.ReadFrom(rc)
 
 		output := buf.String()
+		t.Logf("OUTPUT: %s", output)
 		if !strings.Contains(output, "Listening on [hello.world]") {
 			return false, nil
 		}
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pod state: %s", err)
-	}
 
 	// Remove the user and then current connection will be closed.
 	sec = `{
@@ -308,7 +306,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 	params = k8smetav1.ListOptions{
 		LabelSelector: fmt.Sprintf("app=nats,nats_cluster=%s", name),
 	}
-	err = k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
 		podList, err = cl.kc.Pods(namespace).List(params)
 		if err != nil {
 			return false, err
@@ -330,6 +328,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 		buf.ReadFrom(rc)
 
 		output := buf.String()
+		t.Logf("OUTPUT: %s", output)
 
 		if !strings.Contains(output, "Authorization Error") {
 			return false, nil
@@ -337,7 +336,4 @@ func TestConfigMapReload_Auth(t *testing.T) {
 
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pods to be reloaded: %s", err)
-	}
 }
