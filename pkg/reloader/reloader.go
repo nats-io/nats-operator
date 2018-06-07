@@ -53,7 +53,6 @@ func (r *Reloader) Run(ctx context.Context) error {
 	}
 
 	var (
-		err      error
 		proc     *os.Process
 		pid      int
 		attempts int
@@ -86,11 +85,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 	r.pid = pid
 	r.proc = proc
 
-	var (
-		event         fsnotify.Event
-		configWatcher *fsnotify.Watcher
-	)
-	configWatcher, err = fsnotify.NewWatcher()
+	configWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
@@ -108,7 +103,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case event = <-configWatcher.Events:
+		case event := <-configWatcher.Events:
 			log.Printf("Event: %+v \n", event)
 			// FIXME: This captures all events in the same folder, should
 			// narrow down to updates to the config file involved only.

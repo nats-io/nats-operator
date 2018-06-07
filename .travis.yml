@@ -23,4 +23,5 @@ script:
 - kubectl cluster-info
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/ && ./prepare-secrets.sh
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/operator/ && go test ./... -v
+- cd $GOPATH/src/github.com/nats-io/nats-operator/test/reloader/ && go test ./... -v
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/rbac && ./rbac-test.sh
