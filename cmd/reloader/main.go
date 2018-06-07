@@ -64,7 +64,7 @@ func main() {
 			log.Printf("Trapped \"%v\" signal\n", sig)
 			switch sig {
 			case syscall.SIGINT:
-				log.Println("Exiting...\n")
+				log.Println("Exiting...")
 				os.Exit(0)
 				return
 			case syscall.SIGTERM:
