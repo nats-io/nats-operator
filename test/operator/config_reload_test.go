@@ -210,6 +210,10 @@ func TestConfigMapReload_Auth(t *testing.T) {
 		if len(podList.Items) < size {
 			return false, nil
 		}
+		pod := podList.Items[0]
+		if pod.Status.Phase != k8sv1.PodRunning {
+			return false, nil
+		}
 
 		return true, nil
 	})
@@ -232,7 +236,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 					Command: []string{
 						"/nats-sub",
 						"-s",
-						fmt.Sprintf("nats://user1:secret1@%s:4222", name),
+						fmt.Sprintf("nats://user1:secret1@%s.default.svc.cluster.local:4222", name),
 						"hello.world",
 					},
 				},
@@ -261,7 +265,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 
 	// Confirm that the pod subscribed successfully, then do a reload
 	// removing its user.
-	err = k8swaitutil.Poll(3*time.Second, 3*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
 		sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
 		opts := &k8sv1.PodLogOptions{
 			SinceTime: &sinceTime,
@@ -274,15 +278,12 @@ func TestConfigMapReload_Auth(t *testing.T) {
 		buf.ReadFrom(rc)
 
 		output := buf.String()
-		fmt.Println(output)
+		t.Logf("OUTPUT: %s", output)
 		if !strings.Contains(output, "Listening on [hello.world]") {
 			return false, nil
 		}
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pod state: %s", err)
-	}
 
 	// Remove the user and then current connection will be closed.
 	sec = `{
@@ -331,8 +332,12 @@ func TestConfigMapReload_Auth(t *testing.T) {
 		buf.ReadFrom(rc)
 
 		output := buf.String()
-		fmt.Println(output)
-		if !strings.Contains(output, "Authorization Error") {
+
+		// On reload now pod would get:
+		//
+		// Authorization Error - User "user1"
+		//
+		if !strings.Contains(output, "Reloaded: authorization users") {
 			return false, nil
 		}
 
