@@ -232,22 +232,22 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		LabelAppKey:         LabelAppValue,
 		LabelClusterNameKey: clusterName,
 	}
-	cm := &v1.ConfigMap{
+	cm := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   clusterName,
 			Labels: labels,
 		},
-		Data: map[string]string{
-			constants.ConfigFileName: string(rawConfig),
+		Data: map[string][]byte{
+			constants.ConfigFileName: rawConfig,
 		},
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
 
-	_, err = kubecli.ConfigMaps(ns).Create(cm)
+	_, err = kubecli.Secrets(ns).Create(cm)
 	if apierrors.IsAlreadyExists(err) {
 		// Skip in case it was created already and update instead
 		// with the latest configuration.
-		_, err = kubecli.ConfigMaps(ns).Update(cm)
+		_, err = kubecli.Secrets(ns).Update(cm)
 		return err
 	}
 
@@ -295,22 +295,13 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
-	labels := map[string]string{
-		LabelAppKey:         LabelAppValue,
-		LabelClusterNameKey: clusterName,
+	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
+	if err != nil {
+		return err
 	}
-	cm := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   clusterName,
-			Labels: labels,
-		},
-		Data: map[string]string{
-			constants.ConfigFileName: string(rawConfig),
-		},
-	}
-	addOwnerRefToObject(cm.GetObjectMeta(), owner)
+	cm.Data[constants.ConfigFileName] = rawConfig
 
-	_, err = kubecli.ConfigMaps(ns).Update(cm)
+	_, err = kubecli.Secrets(ns).Update(cm)
 	return err
 }
 
@@ -318,10 +309,8 @@ func newNatsConfigMapVolume(clusterName string) v1.Volume {
 	return v1.Volume{
 		Name: constants.ConfigMapVolumeName,
 		VolumeSource: v1.VolumeSource{
-			ConfigMap: &v1.ConfigMapVolumeSource{
-				LocalObjectReference: v1.LocalObjectReference{
-					Name: clusterName,
-				},
+			Secret: &v1.SecretVolumeSource{
+				SecretName: clusterName,
 			},
 		},
 	}

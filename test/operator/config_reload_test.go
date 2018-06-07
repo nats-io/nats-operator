@@ -125,7 +125,7 @@ func TestConfigMapReload_Servers(t *testing.T) {
 	time.Sleep(1 * time.Minute)
 }
 
-func TestConfigMapReload_Auth(t *testing.T) {
+func TestConfigSecretReload_Auth(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	runController(ctx, t)
@@ -155,9 +155,10 @@ func TestConfigMapReload_Auth(t *testing.T) {
   }
 }
 `
+	authSecretName := fmt.Sprintf("%s-clients-auth", name)
 	cm := &k8sv1.Secret{
 		ObjectMeta: k8smetav1.ObjectMeta{
-			Name: name,
+			Name: authSecretName,
 		},
 		Data: map[string][]byte{
 			"anything": []byte(sec),
@@ -187,7 +188,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
 				EnableConfigReload: true,
 			},
 			Auth: &spec.AuthConfig{
-				ClientsAuthSecret:  name,
+				ClientsAuthSecret:  authSecretName,
 				ClientsAuthTimeout: 10,
 			},
 		},
@@ -296,7 +297,7 @@ func TestConfigMapReload_Auth(t *testing.T) {
   }
 }
 `
-	result, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
+	result, err := cl.kc.Secrets(namespace).Get(authSecretName, k8smetav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

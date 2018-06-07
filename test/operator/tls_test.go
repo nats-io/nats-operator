@@ -102,7 +102,7 @@ func TestCreateTLSSetup(t *testing.T) {
 	// Give some time for cluster to form
 	time.Sleep(2 * time.Second)
 
-	cm, err := cl.kc.ConfigMaps(namespace).Get(name, k8smetav1.GetOptions{})
+	cm, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
 	if err != nil {
 		t.Errorf("Config map error: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestCreateTLSSetup(t *testing.T) {
 		t.Error("Config map was missing")
 	}
 	for _, pod := range podList.Items {
-		if !strings.Contains(conf, pod.Name) {
+		if !strings.Contains(string(conf), pod.Name) {
 			t.Errorf("Could not find pod %q in config", pod.Name)
 		}
 

@@ -69,7 +69,7 @@ func TestRegisterCRD(t *testing.T) {
 	}
 }
 
-func TestCreateConfigMap(t *testing.T) {
+func TestCreateConfigSecret(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	runController(ctx, t)
@@ -123,7 +123,7 @@ func TestCreateConfigMap(t *testing.T) {
 		t.Errorf("Error waiting for pods to be created: %s", err)
 	}
 
-	cm, err := cl.kc.ConfigMaps(namespace).Get(name, k8smetav1.GetOptions{})
+	cm, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
 	if err != nil {
 		t.Errorf("Config map error: %v", err)
 	}
@@ -132,13 +132,13 @@ func TestCreateConfigMap(t *testing.T) {
 		t.Error("Config map was missing")
 	}
 	for _, pod := range podList.Items {
-		if !strings.Contains(conf, pod.Name) {
+		if !strings.Contains(string(conf), pod.Name) {
 			t.Errorf("Could not find pod %q in config", pod.Name)
 		}
 	}
 }
 
-func TestReplacePresentConfigMap(t *testing.T) {
+func TestReplacePresentConfigSecret(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	runController(ctx, t)
@@ -152,17 +152,17 @@ func TestReplacePresentConfigMap(t *testing.T) {
 	name := "test-nats-cluster-2"
 	namespace := "default"
 
-	// Create a configmap with the same name, that will
+	// Create a secret with the same name, that will
 	// be replaced with a new one by the operator.
-	cm := &k8sv1.ConfigMap{
+	cm := &k8sv1.Secret{
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name: name,
 		},
-		Data: map[string]string{
-			"nats.conf": "port: 4222",
+		Data: map[string][]byte{
+			"nats.conf": []byte("port: 4222"),
 		},
 	}
-	_, err = cl.kc.ConfigMaps(namespace).Create(cm)
+	_, err = cl.kc.Secrets(namespace).Create(cm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestReplacePresentConfigMap(t *testing.T) {
 		t.Errorf("Error waiting for pods to be created: %s", err)
 	}
 
-	cm, err = cl.kc.ConfigMaps(namespace).Get(name, k8smetav1.GetOptions{})
+	cm, err = cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
 	if err != nil {
 		t.Errorf("Config map error: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestReplacePresentConfigMap(t *testing.T) {
 		t.Error("Config map was missing")
 	}
 	for _, pod := range podList.Items {
-		if !strings.Contains(conf, pod.Name) {
+		if !strings.Contains(string(conf), pod.Name) {
 			t.Errorf("Could not find pod %q in config", pod.Name)
 		}
 	}
