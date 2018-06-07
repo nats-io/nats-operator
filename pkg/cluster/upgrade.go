@@ -33,7 +33,7 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 	if err != nil {
 		return fmt.Errorf("fail to get pod (%s): %v", oldPod.GetName(), err)
 	}
-	oldpod := kubernetesutil.ClonePod(pod)
+	oldpod := pod.DeepCopy()
 
 	c.logger.Infof("upgrading the NATS member %v from %s to %s", pod.GetName(), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
 	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version)
@@ -65,7 +65,7 @@ func (c *Cluster) maybeUpgradeMgmtService() error {
 		c.logger.Infof("NATS management service %v has already been updated to %s", svc.GetName(), c.cluster.Spec.Version)
 		return nil
 	}
-	oldsvc := kubernetesutil.CloneSvc(svc)
+	oldsvc := svc.DeepCopy()
 
 	svc.Spec.Selector[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
 

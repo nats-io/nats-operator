@@ -123,10 +123,20 @@ type PodPolicy struct {
 	Tolerations []v1.Toleration `json:"tolerations,omitempty"`
 
 	// List of environment variables to set in the NATS container.
-	// This is used to configure NATS process. NATS cluster cannot be created, when
-	// bad environment variables are provided.
-	// This field cannot be updated.
 	NatsEnv []v1.EnvVar `json:"natsEnv,omitempty"`
+
+	// EnableConfigReload attaches a sidecar to each NATS Server
+	// that will signal the server whenever the configuration is updated.
+	EnableConfigReload bool `json:"enableConfigReload,omitempty"`
+
+	// ReloaderImage is the image to use for the reloader.
+	ReloaderImage string `json:"reloaderImage,omitempty"`
+
+	// ReloaderImageTag is the tag of the reloader image.
+	ReloaderImageTag string `json:"reloaderImageTag,omitempty"`
+
+	// ReloaderImagePullPolicy is the pull policy for the reloader image.
+	ReloaderImagePullPolicy string `json:"reloaderImagePullPolicy,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for

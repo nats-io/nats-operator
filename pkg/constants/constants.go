@@ -39,6 +39,19 @@ const (
 	// ConfigFilePath is the absolute path to the NATS config file.
 	ConfigFilePath = ConfigMapMountPath + "/" + ConfigFileName
 
+	// PidFileVolumeName is the name of the volume used for the NATS server pid file.
+	PidFileVolumeName = "pid"
+
+	// PidFileName is the pid file name.
+	PidFileName = "gnatsd.pid"
+
+	// PidFileMountPath is the absolute path to the directory where NATS
+	// will be leaving its pid file.
+	PidFileMountPath = "/var/run/nats"
+
+	// PidFilePath is the location of the pid file.
+	PidFilePath = PidFileMountPath + "/" + PidFileName
+
 	// ServerSecretVolumeName is the name of the volume used for the server certs.
 	ServerSecretVolumeName = "server-tls-certs"
 
@@ -58,4 +71,10 @@ const (
 	RoutesCAFilePath     = RoutesCertsMountPath + "/ca.pem"
 	RoutesCertFilePath   = RoutesCertsMountPath + "/route.pem"
 	RoutesKeyFilePath    = RoutesCertsMountPath + "/route-key.pem"
+
+	// Default Docker Images
+	DefaultServerImage = "nats"
+	DefaultReloaderImage = "wallyqs/nats-server-config-reloader"
+	DefaultReloaderImageTag = "0.2.1-v1alpha2"
+	DefaultReloaderImagePullPolicy = "IfNotPresent"
 )

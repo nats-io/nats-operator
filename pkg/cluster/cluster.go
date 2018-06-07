@@ -196,6 +196,7 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 	}
 	c.logger.Infof("start running...")
 
+	var secretLastResourceVersion string
 	var rerr error
 	for {
 		select {
@@ -229,6 +230,18 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 				continue
 			} else {
 				c.status.Control()
+			}
+
+			// Just here get the secret version in case there is one.
+			if c.cluster.Spec.Auth != nil {
+				// Look for updates in the secret used for auth then
+				// trigger config reload in case there are new updates.
+				authSecret := c.cluster.Spec.Auth.ClientsAuthSecret
+				result, err := c.config.KubeCli.Secrets(c.cluster.Namespace).Get(authSecret, metav1.GetOptions{})
+				if err == nil && secretLastResourceVersion != result.ResourceVersion {
+					secretLastResourceVersion = result.ResourceVersion
+					c.updateConfigMap()
+				}
 			}
 
 			running, pending, err := c.pollPods()
