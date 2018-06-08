@@ -74,7 +74,8 @@ const (
 
 	// Default Docker Images
 	DefaultServerImage = "nats"
-	DefaultReloaderImage = "wallyqs/nats-server-config-reloader"
-	DefaultReloaderImageTag = "0.2.1-v1alpha2"
+	DefaultReloaderImage = "connecteverything/nats-server-config-reloader"
+	DefaultReloaderImageTag = "0.2.2-v1alpha2"
 	DefaultReloaderImagePullPolicy = "IfNotPresent"
 )
+
