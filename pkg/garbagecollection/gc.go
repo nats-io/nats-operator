@@ -116,7 +116,7 @@ func (gc *GC) collectPods(option metav1.ListOptions, runningSet map[types.UID]bo
 }
 
 func (gc *GC) collectConfigMaps(option metav1.ListOptions, runningSet map[types.UID]bool) error {
-	cms, err := gc.kubecli.ConfigMaps(gc.ns).List(option)
+	cms, err := gc.kubecli.Secrets(gc.ns).List(option)
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (gc *GC) collectConfigMaps(option metav1.ListOptions, runningSet map[types.
 			continue
 		}
 		if !runningSet[cm.OwnerReferences[0].UID] {
-			err = gc.kubecli.ConfigMaps(gc.ns).Delete(cm.GetName(), nil)
+			err = gc.kubecli.Secrets(gc.ns).Delete(cm.GetName(), nil)
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
