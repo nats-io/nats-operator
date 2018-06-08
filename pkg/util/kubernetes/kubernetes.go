@@ -251,7 +251,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, clusterName, ns strin
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // UpdateConfigMap applies the new configuration of the cluster,
