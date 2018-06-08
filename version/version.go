@@ -15,6 +15,6 @@
 package version
 
 var (
-	OperatorVersion = "0.2.1-v1alpha2+git"
+	OperatorVersion = "0.2.2-v1alpha2+git"
 	GitSHA          = "Not provided"
 )

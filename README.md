@@ -68,10 +68,7 @@ Then this will deploy a `nats-operator` on the `nats-io` namespace.
 
 ```
 $ kubectl -n nats-io logs deployment/nats-operator
-time="2018-03-23T00:45:49Z" level=info msg="nats-operator Version: 0.2.0-v1alpha2+git"
-time="2018-03-23T00:45:49Z" level=info msg="Git SHA: 4040d87"
-time="2018-03-23T00:45:49Z" level=info msg="Go Version: go1.9"
-time="2018-03-23T00:45:49Z" level=info msg="Go OS/Arch: linux/amd64"
+time="2018-06-07T15:53:17-07:00" level=info msg="nats-operator Version: 0.2.2-v1alpha2+git"
 ```
 
 Note that the NATS operator only monitors the `NatsCluster` resources
@@ -88,10 +85,10 @@ NAME             AGE
 example-nats-1   6m
 
 $ kubectl -n nats-io get pods -l nats_cluster=example-nats-1
-NAME              READY     STATUS    RESTARTS   AGE
-nats-2jgb0tg3sm   1/1       Running   0          7m
-nats-h8z9dckvfr   1/1       Running   0          7m
-nats-px28gkx5wk   1/1       Running   0          6m
+NAME               READY     STATUS    RESTARTS   AGE
+example-nats-1-1   1/1       Running   0          7m
+example-nats-1-2   1/1       Running   0          7m
+example-nats-1-3   1/1       Running   0          6m
 ```
 
 ### TLS support
@@ -135,6 +132,90 @@ with the clients.
 
 ```
 $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
+```
+
+### Authorization
+
+Authorization can be set for the server by using a secret
+where the permissions are defined in JSON:
+
+```json
+{
+  "users": [
+    { "username": "user1", "password": "secret1" },
+    { "username": "user2", "password": "secret2",
+      "permissions": {
+	"publish": ["hello.*"],
+	"subscribe": ["hello.world"]
+      }
+    }
+  ],
+  "default_permissions": {
+    "publish": ["SANDBOX.*"],
+    "subscribe": ["PUBLIC.>"]
+  }
+}
+```
+
+Example of creating a secret to set the permissions:
+
+```
+kubectl create secret generic nats-clients-auth --from-file=clients-auth.json
+```
+
+Now when creating a NATS cluster it is possible to set the permissions as
+in the following example:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+pmetadata:
+  name: "example-nats-auth"
+spec:
+  size: 3
+  version: "1.1.0"
+
+  auth:
+    # Definition in JSON of the users permissions
+    clientsAuthSecret: "nats-clients-auth"
+
+    # How long to wait for authentication
+    clientsAuthTimeout: 5
+```
+
+### Configuration Reload
+
+On Kubernetes +v1.10 clusters that have been started with support for
+sharing the process namespace (via `--feature-gates=PodShareProcessNamespace=true`),
+it is possible to enable on-the-fly reloading of configuration for the
+servers that are part of the cluster.  This can also be combined with the
+authorization support, so in case the user permissions change, then the
+servers will reload and apply the new permissions.
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "example-nats-auth"
+spec:
+  size: 3
+  version: "1.1.0"
+
+  pod:
+    # Enable on-the-fly NATS Server config reload
+    # Note: only supported in Kubernetes clusters with PID namespace sharing enabled.
+    enableConfigReload: true
+
+    # Possible to customize version of reloader image
+    reloaderImage: connecteverything/nats-server-config-reloader"
+    reloaderImageTag: "0.2.2-v1alpha2"
+    reloaderImagePullPolicy: "IfNotPresent"
+  auth:
+    # Definition in JSON of the users permissions
+    clientsAuthSecret: "nats-clients-auth"
+
+    # How long to wait for authentication
+    clientsAuthTimeout: 5
 ```
 
 ## Development
