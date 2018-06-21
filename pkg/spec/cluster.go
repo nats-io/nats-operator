@@ -142,8 +142,9 @@ type PodPolicy struct {
 // AuthConfig is the authorization configuration for
 // user permissions in the cluster.
 type AuthConfig struct {
-	ClientsAuthSecret  string `json:"clientsAuthSecret,omitempty"`
-	ClientsAuthTimeout int    `json:"clientsAuthTimeout,omitempty"`
+	EnableServiceAccounts bool   `json:"enableServiceAccounts,omitempty"`
+	ClientsAuthSecret     string `json:"clientsAuthSecret,omitempty"`
+	ClientsAuthTimeout    int    `json:"clientsAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {

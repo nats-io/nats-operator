@@ -39,6 +39,8 @@ func addKnownTypes(s *runtime.Scheme) error {
 	s.AddKnownTypes(SchemeGroupVersion,
 		&NatsCluster{},
 		&NatsClusterList{},
+		&ServiceRole{},
+		&ServiceRoleList{},
 	)
 	metav1.AddToGroupVersion(s, SchemeGroupVersion)
 	return nil
