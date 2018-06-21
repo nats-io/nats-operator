@@ -38,6 +38,8 @@ type NatsClusterList struct {
 
 // NatsCluster is a NATS cluster.
 //
+// +genclient
+// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsCluster struct {
 	metav1.TypeMeta   `json:",inline"`
