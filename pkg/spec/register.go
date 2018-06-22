@@ -24,14 +24,18 @@ const (
 	CRDResourceKind   = "NatsCluster"
 	CRDResourcePlural = "natsclusters"
 	groupName         = "nats.io"
+
+	ServiceRoleCRDResourceKind   = "ServiceRole"
+	ServiceRoleCRDResourcePlural = "serviceroles"
 )
 
 var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	AddToScheme   = SchemeBuilder.AddToScheme
 
-	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha2"}
+	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha3"}
 	CRDName            = CRDResourcePlural + "." + groupName
+	ServiceRoleCRDName = ServiceRoleCRDResourcePlural + "." + groupName
 )
 
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.

@@ -2,7 +2,7 @@
 apiVersion: "nats.io/v1alpha3"
 kind: "NatsCluster"
 metadata:
-  name: "example-nats-auth"
+  name: "example-nats-cluster"
 spec:
   size: 3
   version: "1.1.0"

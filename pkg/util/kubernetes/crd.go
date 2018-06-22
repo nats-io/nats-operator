@@ -96,6 +96,7 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 		return ErrCRDAlreadyExists
 	}
 
+	// NatsCluster
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: spec.CRDName,
@@ -116,6 +117,24 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 	if IsKubernetesResourceAlreadyExistError(err) {
 		return ErrCRDAlreadyExists
 	}
+
+	// NatsServiceRole
+	crd = &apiextensionsv1beta1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: spec.ServiceRoleCRDName,
+		},
+		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
+			Group:   spec.SchemeGroupVersion.Group,
+			Version: spec.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
+				Plural: spec.ServiceRoleCRDResourcePlural,
+				Kind:   spec.ServiceRoleCRDResourceKind,
+			},
+		},
+	}
+	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+
 	return err
 }
 

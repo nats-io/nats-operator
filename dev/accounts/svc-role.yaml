@@ -1,0 +1,13 @@
+---
+apiVersion: "nats.io/v1alpha3"
+kind: "ServiceRole"
+metadata:
+  name: "example-nats-auth-service-role"
+  namespace: default
+  labels:
+    nats_cluster: example-nats-cluster
+spec:
+  serviceAccountName: example-nats-user
+  permissions:
+    publish: ["hello.*"]
+    subscribe: ["hello.world"]
