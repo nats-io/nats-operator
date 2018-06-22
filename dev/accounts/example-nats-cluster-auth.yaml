@@ -16,7 +16,7 @@ spec:
     # reloaderImageTag: "0.2.2-v1alpha2"
     # reloaderImagePullPolicy: "IfNotPresent"
   auth:
-    useServiceAccounts: true
+    enableServiceAccounts: true
 
     # Definition in JSON of the users permissions
     # clientsAuthSecret: "nats-clients-auth"

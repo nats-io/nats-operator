@@ -28,6 +28,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	"github.com/nats-io/nats-operator/pkg/spec"
+	natsalphav3client "github.com/nats-io/nats-operator/pkg/typed-client/versioned/typed/pkg/spec"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/sirupsen/logrus"
@@ -56,8 +57,8 @@ type clusterEvent struct {
 
 type Config struct {
 	ServiceAccount string
-
-	KubeCli corev1client.CoreV1Interface
+	KubeCli        corev1client.CoreV1Interface
+	OperatorCli    natsalphav3client.PkgSpecInterface
 }
 
 type Cluster struct {
@@ -233,6 +234,7 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 			}
 
 			// Just here get the secret version in case there is one.
+			// TODO: This should be done using a watch instead.
 			if c.cluster.Spec.Auth != nil {
 				// Look for updates in the secret used for auth then
 				// trigger config reload in case there are new updates.
@@ -240,6 +242,16 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 				result, err := c.config.KubeCli.Secrets(c.cluster.Namespace).Get(authSecret, metav1.GetOptions{})
 				if err == nil && secretLastResourceVersion != result.ResourceVersion {
 					secretLastResourceVersion = result.ResourceVersion
+					c.updateConfigMap()
+				}
+
+				roles, err := c.config.OperatorCli.ServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
+					LabelSelector: fmt.Sprintf("nats_cluster=%s", c.cluster.Name),
+				})
+
+				// TODO: Cache the version of the resource
+				if err == nil && len(roles.Items) > 0 {
+					// Apply the new config to the secret.
 					c.updateConfigMap()
 				}
 			}
@@ -313,11 +325,11 @@ func (c *Cluster) setupServices() error {
 }
 
 func (c *Cluster) setupConfigMap() error {
-	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
 }
 
 func (c *Cluster) updateConfigMap() error {
-	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
 }
 
 func (c *Cluster) createPod() (*v1.Pod, error) {

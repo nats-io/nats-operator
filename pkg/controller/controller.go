@@ -26,6 +26,7 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/cluster"
 	"github.com/nats-io/nats-operator/pkg/spec"
+	natsalphav3client "github.com/nats-io/nats-operator/pkg/typed-client/versioned/typed/pkg/spec"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
 
@@ -71,6 +72,7 @@ type Config struct {
 	PVProvisioner  string
 	KubeCli        corev1client.CoreV1Interface
 	KubeExtCli     apiextensionsclient.Interface
+	OperatorCli    natsalphav3client.PkgSpecInterface
 }
 
 func (c *Config) Validate() error {
@@ -222,6 +224,7 @@ func (c *Controller) makeClusterConfig() cluster.Config {
 	return cluster.Config{
 		ServiceAccount: c.Config.ServiceAccount,
 		KubeCli:        c.KubeCli,
+		OperatorCli:    c.OperatorCli,
 	}
 }
 

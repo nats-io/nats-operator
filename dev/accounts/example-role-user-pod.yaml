@@ -1,0 +1,37 @@
+---
+apiVersion: v1
+kind: "ServiceAccount"
+metadata:
+  name: "new-account-user"
+---
+apiVersion: "nats.io/v1alpha3"
+kind: "ServiceRole"
+metadata:
+  name: "new-account-user-role"
+  namespace: default
+
+  # Specifies which NATS cluster will be mapping this account,
+  # (have to create a service role with permission per cluster).
+  labels:
+    nats_cluster: example-nats-cluster
+
+spec:
+  serviceAccountName: new-account-user
+  permissions:
+    publish: ["foo.*"]
+    subscribe: ["foo.bar"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nats-ops-example
+spec:
+  serviceAccountName: new-account-user
+  restartPolicy: Never
+  containers:
+    - name: nats-ops
+      command: ["/bin/sh"]
+      image: "wallyqs/nats-ops:latest"
+      tty: true
+      stdin: true
+      stdinOnce: true
