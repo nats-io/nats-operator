@@ -35,9 +35,10 @@ func pollEvent(decoder *json.Decoder) (*Event, *metav1.Status, error) {
 	re := &rawEvent{}
 	err := decoder.Decode(re)
 	if err != nil {
-		if err == io.EOF {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, nil, err
 		}
+
 		return nil, nil, fmt.Errorf("fail to decode raw event from apiserver (%v)", err)
 	}
 
