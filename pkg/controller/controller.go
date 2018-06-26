@@ -281,7 +281,9 @@ func (c *Controller) watch(watchVersion string) (<-chan *Event, <-chan error) {
 			for {
 				ev, st, err := pollEvent(decoder)
 				if err != nil {
-					if err == io.EOF { // apiserver will close stream periodically
+					// API Server will close stream periodically so schedule a reconnect,
+					// also recover in case connection was broken for some reason.
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
 						c.logger.Info("apiserver closed watch stream, retrying after 5s...")
 						time.Sleep(5 * time.Second)
 						break
