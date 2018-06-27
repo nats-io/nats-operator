@@ -16,6 +16,7 @@ package kubernetes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -29,6 +30,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+)
+
+var (
+	ErrCRDAlreadyExists = errors.New("crd already exists")
 )
 
 // TODO: replace this package with Operator client
@@ -86,6 +91,11 @@ func readClusterCR(b []byte) (*spec.NatsCluster, error) {
 }
 
 func CreateCRD(clientset apiextensionsclient.Interface) error {
+	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDName, metav1.GetOptions{})
+	if err == nil {
+		return ErrCRDAlreadyExists
+	}
+
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: spec.CRDName,
@@ -101,7 +111,11 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			},
 		},
 	}
-	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+
+	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	if IsKubernetesResourceAlreadyExistError(err) {
+		return ErrCRDAlreadyExists
+	}
 	return err
 }
 
