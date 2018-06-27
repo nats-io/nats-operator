@@ -228,16 +228,11 @@ func (c *Controller) makeClusterConfig() cluster.Config {
 func (c *Controller) initResource() (string, error) {
 	watchVersion := "0"
 	err := c.initCRD()
+	if err == kubernetesutil.ErrCRDAlreadyExists {
+		return c.findAllClusters()
+	}
 	if err != nil {
-		if kubernetesutil.IsKubernetesResourceAlreadyExistError(err) {
-			// CRD has been initialized before. We need to recover existing cluster.
-			watchVersion, err = c.findAllClusters()
-			if err != nil {
-				return "", err
-			}
-		} else {
-			return "", fmt.Errorf("fail to create CRD: %v", err)
-		}
+		return "", fmt.Errorf("fail to create CRD: %v", err)
 	}
 
 	return watchVersion, nil
