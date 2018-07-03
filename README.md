@@ -207,7 +207,7 @@ spec:
     enableConfigReload: true
 
     # Possible to customize version of reloader image
-    reloaderImage: connecteverything/nats-server-config-reloader"
+    reloaderImage: connecteverything/nats-server-config-reloader
     reloaderImageTag: "0.2.2-v1alpha2"
     reloaderImagePullPolicy: "IfNotPresent"
   auth:
