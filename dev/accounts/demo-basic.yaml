@@ -35,12 +35,17 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: demo-nats-ops
+  name: demo-nats-ops-2
 spec:
-  # volumes:
-  #   - name: "token"
-  #     secret:
-  #       secretName: "demo-nats-account-token"
+  serviceAccountName: demo-nats-account
+  volumes:
+    - name: "token"
+      projected:
+        sources:
+        - serviceAccountToken:
+            # This has to map to the value in the API Server
+            audience: api # "nats://demo-nats" # could be the cluster name here then?
+            path: "token"
 
   # Instead of this will have to mount a secret named the same
   # and set the name of the account as an environment variable.
@@ -56,8 +61,11 @@ spec:
 
       # Declare it here in order to have access
       # to the service account.
+      volumeMounts:
+      - name: "token"
+        mountPath: "/var/run/secrets/nats.io"
+
       # volumeMounts:
       # - name: "token"
       #   mountPath: "/var/run/secrets/nats/token"
-
       # TODO: This should be a projection
