@@ -1,0 +1,46 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: demo-nats-ops-3
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: demo-nats-ops-3
+  template:
+    metadata:
+      labels:
+        name: demo-nats-ops-3
+
+    spec:
+      volumes:
+        - name: "token"
+          projected:
+            sources:
+            - serviceAccountToken:
+                # This has to map to the value in the API Server?
+                audience: "nats://demo-nats" # could be the cluster name here then?
+                path: "token"
+
+      # Instead of this will have to mount a secret named the same
+      # and set the name of the account as an environment variable.
+      # serviceAccountName: demo-nats-account
+      # restartPolicy: Never
+      containers:
+        - name: nats-ops
+          command: ["/bin/sh"]
+          image: "wallyqs/nats-ops:latest"
+          tty: true
+          stdin: true
+          stdinOnce: true
+
+          # Declare it here in order to have access
+          # to the service account.
+          volumeMounts:
+          - name: "token"
+            mountPath: "/var/run/secrets/nats.io"
+
+          # volumeMounts:
+          # - name: "token"
+          #   mountPath: "/var/run/secrets/nats/token"
+          # TODO: This should be a projection

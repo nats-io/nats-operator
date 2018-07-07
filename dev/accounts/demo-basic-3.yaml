@@ -1,0 +1,89 @@
+---
+apiVersion: nats.io/v1alpha3
+kind: NatsCluster
+metadata:
+  name: demo-nats
+spec:
+  size: 3
+  version: "1.1.0"
+  pod:
+    enableConfigReload: true
+  auth:
+    enableServiceAccounts: true
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: demo-nats-account
+
+---
+apiVersion: nats.io/v1alpha3
+kind: ServiceRole
+metadata:
+  name: demo-nats-role
+  namespace: default
+
+  # Specifies which NATS cluster will be mapping this account,
+  # (have to create a service role with permission per cluster).
+  labels:
+    nats_cluster: demo-nats
+spec:
+  serviceAccountName: demo-nats-account
+  permissions:
+    publish: ["foo.*", "foo.bar.quux"]
+    subscribe: ["foo.bar", "greetings"]
+
+---
+apiVersion: nats.io/v1alpha3
+kind: ServiceRole
+metadata:
+  name: demo-nats-admin-role
+  namespace: default
+
+  # Specifies which NATS cluster will be mapping this account,
+  # (have to create a service role with permission per cluster).
+  labels:
+    nats_cluster: demo-nats
+spec:
+  serviceAccountName: demo-nats-account
+  permissions:
+    publish: [">"]
+    subscribe: [">"]
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-nats-ops-10
+  labels:
+    nats_cluster: demo-nats
+spec:
+  # Less simple than a service account declaration
+  # but could use a PodPreset instead here.
+  volumes:
+    - name: "token"
+      projected:
+        sources:
+        - secret:
+            name: "demo-nats-account-demo-nats-bound-token"
+            items:
+              - key: token
+                path: "token"
+
+  # Instead of this will have to mount a secret named the same
+  # and set the name of the account as an environment variable.
+  # serviceAccountName: demo-nats-account
+  restartPolicy: Never
+  containers:
+    - name: nats-ops
+      command: ["/bin/sh"]
+      image: "wallyqs/nats-ops:latest"
+      tty: true
+      stdin: true
+      stdinOnce: true
+
+      # Service Account Token is mounted via projected volume.
+      volumeMounts:
+      - name: "token"
+        mountPath: "/var/run/secrets/nats.io"
