@@ -10,37 +10,6 @@ metadata:
   name: nats-operator
   namespace: nats-io
 ---
-apiVersion: apps/v1beta2
-kind: Deployment
-metadata:
-  name: nats-operator
-  namespace: nats-io
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      name: nats-operator
-  template:
-    metadata:
-      labels:
-        name: nats-operator
-    spec:
-      serviceAccountName: nats-operator
-      containers:
-      - name: nats-operator
-        image: wallyqs/nats-operator:0.2.3-v1alpha3
-        # image: connecteverything/nats-operator:0.2.2-v1alpha2
-        imagePullPolicy: Always
-        env:
-        - name: MY_POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: MY_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -70,6 +39,7 @@ rules:
   - nats.io
   resources:
   - natsclusters
+  - serviceroles  
   verbs: ["*"]
 # Allow actions on basic Kubernetes objects
 - apiGroups: [""]
@@ -78,6 +48,8 @@ rules:
   - secrets
   - pods
   - services
+  - serviceaccounts
+  - serviceaccounts/token
   - endpoints
   - events
   verbs: ["*"]

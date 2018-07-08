@@ -158,6 +158,7 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 		roles, err := operatorcli.ServiceRoles(ns).List(metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("nats_cluster=%s", clusterName),
 		})
+		fmt.Println(err)
 		if err != nil || len(roles.Items) == 0 {
 			// Nothing to do
 			return nil
@@ -169,7 +170,8 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 	NextRole:
 		for _, role := range roles.Items {
 			// Lookup for the service account with the name.
-			sa, err := kubecli.ServiceAccounts(ns).Get(role.Spec.ServiceAccountName, metav1.GetOptions{})
+			_, err := kubecli.ServiceAccounts(ns).Get(role.Spec.ServiceAccountName, metav1.GetOptions{})
+			fmt.Println(err)
 			if err != nil {
 				// Skip looking up this service account
 				continue NextRole
@@ -184,6 +186,7 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 			// and whether it has expired in case we need to issue another one.
 			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Spec.ServiceAccountName, clusterName)
 			cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
+			fmt.Println(err)
 			if err == nil {
 				// Skip since already exists.
 
@@ -208,80 +211,97 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 			}
 
 			// NOTE: Assume that there is only one secret bound to the service account.
-			for _, secretRef := range sa.Secrets {
-				secret, err := kubecli.Secrets(ns).Get(secretRef.Name, metav1.GetOptions{})
-				if err != nil {
-					continue NextRole
-				}
+			// for _, secretRef := range sa.Secrets {
+			// Maybe do not need this?
+			// _, err := kubecli.Secrets(ns).Get(secretRef.Name, metav1.GetOptions{})
+			// if err != nil {
+			// 	continue NextRole
+			// }
 
-				// Make a request for a token.
-				ar := &authenticationv1.TokenRequest{
-					// Name has to be the service account name???
-					// ObjectMeta: metav1.ObjectMeta{
-					// 	Name: role.Spec.ServiceAccountName,
-					// 	Labels: map[string]string{
-					// 		LabelAppKey:         LabelAppValue,
-					// 		LabelClusterNameKey: clusterName,
-					// 	},
-					// },
-					Spec: authenticationv1.TokenRequestSpec{
-						// Audiences: []string{"api"},
-						// Audiences: []string{fmt.Sprintf("nats://%s", clusterName)},
-						// TODO: Here need to bind to the secret of the service account?
-						BoundObjectRef: &authenticationv1.BoundObjectReference{
-							// Service Token will exist for as long as the original
-							// secret from the Service Account exists.
-							Kind:       "Secret",
-							APIVersion: "v1",
-							Name:       secret.Name,
-							UID:        secret.UID,
-						},
+			// Create the extra buddy secret for the clients.
+			tokenSecret := &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tokenSecretName,
+					Labels: map[string]string{
+						LabelAppKey:         LabelAppValue,
+						LabelClusterNameKey: clusterName,
 					},
-				}
-				tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Spec.ServiceAccountName, ar)
-				if err != nil {
-					// Skip creating token
-					continue NextRole
-				}
+				},
+				// Data: map[string][]byte{
+				// 	"token": []byte(tr.Status.Token),
+				// },
+			}
 
-				// Create the extra buddy secret for the clients.
-				tokenSecret := &v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: tokenSecretName,
-						Labels: map[string]string{
-							LabelAppKey:         LabelAppValue,
-							LabelClusterNameKey: clusterName,
-						},
-					},
-					Data: map[string][]byte{
-						"token": []byte(tr.Status.Token),
-					},
-				}
-
-				// Create the secret.
-				_, err = kubecli.Secrets(ns).Create(tokenSecret)
-				if err != nil {
-					continue NextRole
-				}
-				if err == nil {
-					token := tr.Status.Token
-					user := &natsconf.User{
-						User:     role.Spec.ServiceAccountName,
-						Password: string(token),
-						Permissions: &natsconf.Permissions{
-							Publish:   role.Spec.Permissions.Publish,
-							Subscribe: role.Spec.Permissions.Subscribe,
-						},
-					}
-					users = append(users, user)
-					continue NextRole
-				}
+			// Create the secret, make a service token request, then
+			// update the secret with the token mapped to the service account.
+			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
+			if err != nil {
+				fmt.Println(err)
 				continue NextRole
 			}
 
-			// TODO: Instead of getting the secret from the ServiceAccount we will
-			// create a new special token for mapping the service account to the maps role.
+			// Make a request for a token.
+			ar := &authenticationv1.TokenRequest{
+				// Name has to be the service account name???
+				// ObjectMeta: metav1.ObjectMeta{
+				// 	Name: role.Spec.ServiceAccountName,
+				// 	Labels: map[string]string{
+				// 		LabelAppKey:         LabelAppValue,
+				// 		LabelClusterNameKey: clusterName,
+				// 	},
+				// },
+				Spec: authenticationv1.TokenRequestSpec{
+					// Audiences: []string{"api"},
+					// Audiences: []string{fmt.Sprintf("nats://%s", clusterName)},
+					// TODO: Here need to bind to the secret of the service account?
+					BoundObjectRef: &authenticationv1.BoundObjectReference{
+						// Service Token will exist for as long as the Service Account
+						// exists or the secret mapped to the service account exists.
+						Kind:       "Secret",
+						APIVersion: "v1",
+						Name:       tokenSecret.Name,
+						UID:        tokenSecret.UID,
+					},
+				},
+			}
+
+			// Create the token mapped to service account using the secret...
+			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Spec.ServiceAccountName, ar)
+			if err != nil {
+				// Skip creating token
+				fmt.Println(err)
+				continue NextRole
+			}
+
+			if err == nil {
+				// Update secret with token, then save the user in NATS Config.
+				tokenSecret.Data = map[string][]byte{
+					"token": []byte(tr.Status.Token),
+				}
+				tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
+				if err != nil {
+					fmt.Println(err)
+					continue NextRole
+				}
+
+				token := tr.Status.Token
+				user := &natsconf.User{
+					User:     role.Spec.ServiceAccountName,
+					Password: string(token),
+					Permissions: &natsconf.Permissions{
+						Publish:   role.Spec.Permissions.Publish,
+						Subscribe: role.Spec.Permissions.Subscribe,
+					},
+				}
+				users = append(users, user)
+				continue NextRole
+			}
+			continue NextRole
 		}
+
+		// TODO: Instead of getting the secret from the ServiceAccount we will
+		// create a new special token for mapping the service account to the maps role.
+		// }
 
 		// Check in the current config in case there are any accounts which are stale,
 		// and revoke the tokens.
