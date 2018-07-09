@@ -148,56 +148,38 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 }
 
 // addAuthConfig fills the Auth configuration to be used in config map.
-func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3client.PkgSpecInterface, ns string, clusterName string, sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) error {
+func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3client.PkgSpecInterface, ns string, clusterName string, sconfig *natsconf.ServerConfig, cs spec.ClusterSpec, owner metav1.OwnerReference) error {
 	if cs.Auth == nil {
 		return nil
 	}
-	// TODO: This needs further refactoring...
+
 	if cs.Auth.EnableServiceAccounts {
+		roleSelector := map[string]string{
+			LabelClusterNameKey: clusterName,
+		}
+
 		users := make([]*natsconf.User, 0)
 		roles, err := operatorcli.ServiceRoles(ns).List(metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("nats_cluster=%s", clusterName),
+			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
 		})
-		fmt.Println(err)
 		if err != nil || len(roles.Items) == 0 {
-			// Nothing to do
 			return nil
 		}
 
-		// Collection of user accounts that are valid.
-		// userAccounts := make(map[string]bool)
-
 	NextRole:
 		for _, role := range roles.Items {
-			// Lookup for the service account with the name.
-			_, err := kubecli.ServiceAccounts(ns).Get(role.Spec.ServiceAccountName, metav1.GetOptions{})
-			fmt.Println(err)
+			// Lookup for the service account with the same name as the role.
+			sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
 			if err != nil {
-				// Skip looking up this service account
 				continue NextRole
 			}
 
-			// Mark that we have found the service account, we will later
-			// compare with the secrets section and purge any account
-			// that is still present.
-			// userAccounts[role.Spec.ServiceAccountName] = true
-
-			// TODO: Check if we have created the binding to the secret token already,
-			// and whether it has expired in case we need to issue another one.
+			// TODO: Add custom expiration to the issued tokens.
 			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Spec.ServiceAccountName, clusterName)
 			cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
-			fmt.Println(err)
 			if err == nil {
-				// Skip since already exists.
-
-				// NOTE: Should instead check whether need to change the permissions
-				// or update if the token has already expired here for example.
-
-				// TODO: Add annotation to the secret on when it would expire?
-				// TODO: Continue to use opaque secret?
-
-				// NOTE: We always get everything and apply, so in case there is a diff
-				// then it would be the reloader responsibility on applying the change.
+				// We always get everything and apply, in case there is a diff
+				// then the reloader will apply them.
 				user := &natsconf.User{
 					User:     role.Spec.ServiceAccountName,
 					Password: string(cs.Data["token"]),
@@ -210,15 +192,8 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 				continue NextRole
 			}
 
-			// NOTE: Assume that there is only one secret bound to the service account.
-			// for _, secretRef := range sa.Secrets {
-			// Maybe do not need this?
-			// _, err := kubecli.Secrets(ns).Get(secretRef.Name, metav1.GetOptions{})
-			// if err != nil {
-			// 	continue NextRole
-			// }
-
-			// Create the extra buddy secret for the clients.
+			// Create the secret, then make a service token request, and finally
+			// update the secret with the token mapped to the service account.
 			tokenSecret := &v1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: tokenSecretName,
@@ -227,36 +202,36 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 						LabelClusterNameKey: clusterName,
 					},
 				},
-				// Data: map[string][]byte{
-				// 	"token": []byte(tr.Status.Token),
-				// },
 			}
 
-			// Create the secret, make a service token request, then
-			// update the secret with the token mapped to the service account.
+			// When either the service account, nats role or cluster which
+			// was mapping the role are deleted, then the secret token is deleted too.
+			addOwnerRefToObject(tokenSecret.GetObjectMeta(), owner)
+			addOwnerRefToObject(tokenSecret.GetObjectMeta(), metav1.OwnerReference{
+				APIVersion: "v1",
+				Kind:       "ServiceAccount",
+				Name:       sa.Name,
+				UID:        sa.UID,
+			})
+			addOwnerRefToObject(tokenSecret.GetObjectMeta(), metav1.OwnerReference{
+				APIVersion: role.APIVersion,
+				Kind:       role.Kind,
+				Name:       role.Name,
+				UID:        role.UID,
+			})
 			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
 			if err != nil {
-				fmt.Println(err)
 				continue NextRole
 			}
 
-			// Make a request for a token.
+			// Issue token with audience set for the NATS cluster in this namespace only,
+			// this will prevent the token from being usable against the API Server.
 			ar := &authenticationv1.TokenRequest{
-				// Name has to be the service account name???
-				// ObjectMeta: metav1.ObjectMeta{
-				// 	Name: role.Spec.ServiceAccountName,
-				// 	Labels: map[string]string{
-				// 		LabelAppKey:         LabelAppValue,
-				// 		LabelClusterNameKey: clusterName,
-				// 	},
-				// },
 				Spec: authenticationv1.TokenRequestSpec{
-					// Audiences: []string{"api"},
-					// Audiences: []string{fmt.Sprintf("nats://%s", clusterName)},
-					// TODO: Here need to bind to the secret of the service account?
+					Audiences: []string{fmt.Sprintf("nats://%s.%s.svc", clusterName, ns)},
+
+					// Service Token will be valid for as long as the created secret exists.
 					BoundObjectRef: &authenticationv1.BoundObjectReference{
-						// Service Token will exist for as long as the Service Account
-						// exists or the secret mapped to the service account exists.
 						Kind:       "Secret",
 						APIVersion: "v1",
 						Name:       tokenSecret.Name,
@@ -264,27 +239,22 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 					},
 				},
 			}
-
-			// Create the token mapped to service account using the secret...
 			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Spec.ServiceAccountName, ar)
 			if err != nil {
 				// Skip creating token
-				fmt.Println(err)
 				continue NextRole
 			}
 
 			if err == nil {
-				// Update secret with token, then save the user in NATS Config.
+				// Update secret with issued token, then save the user in the NATS Config.
+				token := tr.Status.Token
 				tokenSecret.Data = map[string][]byte{
-					"token": []byte(tr.Status.Token),
+					"token": []byte(token),
 				}
 				tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
 				if err != nil {
-					fmt.Println(err)
 					continue NextRole
 				}
-
-				token := tr.Status.Token
 				user := &natsconf.User{
 					User:     role.Spec.ServiceAccountName,
 					Password: string(token),
@@ -298,22 +268,6 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 			}
 			continue NextRole
 		}
-
-		// TODO: Instead of getting the secret from the ServiceAccount we will
-		// create a new special token for mapping the service account to the maps role.
-		// }
-
-		// Check in the current config in case there are any accounts which are stale,
-		// and revoke the tokens.
-		// if sconfig.Authorization != nil {
-		// 	for _, u := range sconfig.Authorization.Users {
-		// 		if user, ok := userAccounts[u.User]; ok {
-		// 			fmt.Println("Account exists:", user)
-		// 		} else {
-		// 			fmt.Println("Account does not exist anymore", user)
-		// 		}
-		// 	}
-		// }
 
 		// Expand authorization rules from the service account tokens.
 		sconfig.Authorization = &natsconf.AuthorizationConfig{
@@ -391,7 +345,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 		},
 	}
 	addTLSConfig(sconfig, cluster)
-	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster)
+	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
 	}
@@ -401,10 +355,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 		return err
 	}
 
-	labels := map[string]string{
-		LabelAppKey:         LabelAppValue,
-		LabelClusterNameKey: clusterName,
-	}
+	labels := LabelsForCluster(clusterName)
 	cm := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   clusterName,
@@ -449,25 +400,16 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 		routes = append(routes, route)
 	}
 
-	// Get the previous config and start filling from there.
-	currentSecret, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	data := currentSecret.Data["nats.conf"]
-	var sconfig *natsconf.ServerConfig
-	err = json.Unmarshal(data, &sconfig)
-	if err != nil {
-		return err
-	}
-
-	// Port, HttpPort, ClusterPort are not customizable.
-	sconfig.Cluster = &natsconf.ClusterConfig{
-		Port:   int(constants.ClusterPort),
-		Routes: routes,
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port:   int(constants.ClusterPort),
+			Routes: routes,
+		},
 	}
 	addTLSConfig(sconfig, cluster)
-	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster)
+	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
 	}

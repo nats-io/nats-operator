@@ -29,7 +29,7 @@ apiVersion: nats.io/v1alpha3
 kind: ServiceRole
 metadata:
   name: demo-nats-user
-  # namespace: default
+  namespace: nats-io
 
   # Specifies which NATS cluster will be mapping this account,
   # (have to create a service role with permission per cluster).
@@ -49,7 +49,7 @@ apiVersion: nats.io/v1alpha3
 kind: ServiceRole
 metadata:
   name: demo-nats-admin-user
-  # namespace: default
+  namespace: nats-io
 
   # Specifies which NATS cluster will be mapping this account,
   # (have to create a service role with permission per cluster).
