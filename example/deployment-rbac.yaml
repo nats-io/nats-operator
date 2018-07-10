@@ -69,6 +69,7 @@ rules:
   - nats.io
   resources:
   - natsclusters
+  - natsserviceroles
   verbs: ["*"]
 # Allow actions on basic Kubernetes objects
 - apiGroups: [""]
@@ -77,6 +78,8 @@ rules:
   - secrets
   - pods
   - services
+  - serviceaccounts
+  - serviceaccounts/token
   - endpoints
   - events
   verbs: ["*"]
