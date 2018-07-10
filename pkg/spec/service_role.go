@@ -19,26 +19,27 @@ import (
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ServiceRoleList struct {
+type NatsServiceRoleList struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard list metadata
 	// More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ServiceRole `json:"items"`
+	Items           []NatsServiceRole `json:"items"`
 }
 
-// ServiceRole is a NATS cluster service role.
+// ServiceRole is a NATS cluster service role. Its name is should be the same
+// as the name a Kubernetes ServiceAccount in a namespace.
 //
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ServiceRole struct {
+type NatsServiceRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              ServiceRoleSpec `json:"spec"`
 }
 
-func (c *ServiceRole) AsOwner() metav1.OwnerReference {
+func (c *NatsServiceRole) AsOwner() metav1.OwnerReference {
 	trueVar := true
 	return metav1.OwnerReference{
 		APIVersion: c.APIVersion,
@@ -51,13 +52,8 @@ func (c *ServiceRole) AsOwner() metav1.OwnerReference {
 
 // ServiceRoleSpec defines the permissions for a user account used by a NATS cluster client.
 type ServiceRoleSpec struct {
-	// ServiceAccountName is the name of the Kubernetes ServiceAccount to
-	// use for authenticating a client with the NATS service when authorization
-	// is enabled.
-	ServiceAccountName string `json:"serviceAccountName,omitempty" protobuf:"bytes,1,opt,name=serviceAccountName"`
-
 	// Permissions are the authorization rules defined for a ServiceAccount.
-	Permissions Permissions `json:"permissions,omitempty" protobuf:"bytes,2,opt,name=permissions"`
+	Permissions Permissions `json:"permissions,omitempty" protobuf:"bytes,1,opt,name=permissions"`
 }
 
 // Permissions are the authorization rules defined for a role.

@@ -166,15 +166,12 @@ func addAuthConfig(
 		}
 
 		users := make([]*natsconf.User, 0)
-		roles, err := operatorcli.ServiceRoles(ns).List(metav1.ListOptions{
+		roles, err := operatorcli.NatsServiceRoles(ns).List(metav1.ListOptions{
 			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
-			// LabelSelector: fmt.Sprintf("nats_cluster=%s", clusterName),
 		})
 		if err != nil {
-			fmt.Println("=========", roles)
 			return nil
 		}
-		fmt.Println(roles)
 
 		for _, role := range roles.Items {
 			// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
@@ -184,13 +181,13 @@ func addAuthConfig(
 			}
 
 			// TODO: Add support for expiration of the issued tokens.
-			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Spec.ServiceAccountName, clusterName)
+			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Name, clusterName)
 			cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
 			if err == nil {
 				// We always get everything and apply, in case there is a diff
 				// then the reloader will apply them.
 				user := &natsconf.User{
-					User:     role.Spec.ServiceAccountName,
+					User:     role.Name,
 					Password: string(cs.Data["token"]),
 					Permissions: &natsconf.Permissions{
 						Publish:   role.Spec.Permissions.Publish,
@@ -245,7 +242,7 @@ func addAuthConfig(
 					},
 				},
 			}
-			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Spec.ServiceAccountName, ar)
+			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Name, ar)
 			if err != nil {
 				continue
 			}
@@ -261,7 +258,7 @@ func addAuthConfig(
 					continue
 				}
 				user := &natsconf.User{
-					User:     role.Spec.ServiceAccountName,
+					User:     role.Name,
 					Password: string(token),
 					Permissions: &natsconf.Permissions{
 						Publish:   role.Spec.Permissions.Publish,

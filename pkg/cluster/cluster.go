@@ -200,7 +200,7 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 	c.logger.Infof("start running...")
 
 	// Track the account service roles for changes.
-	cRoles := make(map[types.UID]spec.ServiceRole)
+	cRoles := make(map[types.UID]spec.NatsServiceRole)
 	var secretLastResourceVersion string
 	var rerr error
 	for {
@@ -256,18 +256,18 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 					roleSelector := map[string]string{
 						"nats_cluster": c.cluster.Name,
 					}
-					roles, err := c.config.OperatorCli.ServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
+					roles, err := c.config.OperatorCli.NatsServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
 						LabelSelector: labels.SelectorFromSet(roleSelector).String(),
 					})
 					if err != nil {
-						c.logger.Errorf("error gathering service roles")
+						c.logger.Errorf("error gathering service roles: %s || %+v", err, roles)
 						continue
 					}
 
 					var shouldUpdate bool
 
 					// Check in case there were changes/additions in the number of roles.
-					aRoles := make(map[types.UID]spec.ServiceRole)
+					aRoles := make(map[types.UID]spec.NatsServiceRole)
 					for _, role := range roles.Items {
 
 						// Update in case not present or the resource version is different.
