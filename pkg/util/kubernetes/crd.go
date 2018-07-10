@@ -91,8 +91,10 @@ func readClusterCR(b []byte) (*spec.NatsCluster, error) {
 }
 
 func CreateCRD(clientset apiextensionsclient.Interface) error {
+	// Lookup in case the CRDs are both present already.
 	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDName, metav1.GetOptions{})
-	if err == nil {
+	_, err2 := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.ServiceRoleCRDName, metav1.GetOptions{})
+	if err == nil && err2 == nil {
 		return ErrCRDAlreadyExists
 	}
 
@@ -114,8 +116,8 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 	}
 
 	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if IsKubernetesResourceAlreadyExistError(err) {
-		return ErrCRDAlreadyExists
+	if err != nil && !IsKubernetesResourceAlreadyExistError(err) {
+		return err
 	}
 
 	// NatsServiceRole
@@ -133,9 +135,12 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 			},
 		},
 	}
-	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	_, err2 = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	if err2 != nil && !IsKubernetesResourceAlreadyExistError(err2) {
+		return err2
+	}
 
-	return err
+	return nil
 }
 
 func WaitCRDReady(clientset apiextensionsclient.Interface) error {
