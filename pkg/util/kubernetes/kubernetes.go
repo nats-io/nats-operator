@@ -177,6 +177,9 @@ func addAuthConfig(
 			// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
 			sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
 			if err != nil {
+				// TODO: Collect created secrets when the service account no
+				// longer exists, currently only deleted when the NatsServiceRole
+				// is deleted since it is the owner of the object.
 				continue
 			}
 
@@ -207,21 +210,8 @@ func addAuthConfig(
 				},
 			}
 
-			// When either the service account, nats role or cluster which
-			// was mapping the role are deleted, then the secret token is deleted too.
-			addOwnerRefToObject(tokenSecret.GetObjectMeta(), owner)
-			addOwnerRefToObject(tokenSecret.GetObjectMeta(), metav1.OwnerReference{
-				APIVersion: "v1",
-				Kind:       "ServiceAccount",
-				Name:       sa.Name,
-				UID:        sa.UID,
-			})
-			addOwnerRefToObject(tokenSecret.GetObjectMeta(), metav1.OwnerReference{
-				APIVersion: role.APIVersion,
-				Kind:       role.Kind,
-				Name:       role.Name,
-				UID:        role.UID,
-			})
+			// When the role that was mapped is deleted, then also delete the secret.
+			addOwnerRefToObject(tokenSecret.GetObjectMeta(), role.AsOwner())
 			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
 			if err != nil {
 				continue
@@ -242,7 +232,7 @@ func addAuthConfig(
 					},
 				},
 			}
-			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Name, ar)
+			tr, err := kubecli.ServiceAccounts(ns).CreateToken(sa.Name, ar)
 			if err != nil {
 				continue
 			}
