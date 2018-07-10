@@ -25,15 +25,15 @@ const (
 	CRDResourcePlural = "natsclusters"
 	groupName         = "nats.io"
 
-	ServiceRoleCRDResourceKind   = "ServiceRole"
-	ServiceRoleCRDResourcePlural = "serviceroles"
+	ServiceRoleCRDResourceKind   = "NatsServiceRole"
+	ServiceRoleCRDResourcePlural = "natsserviceroles"
 )
 
 var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	AddToScheme   = SchemeBuilder.AddToScheme
 
-	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha3"}
+	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha2"}
 	CRDName            = CRDResourcePlural + "." + groupName
 	ServiceRoleCRDName = ServiceRoleCRDResourcePlural + "." + groupName
 )

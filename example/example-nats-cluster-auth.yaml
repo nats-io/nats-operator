@@ -1,5 +1,5 @@
 ---
-apiVersion: "nats.io/v1alpha3"
+apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:
   name: "example-nats-auth"
@@ -12,14 +12,12 @@ spec:
     enableConfigReload: true
 
     # Defaults but can be customized to be a different image
-    # reloaderImage: "connecteverything/nats-server-config-reloader"
-    # reloaderImageTag: "0.2.2-v1alpha2"
-    # reloaderImagePullPolicy: "IfNotPresent"
+    reloaderImage: "connecteverything/nats-server-config-reloader"
+    reloaderImageTag: "0.2.2-v1alpha2"
+    reloaderImagePullPolicy: "IfNotPresent"
   auth:
-    useServiceAccounts: true
-
     # Definition in JSON of the users permissions
-    # clientsAuthSecret: "nats-clients-auth"
+    clientsAuthSecret: "nats-clients-auth"
 
     # How long to wait for authentication
     clientsAuthTimeout: 5

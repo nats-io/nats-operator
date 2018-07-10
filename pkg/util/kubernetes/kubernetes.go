@@ -27,7 +27,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/spec"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
-	natsalphav3client "github.com/nats-io/nats-operator/pkg/typed-client/versioned/typed/pkg/spec"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -147,8 +147,15 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 	}
 }
 
-// addAuthConfig fills the Auth configuration to be used in config map.
-func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3client.PkgSpecInterface, ns string, clusterName string, sconfig *natsconf.ServerConfig, cs spec.ClusterSpec, owner metav1.OwnerReference) error {
+func addAuthConfig(
+	kubecli corev1client.CoreV1Interface,
+	operatorcli natsalphav2client.PkgSpecInterface,
+	ns string,
+	clusterName string,
+	sconfig *natsconf.ServerConfig,
+	cs spec.ClusterSpec,
+	owner metav1.OwnerReference,
+) error {
 	if cs.Auth == nil {
 		return nil
 	}
@@ -161,20 +168,22 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 		users := make([]*natsconf.User, 0)
 		roles, err := operatorcli.ServiceRoles(ns).List(metav1.ListOptions{
 			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
+			// LabelSelector: fmt.Sprintf("nats_cluster=%s", clusterName),
 		})
-		if err != nil || len(roles.Items) == 0 {
+		if err != nil {
+			fmt.Println("=========", roles)
 			return nil
 		}
+		fmt.Println(roles)
 
-	NextRole:
 		for _, role := range roles.Items {
-			// Lookup for the service account with the same name as the role.
+			// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
 			sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
 			if err != nil {
-				continue NextRole
+				continue
 			}
 
-			// TODO: Add custom expiration to the issued tokens.
+			// TODO: Add support for expiration of the issued tokens.
 			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Spec.ServiceAccountName, clusterName)
 			cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
 			if err == nil {
@@ -189,18 +198,15 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 					},
 				}
 				users = append(users, user)
-				continue NextRole
+				continue
 			}
 
 			// Create the secret, then make a service token request, and finally
 			// update the secret with the token mapped to the service account.
 			tokenSecret := &v1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: tokenSecretName,
-					Labels: map[string]string{
-						LabelAppKey:         LabelAppValue,
-						LabelClusterNameKey: clusterName,
-					},
+					Name:   tokenSecretName,
+					Labels: LabelsForCluster(clusterName),
 				},
 			}
 
@@ -221,7 +227,7 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 			})
 			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
 			if err != nil {
-				continue NextRole
+				continue
 			}
 
 			// Issue token with audience set for the NATS cluster in this namespace only,
@@ -241,8 +247,7 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 			}
 			tr, err := kubecli.ServiceAccounts(ns).CreateToken(role.Spec.ServiceAccountName, ar)
 			if err != nil {
-				// Skip creating token
-				continue NextRole
+				continue
 			}
 
 			if err == nil {
@@ -253,7 +258,7 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 				}
 				tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
 				if err != nil {
-					continue NextRole
+					continue
 				}
 				user := &natsconf.User{
 					User:     role.Spec.ServiceAccountName,
@@ -264,9 +269,9 @@ func addAuthConfig(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3
 					},
 				}
 				users = append(users, user)
-				continue NextRole
+				continue
 			}
-			continue NextRole
+			continue
 		}
 
 		// Expand authorization rules from the service account tokens.
@@ -336,7 +341,7 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 }
 
 // CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
-func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
@@ -380,7 +385,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 
 // UpdateConfigMap applies the new configuration of the cluster,
 // such as modifying the routes available in the cluster.
-func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav3client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -659,7 +664,7 @@ func MustNewKubeClient() corev1client.CoreV1Interface {
 	return corev1client.NewForConfigOrDie(cfg)
 }
 
-func MustNewOperatorClient() natsalphav3client.PkgSpecInterface {
+func MustNewOperatorClient() natsalphav2client.PkgSpecInterface {
 	var (
 		cfg *rest.Config
 		err error
@@ -675,7 +680,7 @@ func MustNewOperatorClient() natsalphav3client.PkgSpecInterface {
 		panic(err)
 	}
 
-	return natsalphav3client.NewForConfigOrDie(cfg)
+	return natsalphav2client.NewForConfigOrDie(cfg)
 }
 
 func InClusterConfig() (*rest.Config, error) {

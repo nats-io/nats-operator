@@ -14,8 +14,7 @@ spec:
     spec:
       containers:
       - name: nats-operator
-        # image: connecteverything/nats-operator:0.2.2-v1alpha2
-        image: wallyqs/nats-operator:0.2.3-v1alpha3
+        image: connecteverything/nats-operator:0.2.2-v1alpha2
         imagePullPolicy: Always
         env:
         - name: MY_POD_NAMESPACE
