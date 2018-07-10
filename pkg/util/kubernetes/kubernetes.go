@@ -170,7 +170,7 @@ func addAuthConfig(
 			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
 		})
 		if err != nil {
-			return nil
+			return err
 		}
 
 		for _, role := range roles.Items {
@@ -180,6 +180,8 @@ func addAuthConfig(
 				// TODO: Collect created secrets when the service account no
 				// longer exists, currently only deleted when the NatsServiceRole
 				// is deleted since it is the owner of the object.
+
+				// Skip since cannot map unless valid service account is found.
 				continue
 			}
 
@@ -214,7 +216,7 @@ func addAuthConfig(
 			addOwnerRefToObject(tokenSecret.GetObjectMeta(), role.AsOwner())
 			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
 			if err != nil {
-				continue
+				return err
 			}
 
 			// Issue token with audience set for the NATS cluster in this namespace only,
@@ -234,7 +236,7 @@ func addAuthConfig(
 			}
 			tr, err := kubecli.ServiceAccounts(ns).CreateToken(sa.Name, ar)
 			if err != nil {
-				continue
+				return err
 			}
 
 			if err == nil {
@@ -245,7 +247,7 @@ func addAuthConfig(
 				}
 				tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
 				if err != nil {
-					continue
+					return err
 				}
 				user := &natsconf.User{
 					User:     role.Name,
@@ -256,9 +258,7 @@ func addAuthConfig(
 					},
 				}
 				users = append(users, user)
-				continue
 			}
-			continue
 		}
 
 		// Expand authorization rules from the service account tokens.
