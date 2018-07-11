@@ -237,7 +237,7 @@ func TestConfigSecretReload_Auth(t *testing.T) {
 					Command: []string{
 						"/nats-sub",
 						"-s",
-						fmt.Sprintf("nats://user1:secret1@%s.default.svc.cluster.local:4222", name),
+						fmt.Sprintf("nats://user1:secret1@%s:4222", name),
 						"hello.world",
 					},
 				},
@@ -467,7 +467,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	}
 	boundTokenSecretName := fmt.Sprintf("%s-%s-bound-token", userRoleName, clusterName)
 	var podList *k8sv1.PodList
-	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
 		podList, err = cl.kc.Pods(namespace).List(params)
 		if err != nil {
 			return false, err
@@ -487,9 +487,6 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		}
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pods to be created: %s", err)
-	}
 
 	// Create pod that will be mounting the created secret.
 	opsPodName := fmt.Sprintf("%s-%s-account-ops-1", userRoleName, clusterName)
@@ -524,7 +521,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 					Command:         []string{"/bin/sh", "-c"},
 					Args: []string{
 						fmt.Sprintf(
-							"/go/bin/nats-sub -s nats://%s:`cat /nats-token/token`@%s.default.svc.cluster.local:4222 hello.world;",
+							"/go/bin/nats-sub -s nats://%s:`cat /nats-token/token`@%s:4222 hello.world;",
 							userRoleName,
 							clusterName),
 					},
@@ -605,7 +602,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 					Command:         []string{"/bin/sh", "-c"},
 					Args: []string{
 						fmt.Sprintf(
-							"/go/bin/nats-sub -s nats://%s:`cat /nats-token/token`@%s.default.svc.cluster.local:4222 hello.world",
+							"/go/bin/nats-sub -s nats://%s:`cat /nats-token/token`@%s:4222 hello.world",
 							userRoleName,
 							clusterName),
 					},
