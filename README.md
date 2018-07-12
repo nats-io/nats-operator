@@ -136,7 +136,130 @@ $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=
 
 ### Authorization
 
-Authorization can be set for the server by using a secret
+#### Using ServiceAccounts
+
+The NATS Operator can define permissions based on Roles by using any
+present ServiceAccount in a namespace.  This can be enabled by setting
+the `enableServiceAccounts` flag to true in the `NatsCluster` configuration.
+
+```yaml
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
+metadata:
+  name: example-nats
+spec:
+  size: 3
+  version: "1.2.0"
+  pod:
+    enableConfigReload: true
+  auth:
+    enableServiceAccounts: true
+```
+
+Permissions for a `ServiceAccount` can be set by creating a
+`NatsServiceRole` for that account.  In the example below, there are
+two accounts, one is an admin user that has more permissions.
+
+```yaml
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nats-admin-user
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nats-user
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsServiceRole
+metadata:
+  name: nats-user
+  namespace: nats-io
+
+  # Specifies which NATS cluster will be mapping this account.
+  labels:
+    nats_cluster: example-nats
+spec:
+  permissions:
+    publish: ["foo.*", "foo.bar.quux"]
+    subscribe: ["foo.bar"]
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsServiceRole
+metadata:
+  name: nats-admin-user
+  namespace: nats-io
+  labels:
+    nats_cluster: example-nats
+spec:
+  permissions:
+    publish: [">"]
+    subscribe: [">"]
+```
+
+The above will create two different Secrets which can then be mounted as volumes
+for a Pod.
+
+```sh
+$ kubectl -n nats-io get secrets
+NAME                                       TYPE          DATA      AGE
+...
+nats-admin-user-example-nats-bound-token   Opaque        1         43m
+nats-user-example-nats-bound-token         Opaque        1         43m
+```
+
+An example of mounting the secret in a `Pod` can be found below:
+
+```yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nats-user-pod
+  labels:
+    nats_cluster: example-nats
+spec:
+  volumes:
+    - name: "token"
+      projected:
+        sources:
+        - secret:
+            name: "nats-user-example-nats-bound-token"
+            items:
+              - key: token
+                path: "token"
+  restartPolicy: Never
+  containers:
+    - name: nats-ops
+      command: ["/bin/sh"]
+      image: "wallyqs/nats-ops:latest"
+      tty: true
+      stdin: true
+      stdinOnce: true
+      volumeMounts:
+      - name: "token"
+        mountPath: "/var/run/secrets/nats.io"
+```
+
+Then within the `Pod` the token can be used to authenticate against
+the server using the created token.
+
+```sh
+$ kubectl -n nats-io attach -it nats-user-pod
+
+/go # nats-sub -s nats://nats-user:`cat /var/run/secrets/nats.io/token`@example-nats:4222 hello.world
+Listening on [hello.world]
+^C
+/go # nats-sub -s nats://nats-admin-user:`cat /var/run/secrets/nats.io/token`@example-nats:4222 hello.world
+Can't connect: nats: authorization violation
+```
+
+#### Using a single secret with the explicit configuration.
+
+Authorization can also be set for the server by using a secret
 where the permissions are defined in JSON:
 
 ```json
@@ -159,7 +282,7 @@ where the permissions are defined in JSON:
 
 Example of creating a secret to set the permissions:
 
-```
+```sh
 kubectl create secret generic nats-clients-auth --from-file=clients-auth.json
 ```
 
