@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/client"
 	"github.com/nats-io/nats-operator/pkg/controller"
 	"github.com/nats-io/nats-operator/pkg/spec"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
 	k8sv1 "k8s.io/api/core/v1"
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -228,6 +229,7 @@ type clients struct {
 	restcli *k8srestapi.RESTClient
 	config  *k8srestapi.Config
 	ncli    client.NatsClusterCR
+	ocli    *natsalphav2client.PkgSpecClient
 }
 
 func newKubeClients() (*clients, error) {
@@ -252,12 +254,17 @@ func newKubeClients() (*clients, error) {
 	if err != nil {
 		return nil, err
 	}
+	ocli, err := natsalphav2client.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	cl := &clients{
 		kc:      kc,
 		kcrdc:   kcrdc,
 		restcli: restcli,
 		ncli:    ncli,
+		ocli:    ocli,
 		config:  cfg,
 	}
 	return cl, nil
