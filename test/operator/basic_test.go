@@ -279,9 +279,10 @@ func newController() (*controller.Controller, error) {
 	// NOTE: Eventually use a namespace at random under a
 	// delete propagation policy for deleting the namespace.
 	config := controller.Config{
-		Namespace:  "default",
-		KubeCli:    cl.kc,
-		KubeExtCli: cl.kcrdc,
+		Namespace:   "default",
+		KubeCli:     cl.kc,
+		KubeExtCli:  cl.kcrdc,
+		OperatorCli: cl.ocli,
 	}
 	c := controller.New(config)
 
