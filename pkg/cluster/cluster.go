@@ -238,61 +238,10 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 			}
 
 			if c.cluster.Spec.Auth != nil {
-				if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
-					// Look for updates in the secret used for auth then
-					// trigger config reload in case there are new updates.
-					authSecret := c.cluster.Spec.Auth.ClientsAuthSecret
-					result, err := c.config.KubeCli.Secrets(c.cluster.Namespace).Get(authSecret, metav1.GetOptions{})
-					if err == nil && secretLastResourceVersion != result.ResourceVersion {
-						secretLastResourceVersion = result.ResourceVersion
-						c.updateConfigMap()
-					}
-				} else if c.cluster.Spec.Auth.EnableServiceAccounts {
-					// Lookup for service roles that may have been created.
-					// TODO(wallyqs): Should also get secrets in case they were deleted
-					// so that they get recreated in case of manual deletion, this would
-					// enable revoking on the fly the tokens since reload would override
-					// the previous credentials.
-					roleSelector := map[string]string{
-						"nats_cluster": c.cluster.Name,
-					}
-					roles, err := c.config.OperatorCli.NatsServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
-						LabelSelector: labels.SelectorFromSet(roleSelector).String(),
-					})
-					if err != nil {
-						c.logger.Errorf("error gathering service roles: %s || %+v", err, roles)
-						continue
-					}
-
-					var shouldUpdate bool
-
-					// Check in case there were changes/additions in the number of roles.
-					aRoles := make(map[types.UID]spec.NatsServiceRole)
-					for _, role := range roles.Items {
-
-						// Update in case not present or the resource version is different.
-						cRole, ok := cRoles[role.UID]
-						if !ok {
-							shouldUpdate = true
-						} else if cRole.ResourceVersion != role.ResourceVersion {
-							shouldUpdate = true
-						}
-						aRoles[role.UID] = role
-						cRoles[role.UID] = role
-					}
-
-					// Check in case there were deletions in the number of roles.
-					for uid, _ := range cRoles {
-						if _, ok := aRoles[uid]; !ok {
-							shouldUpdate = true
-
-							// Stop tracking this role.
-							delete(cRoles, uid)
-						}
-					}
-					if shouldUpdate {
-						c.updateConfigMap()
-					}
+				err := checkClientAuthUpdate(c, secretLastResourceVersion, cRoles)
+				if err != nil {
+					c.logger.Errorf("failed to update auth: %v", err)
+					continue
 				}
 			}
 
@@ -335,6 +284,66 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 			return
 		}
 	}
+}
+
+func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles map[types.UID]spec.NatsServiceRole) error {
+	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
+		// Look for updates in the secret used for auth then
+		// trigger config reload in case there are new updates.
+		authSecret := c.cluster.Spec.Auth.ClientsAuthSecret
+		result, err := c.config.KubeCli.Secrets(c.cluster.Namespace).Get(authSecret, metav1.GetOptions{})
+		if err == nil && secretLastResourceVersion != result.ResourceVersion {
+			secretLastResourceVersion = result.ResourceVersion
+			return c.updateConfigMap()
+		}
+	} else if c.cluster.Spec.Auth.EnableServiceAccounts {
+		// Lookup for service roles that may have been created.
+		// TODO(wallyqs): Should also get secrets in case they were deleted
+		// so that they get recreated in case of manual deletion, this would
+		// enable revoking on the fly the tokens since reload would override
+		// the previous credentials.
+		roleSelector := map[string]string{
+			"nats_cluster": c.cluster.Name,
+		}
+		roles, err := c.config.OperatorCli.NatsServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
+			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
+		})
+		if err != nil {
+			return err
+		}
+
+		var shouldUpdate bool
+
+		// Check in case there were changes/additions in the number of roles.
+		aRoles := make(map[types.UID]spec.NatsServiceRole)
+		for _, role := range roles.Items {
+
+			// Update in case not present or the resource version is different.
+			cRole, ok := cRoles[role.UID]
+			if !ok {
+				shouldUpdate = true
+			} else if cRole.ResourceVersion != role.ResourceVersion {
+				shouldUpdate = true
+			}
+			aRoles[role.UID] = role
+			cRoles[role.UID] = role
+		}
+
+		// Check in case there were deletions in the number of roles.
+		for uid, _ := range cRoles {
+			if _, ok := aRoles[uid]; !ok {
+				shouldUpdate = true
+
+				// Stop tracking this role.
+				delete(cRoles, uid)
+			}
+		}
+		if shouldUpdate {
+			return c.updateConfigMap()
+		}
+	}
+
+	return nil
 }
 
 func isSpecEqual(s1, s2 spec.ClusterSpec) bool {
