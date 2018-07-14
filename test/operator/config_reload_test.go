@@ -350,7 +350,7 @@ func TestConfigSecretReload_Auth(t *testing.T) {
 }
 
 func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	runController(ctx, t)
@@ -536,7 +536,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	}
 
 	// Should poll until pod is available
-	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
 		pod2, err := cl.kc.Pods(namespace).Get(opsPodName, k8smetav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -614,7 +614,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	}
 
 	// Should poll until pod is available
-	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
 		pod2, err := cl.kc.Pods(namespace).Get(opsPodName, k8smetav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -627,7 +627,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 
 	// Confirm that the pod did not have permissions, then do a reload
 	// adding permissions for its user.
-	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 30*time.Second, func() (bool, error) {
 		sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
 		opts := &k8sv1.PodLogOptions{
 			SinceTime: &sinceTime,
@@ -652,7 +652,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
 		sinceTime := k8smetav1.NewTime(time.Now().Add(time.Duration(-1 * time.Hour)))
 		opts := &k8sv1.PodLogOptions{
 			SinceTime: &sinceTime,
