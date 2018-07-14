@@ -446,7 +446,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		},
 		Spec: spec.ClusterSpec{
 			Size:    size,
-			Version: "1.2.0",
+			Version: "1.1.0",
 			Pod: &spec.PodPolicy{
 				EnableConfigReload: true,
 			},
@@ -536,7 +536,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	}
 
 	// Should poll until pod is available
-	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
 		pod2, err := cl.kc.Pods(namespace).Get(opsPodName, k8smetav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -546,9 +546,6 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		}
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pods to be created: %s", err)
-	}
 
 	// Confirm that the pod did not have permissions, then do a reload
 	// adding permissions for its user.
@@ -617,7 +614,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	}
 
 	// Should poll until pod is available
-	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
+	k8swaitutil.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
 		pod2, err := cl.kc.Pods(namespace).Get(opsPodName, k8smetav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -627,9 +624,6 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		}
 		return true, nil
 	})
-	if err != nil {
-		t.Errorf("Error waiting for pods to be created: %s", err)
-	}
 
 	// Confirm that the pod did not have permissions, then do a reload
 	// adding permissions for its user.
