@@ -24,6 +24,9 @@ const (
 	CRDResourceKind   = "NatsCluster"
 	CRDResourcePlural = "natsclusters"
 	groupName         = "nats.io"
+
+	ServiceRoleCRDResourceKind   = "NatsServiceRole"
+	ServiceRoleCRDResourcePlural = "natsserviceroles"
 )
 
 var (
@@ -32,6 +35,7 @@ var (
 
 	SchemeGroupVersion = schema.GroupVersion{Group: groupName, Version: "v1alpha2"}
 	CRDName            = CRDResourcePlural + "." + groupName
+	ServiceRoleCRDName = ServiceRoleCRDResourcePlural + "." + groupName
 )
 
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.
@@ -39,6 +43,8 @@ func addKnownTypes(s *runtime.Scheme) error {
 	s.AddKnownTypes(SchemeGroupVersion,
 		&NatsCluster{},
 		&NatsClusterList{},
+		&NatsServiceRole{},
+		&NatsServiceRoleList{},
 	)
 	metav1.AddToGroupVersion(s, SchemeGroupVersion)
 	return nil

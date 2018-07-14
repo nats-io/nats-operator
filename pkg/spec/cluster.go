@@ -38,6 +38,8 @@ type NatsClusterList struct {
 
 // NatsCluster is a NATS cluster.
 //
+// +genclient
+// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsCluster struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -142,8 +144,19 @@ type PodPolicy struct {
 // AuthConfig is the authorization configuration for
 // user permissions in the cluster.
 type AuthConfig struct {
-	ClientsAuthSecret  string `json:"clientsAuthSecret,omitempty"`
-	ClientsAuthTimeout int    `json:"clientsAuthTimeout,omitempty"`
+	// EnableServiceAccounts makes the operator lookup for mappings among
+	// Kubernetes ServiceAccounts and NatsServiceRoles to issue tokens that
+	// can be used to authenticate against a NATS cluster with authorization
+	// following the permissions set for the role.
+	EnableServiceAccounts bool `json:"enableServiceAccounts,omitempty"`
+
+	// ClientsAuthSecret is the secret containing the explicit authorization
+	// configuration in JSON.
+	ClientsAuthSecret string `json:"clientsAuthSecret,omitempty"`
+
+	// ClientsAuthTimeout is the time in seconds that the NATS server will
+	// allow to clients to send their auth credentials.
+	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {

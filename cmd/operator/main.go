@@ -160,7 +160,7 @@ func main() {
 		logrus.Fatalf("error creating lock: %v", err)
 	}
 
-	leaderelection.RunOrDie(leaderelection.LeaderElectionConfig{
+	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
 		Lock:          rl,
 		LeaseDuration: 15 * time.Second,
 		RenewDeadline: 10 * time.Second,
@@ -176,7 +176,7 @@ func main() {
 	panic("unreachable")
 }
 
-func run(stop <-chan struct{}) {
+func run(ctx context.Context) {
 	cfg := newControllerConfig()
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
@@ -188,7 +188,7 @@ func run(stop <-chan struct{}) {
 
 	for {
 		c := controller.New(cfg)
-		err := c.Run(context.TODO())
+		err := c.Run(ctx)
 		switch err {
 		case controller.ErrVersionOutdated:
 		default:
@@ -216,12 +216,12 @@ func newControllerConfig() controller.Config {
 			logrus.Fatalf("invalid service account name specified")
 		}
 	}
-
 	cfg := controller.Config{
 		Namespace:      namespace,
 		ServiceAccount: serviceAccount,
 		KubeCli:        kubecli,
 		KubeExtCli:     kubernetesutil.MustNewKubeExtClient(),
+		OperatorCli:    kubernetesutil.MustNewOperatorClient(),
 	}
 
 	return cfg

@@ -91,11 +91,14 @@ func readClusterCR(b []byte) (*spec.NatsCluster, error) {
 }
 
 func CreateCRD(clientset apiextensionsclient.Interface) error {
+	// Lookup in case the CRDs are both present already.
 	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDName, metav1.GetOptions{})
-	if err == nil {
+	_, err2 := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.ServiceRoleCRDName, metav1.GetOptions{})
+	if err == nil && err2 == nil {
 		return ErrCRDAlreadyExists
 	}
 
+	// NatsCluster
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: spec.CRDName,
@@ -113,10 +116,31 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 	}
 
 	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if IsKubernetesResourceAlreadyExistError(err) {
-		return ErrCRDAlreadyExists
+	if err != nil && !IsKubernetesResourceAlreadyExistError(err) {
+		return err
 	}
-	return err
+
+	// NatsServiceRole
+	crd = &apiextensionsv1beta1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: spec.ServiceRoleCRDName,
+		},
+		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
+			Group:   spec.SchemeGroupVersion.Group,
+			Version: spec.SchemeGroupVersion.Version,
+			Scope:   apiextensionsv1beta1.NamespaceScoped,
+			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
+				Plural: spec.ServiceRoleCRDResourcePlural,
+				Kind:   spec.ServiceRoleCRDResourceKind,
+			},
+		},
+	}
+	_, err2 = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	if err2 != nil && !IsKubernetesResourceAlreadyExistError(err2) {
+		return err2
+	}
+
+	return nil
 }
 
 func WaitCRDReady(clientset apiextensionsclient.Interface) error {
