@@ -2,7 +2,7 @@
 
 [![License Apache 2.0](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Build Status](https://travis-ci.org/nats-io/nats-operator.svg?branch=master)](https://travis-ci.org/nats-io/nats-operator)
-[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.2.2)](https://github.com/nats-io/nats-operator/releases/tag/v0.2.2)
+[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.2.3)](https://github.com/nats-io/nats-operator/releases/tag/v0.2.3)
 
 NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
 
@@ -43,7 +43,7 @@ metadata:
   name: "example-nats-cluster"
 spec:
   size: 3
-  version: "1.1.0"
+  version: "1.2.0"
 ' | kubectl apply -f -
 ```
 
@@ -105,7 +105,7 @@ metadata:
 spec:
   # Number of nodes in the cluster
   size: 3
-  version: "1.1.0"
+  version: "1.2.0"
 
   tls:
     # Certificates to secure the NATS client connections:
