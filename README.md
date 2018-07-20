@@ -139,8 +139,22 @@ $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=
 #### Using ServiceAccounts
 
 The NATS Operator can define permissions based on Roles by using any
-present ServiceAccount in a namespace.  This can be enabled by setting
-the `enableServiceAccounts` flag to true in the `NatsCluster` configuration.
+present ServiceAccount in a namespace. To use this feature, it is
+necessary to use a Kubernetes +v1.10 cluster with the `TokenRequest`
+and `PodShareProcessNamespace` feature flags enabled.  To try this
+feature using `minikube` you can configure it to start as follows:
+
+```sh
+minikube start \
+  --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" \
+  --extra-config=apiserver.service-account-signing-key-file=/var/lib/localkube/certs/apiserver.key \
+  --extra-config=apiserver.service-account-issuer=api \
+  --extra-config=apiserver.service-account-api-audiences=api \
+  --extra-config=apiserver.service-account-key-file=/var/lib/localkube/certs/sa.pub
+```
+
+ServiceAccounts integration can then be enabled by setting the
+`enableServiceAccounts` flag to true in the `NatsCluster` configuration.
 
 ```yaml
 ---
