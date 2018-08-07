@@ -1,0 +1,27 @@
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-cluster"
+spec:
+  size: {{ .Values.clusterSize }}
+  version: "1.1.0"
+  
+  pod:
+    enableConfigReload: {{ .Values.configReload.enabled }}
+    reloaderImage: {{ .Values.reloaderImage}}
+    reloaderImageTag: {{ .Values.reloaderImageTag}}
+    reloaderImagePullPolicy: {{ .Values.reloaderImagePullPolicy}}
+  
+  auth:
+    enableServiceAccounts: {{ .Values.auth.enabled }}
+    clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth
+    clientsAuthTimeout: 5
+
+  {{- if .Values.auth.enabled }}
+  tls:
+    # Certificates to secure the NATS client connections:
+    serverSecret: {{ .Values.tls.serverSecret }}
+
+    # Certificates to secure the routes.
+    routesSecret: {{ .Values.tls.routesSecret }}
+  {{- end }}

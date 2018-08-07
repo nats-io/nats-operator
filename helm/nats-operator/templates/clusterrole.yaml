@@ -1,0 +1,32 @@
+{{- if .Values.rbacEnabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nats-io:nats-operator
+rules:
+# Allow creating CRDs
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs: ["*"]
+# Allow all actions on NatsClusters
+- apiGroups:
+  - nats.io
+  resources:
+  - natsclusters
+  - natsserviceroles
+  verbs: ["*"]
+# Allow actions on basic Kubernetes objects
+- apiGroups: [""]
+  resources:
+  - configmaps
+  - secrets
+  - pods
+  - services
+  - serviceaccounts
+  - serviceaccounts/token
+  - endpoints
+  - events
+  verbs: ["*"]
+{{- end }}
