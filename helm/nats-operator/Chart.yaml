@@ -1,0 +1,18 @@
+name: nats-operator
+version: 0.0.1
+appVersion: 0.2.3
+description: Nats operator creates/configures/manages nats clusters atop Kubernetes
+keywords:
+- addressing
+- discovery
+- messaging
+- nats
+- operator
+- pubsub
+home: https://github.com/nats-io/nats-operator
+sources:
+- https://github.com/nats-io/nats-operator
+maintainers:
+- name: richerlariviere
+  email: richerlariviere@gmail.com
+icon: https://bitnami.com/assets/stacks/nats/img/nats-stack-110x117.png
