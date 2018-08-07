@@ -17,7 +17,7 @@ spec:
     clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth
     clientsAuthTimeout: 5
 
-  {{- if .Values.auth.enabled }}
+  {{- if .Values.tls.enabled }}
   tls:
     # Certificates to secure the NATS client connections:
     serverSecret: {{ .Values.tls.serverSecret }}
