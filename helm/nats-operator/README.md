@@ -18,12 +18,7 @@ If you want to manage NATS entirely by yourself and have more control over your 
 
 ## Prerequisites
 
-Basic
-- Kubernetes 1.4+ with Beta APIs enabled
-- PV provisioner support in the underlying infrastructure
-
-Advanced
-- Kubernetes 1.10+ with `--feature-gates=PodShareProcessNamespace=true` enabled to benefits from configuration reload feature
+- Kubernetes 1.8+
 
 ## Installing the Chart
 
