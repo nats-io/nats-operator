@@ -1,6 +1,12 @@
 .glide/
 .idea/
 _output/
-docker
-docs
-example
+bin/
+docker/
+docs/
+example/
+test/
+*.md
+.gitignore
+Makefile
+.travis.yml
