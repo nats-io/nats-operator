@@ -48,12 +48,12 @@ spec:
               fieldPath: metadata.name
           ports:
           - name: readyz 
-            port: 8080
+            containerPort: 8080
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             httpGet:
               path: /readyz
-              port: 8080
+              port: readyz
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
@@ -64,7 +64,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8080
+              port: readyz
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
