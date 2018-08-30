@@ -522,7 +522,7 @@ func (c *Cluster) reportFailedStatus() {
 
 	}
 
-	retryutil.Retry(retryInterval, math.MaxInt64, f)
+	retryutil.Retry(retryInterval, math.MaxInt32, f)
 }
 
 func (c *Cluster) name() string {
