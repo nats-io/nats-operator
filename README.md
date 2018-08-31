@@ -16,6 +16,8 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 The current version of the operator creates a `NatsCluster` [Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/) (CRD) under the `nats.io` API group, to which you can make requests to create NATS clusters.
 
+> Note for [Helm](https://www.helm.sh/) users: As an alternative way to install Nats-Operator, you can go to `helm/nats-operator` and use our Helm chart.
+
 To add the `NatsCluster` and NATS Operator to your cluster you can run:
 
 ```
