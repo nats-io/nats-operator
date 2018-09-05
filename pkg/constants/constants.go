@@ -15,6 +15,7 @@
 package constants
 
 const (
+	// DefaultNatsVersion is the nats server version to use.
 	DefaultNatsVersion = "1.1.0"
 
 	// ClientPort is the port for the clients.
@@ -73,9 +74,8 @@ const (
 	RoutesKeyFilePath    = RoutesCertsMountPath + "/route-key.pem"
 
 	// Default Docker Images
-	DefaultServerImage = "nats"
-	DefaultReloaderImage = "connecteverything/nats-server-config-reloader"
-	DefaultReloaderImageTag = "0.2.2-v1alpha2"
+	DefaultServerImage             = "nats"
+	DefaultReloaderImage           = "connecteverything/nats-server-config-reloader"
+	DefaultReloaderImageTag        = "0.2.2-v1alpha2"
 	DefaultReloaderImagePullPolicy = "IfNotPresent"
 )
-
