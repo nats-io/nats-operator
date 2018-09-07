@@ -95,6 +95,14 @@ example-nats-1-2   1/1       Running   0          7m
 example-nats-1-3   1/1       Running   0          6m
 ```
 
+### Direct access to the cluster
+
+For debugging and development you might want to access the nats-cluster directly. If you created the cluster with name `example-nats-cluster` in namespace `nats-io` you can forward ports of the pod with name `example-nats-cluster-1`:
+
+```
+$ kubectl port-forward -n nats-io example-nats-cluster-1 4222:4222
+```
+
 ### TLS support
 
 By using a pair of opaque secrets (one for the clients and then another for the routes),
