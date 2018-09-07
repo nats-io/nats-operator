@@ -1,4 +1,4 @@
-# NATS-Operator
+# NATS Operator Helm Chart
 
 NATS is an open-source, cloud-native messaging system. Companies like Apcera, Baidu, Siemens, VMware, HTC, and Ericsson rely on NATS for its highly performant and resilient messaging capabilities.
 
@@ -11,7 +11,7 @@ $ helm install .
 
 ## Introduction
 
-NATS Operator manages [NATS](https://nats.io/) clusters atop [Kubernetes](http://kubernetes.io), automating their creation and administration. With NATS-operator you can benefits from the flexibility brought by the Kubernetes operator pattern. It means less juggling between manifests and a few handy features like automatic configuration reload.
+NATS Operator manages [NATS](https://nats.io/) clusters atop [Kubernetes](http://kubernetes.io), automating their creation and administration. With the NATS Operator you can benefits from the flexibility brought by the Kubernetes operator pattern. It means less juggling between manifests and a few handy features like automatic configuration reload.
 
 If you want to manage NATS entirely by yourself and have more control over your NATS cluster, you can always use the original [NATS](https://github.com/helm/charts/tree/master/stable/nats) Helm chart.
 
@@ -28,7 +28,7 @@ To install the chart with the release name `my-release`:
 $ helm install --name my-release .
 ```
 
-The command deploys NATS on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
+The command deploys NATS and the NATS Operator on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
 
 > **Tip**: List all releases using `helm list`
 
@@ -49,9 +49,9 @@ The following table lists the configurable parameters of the NATS chart and thei
 | Parameter                            | Description                                                                                  | Default                                         |
 |--------------------------------------|----------------------------------------------------------------------------------------------|-------------------------------------------------|
 | `rbacEnabled`                        | Switch to enable/disable RBAC for this chart                                                 | `true`                                          |
-| `image.registry`                     | NATS image registry                                                                          | `docker.io`                                     |
-| `image.repository`                   | NATS image name                                                                              | `connecteverything/nats-operator`               |
-| `image.tag`                          | NATS image tag                                                                               | `0.2.3-v1alpha2`                                |
+| `image.registry`                     | NATS Operator image registry                                                                 | `docker.io`                                     |
+| `image.repository`                   | NATS Operator image name                                                                     | `connecteverything/nats-operator`               |
+| `image.tag`                          | NATS Operator image tag                                                                      | `0.2.3-v1alpha2`                                |
 | `image.pullPolicy`                   | Image pull policy                                                                            | `Always`                                        |
 | `image.pullSecrets`                  | Specify image pull secrets                                                                   | `nil`                                           |
 | `securityContext.enabled`            | Enable security context                                                                      | `true`                                          |
@@ -116,8 +116,8 @@ You can consider editing the default values.yaml as it is easier to manage:
 auth:
   enabled: true
 
-  #username: 
-  #password: 
+  # username: 
+  # password: 
 
   # values.yaml
   users:
