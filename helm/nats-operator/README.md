@@ -78,9 +78,13 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `readinessProbe.failureThreshold`    | Minimum consecutive failures for the probe to be considered failed after having succeeded.   | `6`                                             |
 | `readinessProbe.successThreshold`    | Minimum consecutive successes for the probe to be considered successful after having failed. | `1`                                             |
 | `auth.enabled`                       | Switch to enable/disable client authentication                                               | `true`                                          |
+| `auth.enableServiceAccounts`         | Enable ServiceAccounts permissions                                                           | `false`                                         |
 | `auth.username`                      | Client authentication username                                                               | `true`                                          |
 | `auth.password`                      | Client authentication password                                                               | `true`                                          |
 | `auth.users`                         | Allows multi-user authentication of 2 or more user                                           | `[]`                                            |
+| `auth.defaultPermissions`            | Enable default permissions for users                                                         | `{}`                                            |
+| `auth.defaultPermissions.publish`    | Default permission for publish requests                                                      | `nil`                                           |  
+| `auth.defaultPermissions.subscribe`  | Default permission for subscribe requests                                                    | `nil`                                           |
 | `tls.enabled`                        | Enable TLS                                                                                   | `false`                                         |
 | `tls.serverSecret`                   | Certificates to secure the NATS client connections (type: kubernetes.io/tls)                 | `nil`                                           |
 | `tls.routesSecret`                   | Certificates to secure the routes. (type: kubernetes.io/tls)                                 | `nil`                                           |
