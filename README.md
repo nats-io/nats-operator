@@ -16,8 +16,6 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 The current version of the operator creates a `NatsCluster` [Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/) (CRD) under the `nats.io` API group, to which you can make requests to create NATS clusters.
 
-> Note for [Helm](https://www.helm.sh/) users: As an alternative way to install Nats-Operator, you can go to `helm/nats-operator` and use our Helm chart.
-
 To add the `NatsCluster` and NATS Operator to your cluster you can run:
 
 ```
@@ -58,6 +56,10 @@ NAME                   AGE
 example-nats-cluster   1s
 ```
 
+### Helm support
+
+There is an alternative way to install NATS Operator for [Helm](https://www.helm.sh/) users. You can go to [helm/nats-operator](https://github.com/nats-io/nats-operator/tree/master/helm/nats-operator) and use the Helm charts found in the repo.
+
 ### RBAC support
 
 If you have RBAC enabled (for example in GKE), you can run:
@@ -91,14 +93,6 @@ NAME               READY     STATUS    RESTARTS   AGE
 example-nats-1-1   1/1       Running   0          7m
 example-nats-1-2   1/1       Running   0          7m
 example-nats-1-3   1/1       Running   0          6m
-```
-
-### Direct access to the cluster
-
-For debugging and development you might want to access the nats-cluster directly. If you created the cluster with name `example-nats-cluster` in namespace `nats-io` you can forward ports of the pod with name `example-nats-cluster-1`:
-
-```
-$ kubectl port-forward -n nats-io example-nats-cluster-1 4222:4222
 ```
 
 ### TLS support
@@ -407,4 +401,12 @@ outside of the cluster without having to build an image:
 
 ```
 MY_POD_NAMESPACE=default MY_POD_NAME=nats-operator go run cmd/operator/main.go --debug-kube-config-path=$HOME/.kube/config
+```
+
+### Direct access to the cluster
+
+For debugging and development you might want to access the NATS cluster directly. For example, if you created the cluster with name `example-nats-cluster` in namespace `nats-io` you can forward ports of the pod with name `example-nats-cluster-1` as follows:
+
+```
+$ kubectl port-forward -n nats-io example-nats-cluster-1 4222:4222
 ```
