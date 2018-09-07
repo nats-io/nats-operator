@@ -1,0 +1,114 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "nats.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: "{{ template "nats.name" . }}"
+      chart: "{{ template "nats.chart" . }}"
+      release: "{{ .Release.Name }}"
+  template:
+    metadata:
+      labels:
+        app: "{{ template "nats.name" . }}"
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+      {{- if .Values.podLabels }}
+        {{ .Values.podLabels}}
+      {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations:
+        {{ .Values.podAnnotations }}
+      {{- end }}
+    spec:
+      updateStrategy:
+        type: {{ .Values.updateStrategy }}
+        {{- if .Values.rollingUpdatePartition }}
+        rollingUpdate:
+          partition: {{ .Values.rollingUpdatePartition }}
+        {{- end }}
+      {{- if .Values.rbacEnabled }}
+      serviceAccountName: nats-operator
+      {{- end }}
+      containers:
+      - name: nats-operator
+        image: {{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}      
+        imagePullPolicy: {{ .Values.pullPolicy  }}
+        env:
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+          ports:
+          - name: readyz 
+            containerPort: 8080
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: readyz
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: readyz
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+      {{- if .Values.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{ .Values.nodeSelector }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations:
+        {{ .Values.tolerations }}
+      {{- end }}
+      {{- if .Values.schedulerName }}
+      schedulerName: "{{ .Values.schedulerName}}"
+      {{- end }}
+      {{- if eq .Values.antiAffinity "hard" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchLabels:
+                  app: "{{ template "nats.name" . }}"
+                  release: {{ .Release.Name | quote }}
+      {{- else if eq .Values.antiAffinity "soft" }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: "{{ template "nats.name" . }}"
+                  release: "{{ .Release.Name }}"
+      {{- end }}
+      {{- if .Values.pullSecrets }}
+      imagePullSecrets:
+        {{ .Values.pullSecrets}}
+      {{- end }}

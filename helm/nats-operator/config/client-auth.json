@@ -1,0 +1,25 @@
+{
+  "users": [
+    {{- if .Values.auth.username }}
+    { 
+      "username": "{{ .Values.auth.username }}",
+      "password": "{{ .Values.auth.password }}"
+    }
+    {{- end }}
+   
+    {{- if .Values.auth.users }}
+    {{ $length := len .Values.auth.users }}
+    {{- range $index, $user := .Values.auth.users }}
+    { 
+      "username": "{{ $user.username }}",
+      "password": "{{ $user.password }}"
+      {{- if $user.permissions }},
+      "permissions": {{ toJson $user.permissions | replace "\\u003e" ">"}}
+      {{- end}}
+    }{{- if lt (add1 $index) $length }},{{ end }}
+    {{- end}}
+    {{- end }}
+  ]{{- if .Values.auth.defaultPermissions }},
+  "default_permissions": {{ toJson .Values.auth.defaultPermissions | replace "\\u003e" ">" }}
+  {{- end}}
+}
