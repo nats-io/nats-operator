@@ -98,6 +98,10 @@ readinessProbe:
 ##
 auth:
   enabled: true
+
+  ## To use this feature, it is necessary to use a Kubernetes +v1.10 cluster with 
+  ## the TokenRequest and PodShareProcessNamespace feature flags enabled
+  enableServiceAccounts: false
   
   ## This is where you enter a username/password for 1 user
   username: "my-user"

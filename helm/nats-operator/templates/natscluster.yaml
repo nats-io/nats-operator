@@ -13,7 +13,7 @@ spec:
     reloaderImagePullPolicy: {{ .Values.reloaderImagePullPolicy}}
   
   auth:
-    enableServiceAccounts: {{ .Values.auth.enabled }}
+    enableServiceAccounts: {{ .Values.auth.enableServiceAccounts }}
     clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth
     clientsAuthTimeout: 5
 
