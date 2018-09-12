@@ -5,7 +5,7 @@ metadata:
   name: "example-nats-auth"
 spec:
   size: 3
-  version: "1.1.0"
+  version: "1.3.0"
 
   # On Kubernetes v1.10+ clusters with feature=`--feature-gates=PodShareProcessNamespace=true
   pod:

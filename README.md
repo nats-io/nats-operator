@@ -43,7 +43,7 @@ metadata:
   name: "example-nats-cluster"
 spec:
   size: 3
-  version: "1.2.0"
+  version: "1.3.0"
 ' | kubectl apply -f -
 ```
 
@@ -109,7 +109,7 @@ metadata:
 spec:
   # Number of nodes in the cluster
   size: 3
-  version: "1.2.0"
+  version: "1.3.0"
 
   tls:
     # Certificates to secure the NATS client connections:
@@ -168,7 +168,8 @@ metadata:
   name: example-nats
 spec:
   size: 3
-  version: "1.2.0"
+  version: "1.3.0"
+
   pod:
     enableConfigReload: true
   auth:
