@@ -27,6 +27,9 @@ const (
 	// MonitoringPort is the port for the server monitoring endpoint.
 	MonitoringPort = 8222
 
+	// NatsPrometheusExporterPort is the port used for NATS prometheus exporter for exposing its metrics
+	NatsPrometheusExporterPort = 7777
+
 	// ConfigMapVolumeName is the name of the volume use for the shared config map.
 	ConfigMapVolumeName = "nats-config"
 

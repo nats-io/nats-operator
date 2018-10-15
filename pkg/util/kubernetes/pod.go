@@ -27,7 +27,7 @@ import (
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(clusterName, version string) v1.Container {
+func natsPodContainer(clusterName string, version string) v1.Container {
 	return v1.Container{
 		Env: []v1.EnvVar{
 			{
@@ -75,6 +75,23 @@ func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
 			constants.PidFilePath,
 		},
 	}
+}
+
+// natsExporterPodContainer returns a NATS exporter pod container spec.
+func natsExporterPodContainer(clusterName string) v1.Container {
+	c := v1.Container{
+		Name:  "prometheus-exporter",
+		Image: NATSPrometheusExporterImage,
+		Ports: []v1.ContainerPort{
+			{
+				Name:          "prometheus",
+				ContainerPort: int32(constants.NatsPrometheusExporterPort),
+				Protocol:      v1.ProtocolTCP,
+			},
+		},
+	}
+
+	return c
 }
 
 func containerWithLivenessProbe(c v1.Container, lp *v1.Probe) v1.Container {
