@@ -65,6 +65,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `podLabels`                          | Additional labels to be added to pods                                                        | `{}`                                            |
 | `updateStrategy`                     | Replicaset Update strategy                                                                   | `OnDelete`                                      |
 | `rollingUpdatePartition`             | Partition for Rolling Update strategy                                                        | `nil`                                           |
+| `resources`                          | CPU/Memory resource requests/limits                                                          | `{}`                                            |
 | `livenessProbe.enabled`              | Enable liveness probe                                                                        | `true`                                          |
 | `livenessProbe.initialDelaySeconds`  | Delay before liveness probe is initiated                                                     | `30`                                            |
 | `livenessProbe.periodSeconds`        | How often to perform the probe                                                               | `10`                                            |
@@ -83,7 +84,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `auth.password`                      | Client authentication password                                                               | `true`                                          |
 | `auth.users`                         | Allows multi-user authentication of 2 or more user                                           | `[]`                                            |
 | `auth.defaultPermissions`            | Enable default permissions for users                                                         | `{}`                                            |
-| `auth.defaultPermissions.publish`    | Default permission for publish requests                                                      | `nil`                                           |  
+| `auth.defaultPermissions.publish`    | Default permission for publish requests                                                      | `nil`                                           |
 | `auth.defaultPermissions.subscribe`  | Default permission for subscribe requests                                                    | `nil`                                           |
 | `tls.enabled`                        | Enable TLS                                                                                   | `false`                                         |
 | `tls.serverSecret`                   | Certificates to secure the NATS client connections (type: kubernetes.io/tls)                 | `nil`                                           |
@@ -98,7 +99,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 
 Here is an example of how to setup a NATS cluster with client authentication.
 
-Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. 
+Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
 ```bash
 $ helm install --name my-release --set auth.enabled=true,auth.username=my-user,auth.password=T0pS3cr3t .
@@ -116,8 +117,8 @@ You can consider editing the default values.yaml as it is easier to manage:
 auth:
   enabled: true
 
-  # username: 
-  # password: 
+  # username:
+  # password:
 
   # values.yaml
   users:
