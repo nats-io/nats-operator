@@ -46,9 +46,9 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-          ports:
-          - name: readyz
-            containerPort: 8080
+        ports:
+        - name: readyz
+          containerPort: 8080
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
