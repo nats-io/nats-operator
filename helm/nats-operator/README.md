@@ -47,7 +47,7 @@ The command removes all the Kubernetes components associated with the chart and 
 The following table lists the configurable parameters of the NATS chart and their default values.
 
 | Parameter                            | Description                                                                                  | Default                                         |
-|--------------------------------------|----------------------------------------------------------------------------------------------|-------------------------------------------------|
+| ------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `rbacEnabled`                        | Switch to enable/disable RBAC for this chart                                                 | `true`                                          |
 | `image.registry`                     | NATS Operator image registry                                                                 | `docker.io`                                     |
 | `image.repository`                   | NATS Operator image name                                                                     | `connecteverything/nats-operator`               |
@@ -94,6 +94,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `configReload.registry`              | Reload configuration name                                                                    | `docker.io`                                     |
 | `configReload.repository`            | Reload configuration image name                                                              | `connecteverything/nats-server-config-reloader` |
 | `configReload.tag`                   | Reload configuration image tag                                                               | `0.2.2-v1alpha2`                                |
+| `configReload.pullPolicy`            | Reload configuration pull policy                                                             | `IfNotPresent`                                  |
 
 ### Example
 

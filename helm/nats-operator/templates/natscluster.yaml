@@ -8,9 +8,9 @@ spec:
 
   pod:
     enableConfigReload: {{ .Values.configReload.enabled }}
-    reloaderImage: {{ .Values.reloaderImage}}
-    reloaderImageTag: {{ .Values.reloaderImageTag}}
-    reloaderImagePullPolicy: {{ .Values.reloaderImagePullPolicy}}
+    reloaderImage: {{ .Values.configReload.repository }}
+    reloaderImageTag: {{ .Values.configReload.tag }}
+    reloaderImagePullPolicy: {{ .Values.configReload.pullPolicy }}
   
   auth:
     enableServiceAccounts: {{ .Values.auth.enableServiceAccounts }}
