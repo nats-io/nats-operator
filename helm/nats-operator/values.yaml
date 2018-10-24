@@ -132,7 +132,8 @@ clusterSize: 3
 ##
 ## On Kubernetes v1.10+ clusters with feature=--feature-gates=PodShareProcessNamespace=true
 configReload:
-  enable: false
+  enabled: false
   registry: "docker.io"
   repository: "connecteverything/nats-server-config-reloader"
   tag: "0.2.2-v1alpha2"
+  pullPolicy: "IfNotPresent"
