@@ -12,6 +12,11 @@ spec:
     reloaderImageTag: {{ .Values.configReload.tag }}
     reloaderImagePullPolicy: {{ .Values.configReload.pullPolicy }}
   
+    enableMetrics: {{ .Values.metrics.enabled }}
+    metricsImage: {{ .Values.metrics.repository }}
+    metricsImageTag: {{ .Values.metrics.tag }}
+    metricsImagePullPolicy: {{ .Values.metrics.pullPolicy }}
+
   auth:
     enableServiceAccounts: {{ .Values.auth.enableServiceAccounts }}
     clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth

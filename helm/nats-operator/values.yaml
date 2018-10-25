@@ -128,7 +128,7 @@ tls:
 
 clusterSize: 3
 
-## Configuration reload
+## Configuration Reload
 ##
 ## On Kubernetes v1.10+ clusters with feature=--feature-gates=PodShareProcessNamespace=true
 configReload:
@@ -136,4 +136,13 @@ configReload:
   registry: "docker.io"
   repository: "connecteverything/nats-server-config-reloader"
   tag: "0.2.2-v1alpha2"
+  pullPolicy: "IfNotPresent"
+
+## Prometheus Metrics Exporter
+##
+metrics:
+  enabled: false
+  registry: ""
+  repository: ""
+  tag: ""
   pullPolicy: "IfNotPresent"

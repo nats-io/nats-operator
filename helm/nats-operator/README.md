@@ -91,10 +91,15 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `tls.routesSecret`                   | Certificates to secure the routes. (type: kubernetes.io/tls)                                 | `nil`                                           |
 | `clusterSize`                        | Number of NATS nodes                                                                         | `3`                                             |
 | `configReload.enabled`               | Enable configuration reload                                                                  | `false`                                         |
-| `configReload.registry`              | Reload configuration name                                                                    | `docker.io`                                     |
+| `configReload.registry`              | Reload configuration image registry                                                          | `docker.io`                                     |
 | `configReload.repository`            | Reload configuration image name                                                              | `connecteverything/nats-server-config-reloader` |
 | `configReload.tag`                   | Reload configuration image tag                                                               | `0.2.2-v1alpha2`                                |
-| `configReload.pullPolicy`            | Reload configuration pull policy                                                             | `IfNotPresent`                                  |
+| `configReload.pullPolicy`            | Reload configuration image pull policy                                                       | `IfNotPresent`                                  |
+| `metrics.enabled`                    | Enable prometheus metrics exporter                                                           | `false`                                         |
+| `metrics.registry`                   | Prometheus metrics exporter image registry                                                   |                                                 |
+| `metrics.repository`                 | Prometheus metrics exporter image name                                                       |                                                 |
+| `metrics.tag`                        | Prometheus metrics exporter image tag                                                        |                                                 |
+| `metrics.pullPolicy`                 | Prometheus metrics exporter image pull policy                                                | `IfNotPresent`                                  |
 
 ### Example
 
