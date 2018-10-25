@@ -142,7 +142,7 @@ configReload:
 ##
 metrics:
   enabled: false
-  registry: ""
-  repository: ""
-  tag: ""
+  registry: "docker.io"
+  repository: "ttjiaa/prometheus-nats-exporter"
+  tag: "0.1.0"
   pullPolicy: "IfNotPresent"

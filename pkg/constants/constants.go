@@ -81,7 +81,7 @@ const (
 	DefaultReloaderImage           = "connecteverything/nats-server-config-reloader"
 	DefaultReloaderImageTag        = "0.2.2-v1alpha2"
 	DefaultReloaderImagePullPolicy = "IfNotPresent"
-	DefaultMetricsImage            = ""
-	DefaultMetricsImageTag         = ""
+	DefaultMetricsImage            = "ttjiaa/prometheus-nats-exporter"
+	DefaultMetricsImageTag         = "0.1.0"
 	DefaultMetricsImagePullPolicy  = "IfNotPresent"
 )
