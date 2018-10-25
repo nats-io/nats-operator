@@ -14,12 +14,17 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 ## Getting Started
 
-The current version of the operator creates a `NatsCluster` [Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/) (CRD) under the `nats.io` API group, to which you can make requests to create NATS clusters.
+The current version of the operator creates a `NatsCluster`
+[Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/)
+(CRD) under the `nats.io` API group, to which you can make requests to
+create NATS clusters.
 
 To add the `NatsCluster` and NATS Operator to your cluster you can run:
 
-```
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/example/deployment.yaml
+```sh
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/default-rbac.yaml
+
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/deployment.yaml
 ```
 
 You will then be able to confirm that there is a new CRD registered
@@ -60,19 +65,46 @@ example-nats-cluster   1s
 
 There is an alternative way to install NATS Operator for [Helm](https://www.helm.sh/) users. You can go to [helm/nats-operator](https://github.com/nats-io/nats-operator/tree/master/helm/nats-operator) and use the Helm charts found in the repo.
 
-### RBAC support
+### Installing NATS Operator on a Custom Namespace with RBAC enabled
 
-If you have RBAC enabled (for example in GKE), you can run:
+In order to install the NATS Operator in a custom namespace, if RBAC
+is enabled it is then necessary to create a `ServiceAccount` and
+`ClusterRoleBinding` referring to the custom namespace in order for
+the operator to be able run properly.
 
-```
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/example/deployment-rbac.yaml
-```
+The example below will deploy the `nats-operator` under the `nats-io` namespace,
+using the `nats-operator` ServiceAccount:
 
-Then this will deploy a `nats-operator` on the `nats-io` namespace.
+```sh
+$ kubectl create namespace nats-io
 
-```
+$ echo '
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nats-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nats-operator-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nats-operator
+subjects:
+- kind: ServiceAccount
+  name: nats-operator
+  namespace: nats-io
+' | kubectl -n nats-io apply -f -
+
+$ kubectl -n nats-io apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/role.yaml
+
+$ kubectl -n nats-io apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/deployment.yaml
+
 $ kubectl -n nats-io logs deployment/nats-operator
-time="2018-06-07T15:53:17-07:00" level=info msg="nats-operator Version: 0.2.2-v1alpha2+git"
+time="2018-10-25T03:04:58Z" level=info msg="nats-operator Version: 0.2.3-v1alpha2+git"
 ```
 
 Note that the NATS operator only monitors the `NatsCluster` resources
