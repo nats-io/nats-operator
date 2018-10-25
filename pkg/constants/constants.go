@@ -27,6 +27,9 @@ const (
 	// MonitoringPort is the port for the server monitoring endpoint.
 	MonitoringPort = 8222
 
+	// MetricsPort is the port for the prometheus metrics endpoint.
+	MetricsPort = 7777
+
 	// ConfigMapVolumeName is the name of the volume use for the shared config map.
 	ConfigMapVolumeName = "nats-config"
 
@@ -78,4 +81,7 @@ const (
 	DefaultReloaderImage           = "connecteverything/nats-server-config-reloader"
 	DefaultReloaderImageTag        = "0.2.2-v1alpha2"
 	DefaultReloaderImagePullPolicy = "IfNotPresent"
+	DefaultMetricsImage            = ""
+	DefaultMetricsImageTag         = ""
+	DefaultMetricsImagePullPolicy  = "IfNotPresent"
 )

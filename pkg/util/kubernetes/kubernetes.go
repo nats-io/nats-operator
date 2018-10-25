@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/conf"
@@ -621,6 +622,30 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 		reloaderContainer.VolumeMounts = volumeMounts
 		containers = append(containers, reloaderContainer)
 	}
+
+	if cs.Pod != nil && cs.Pod.EnableMetrics {
+		// Add pod annotations for promethues metrics
+		pod.ObjectMeta.Annotations["prometheus.io/scrape"] = "true"
+		pod.ObjectMeta.Annotations["prometheus.io/port"] = strconv.Itoa(constants.MetricsPort)
+
+		// Allow customizing promethues metrics exporter image
+		image := constants.DefaultMetricsImage
+		imageTag := constants.DefaultMetricsImageTag
+		imagePullPolicy := constants.DefaultMetricsImagePullPolicy
+		if cs.Pod.MetricsImage != "" {
+			image = cs.Pod.MetricsImage
+		}
+		if cs.Pod.MetricsImageTag != "" {
+			imageTag = cs.Pod.MetricsImageTag
+		}
+		if cs.Pod.MetricsImagePullPolicy != "" {
+			imagePullPolicy = cs.Pod.MetricsImagePullPolicy
+		}
+
+		metricsContainer := natsPodMetricsContainer(image, imageTag, imagePullPolicy)
+		containers = append(containers, metricsContainer)
+	}
+
 	pod.Spec.Containers = containers
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
