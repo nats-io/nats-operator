@@ -61,7 +61,7 @@ func natsPodContainer(clusterName, version string) v1.Container {
 	}
 }
 
-// reloaderContainer returns a NATS server pod container spec.
+// natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.
 func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
 	return v1.Container{
 		Name:            "reloader",
@@ -74,6 +74,29 @@ func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
 			"-pid",
 			constants.PidFilePath,
 		},
+	}
+}
+
+// natsPodMetricsContainer returns a NATS server pod container spec for prometheus metrics exporter.
+func natsPodMetricsContainer(image, tag, pullPolicy string) v1.Container {
+	return v1.Container{
+		Name:            "metrics",
+		Image:           fmt.Sprintf("%s:%s", image, tag),
+		ImagePullPolicy: v1.PullPolicy(pullPolicy),
+		Command:         []string{},
+		Ports: []v1.ContainerPort{
+			{
+				Name:          "metrics",
+				ContainerPort: int32(constants.MetricsPort),
+				Protocol:      v1.ProtocolTCP,
+			},
+		},
+		Args: []string{
+			"-connz",
+			"-routez",
+			"-subz",
+			"-varz",
+			fmt.Sprintf("http://localhost:%d", constants.MonitoringPort)},
 	}
 }
 
