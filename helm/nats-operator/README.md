@@ -97,7 +97,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `configReload.pullPolicy`            | Reload configuration image pull policy                                                       | `IfNotPresent`                                  |
 | `metrics.enabled`                    | Enable prometheus metrics exporter                                                           | `false`                                         |
 | `metrics.registry`                   | Prometheus metrics exporter image registry                                                   | `docker.io`                                     |
-| `metrics.repository`                 | Prometheus metrics exporter image name                                                       | `ttjiaa/prometheus-nats-exporter`               |
+| `metrics.repository`                 | Prometheus metrics exporter image name                                                       | `synadia/prometheus-nats-exporter`              |
 | `metrics.tag`                        | Prometheus metrics exporter image tag                                                        | `0.1.0`                                         |
 | `metrics.pullPolicy`                 | Prometheus metrics exporter image pull policy                                                | `IfNotPresent`                                  |
 
