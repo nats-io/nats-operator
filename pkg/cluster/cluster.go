@@ -365,7 +365,12 @@ func (c *Cluster) delete() {
 }
 
 func (c *Cluster) setupServices() error {
-	err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner())
+	metrics := false
+	if c.cluster.Spec.Pod != nil {
+		metrics = c.cluster.Spec.Pod.EnableMetrics
+	}
+
+	err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner(), metrics)
 	if err != nil {
 		return err
 	}

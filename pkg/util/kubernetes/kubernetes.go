@@ -90,13 +90,23 @@ func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, n
 	return err
 }
 
-func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
+func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference, metrics bool) error {
 	ports := []v1.ServicePort{{
 		Name:       "client",
 		Port:       constants.ClientPort,
 		TargetPort: intstr.FromInt(constants.ClientPort),
 		Protocol:   v1.ProtocolTCP,
 	}}
+
+	if metrics {
+		ports = append(ports, v1.ServicePort{
+			Name:       "metrics",
+			Port:       constants.MetricsPort,
+			TargetPort: intstr.FromInt(constants.MetricsPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+
 	selectors := LabelsForCluster(clusterName)
 	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors, false)
 }
