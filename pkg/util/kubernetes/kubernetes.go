@@ -22,13 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/conf"
-	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,10 +30,19 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/conf"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
 const (
@@ -657,42 +659,31 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 	return pod
 }
 
-func MustNewKubeClient() corev1client.CoreV1Interface {
+// MustNewKubeConfig builds a configuration object by either reading from the specified kubeconfig file or by using an in-cluster config.
+func MustNewKubeConfig() *rest.Config {
 	var (
 		cfg *rest.Config
 		err error
 	)
-
 	if len(local.KubeConfigPath) == 0 {
 		cfg, err = InClusterConfig()
 	} else {
 		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
 	}
-
 	if err != nil {
 		panic(err)
 	}
-
-	return corev1client.NewForConfigOrDie(cfg)
+	return cfg
 }
 
-func MustNewOperatorClient() natsalphav2client.NatsV1alpha2Interface {
-	var (
-		cfg *rest.Config
-		err error
-	)
+// MustNewKubeClientFromConfig builds a Kubernetes client based on the specified configuration object.
+func MustNewKubeClientFromConfig(cfg *rest.Config) kubernetes.Interface {
+	return kubernetes.NewForConfigOrDie(cfg)
+}
 
-	if len(local.KubeConfigPath) == 0 {
-		cfg, err = InClusterConfig()
-	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	return natsalphav2client.NewForConfigOrDie(cfg)
+// MustNewNatsClientFromConfig builds a client for our API based on the specified configuration object.
+func MustNewNatsClientFromConfig(cfg *rest.Config) natsclient.Interface {
+	return natsclient.NewForConfigOrDie(cfg)
 }
 
 func InClusterConfig() (*rest.Config, error) {

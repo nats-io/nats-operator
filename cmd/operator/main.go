@@ -24,8 +24,21 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/client-go/tools/record"
+
 	"github.com/nats-io/nats-operator/pkg/chaos"
-	"github.com/nats-io/nats-operator/pkg/client"
+	natsclientset "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	"github.com/nats-io/nats-operator/pkg/controller"
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
@@ -34,20 +47,6 @@ import (
 	"github.com/nats-io/nats-operator/pkg/util/probe"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/nats-io/nats-operator/version"
-
-	"github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
-
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/kubernetes/scheme"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/client-go/tools/record"
 )
 
 var (
@@ -73,30 +72,6 @@ func init() {
 	flag.BoolVar(&printVersion, "version", false, "Show version and quit")
 	flag.DurationVar(&gcInterval, "gc-interval", 10*time.Minute, "GC interval")
 	flag.Parse()
-
-	// TODO: remove this and use CR client
-
-	var (
-		cfg *rest.Config
-		err error
-	)
-
-	if len(local.KubeConfigPath) == 0 {
-		cfg, err = kubernetesutil.InClusterConfig()
-	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	controller.MasterHost = cfg.Host
-	restcli, _, err := client.New(cfg)
-	if err != nil {
-		panic(err)
-	}
-	controller.KubeHttpCli = restcli.Client
 }
 
 func main() {
@@ -143,7 +118,10 @@ func main() {
 		logrus.Fatalf("failed to get hostname: %v", err)
 	}
 
-	kubecli := kubernetesutil.MustNewKubeClient()
+	// Parse the specified kubeconfig and grab both a configuration object and a Kubernetes client.
+	// The configuration object is required to create clients for our API later on.
+	kubeCfg := kubernetesutil.MustNewKubeConfig()
+	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(kubeCfg)
 
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
 	go http.ListenAndServe(listenAddr, nil)
@@ -151,10 +129,10 @@ func main() {
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
 		namespace,
 		"nats-operator",
-		kubecli,
+		kubeClient.CoreV1(),
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
-			EventRecorder: createRecorder(kubecli, name, namespace),
+			EventRecorder: createRecorder(kubeClient.CoreV1(), name, namespace),
 		})
 	if err != nil {
 		logrus.Fatalf("error creating lock: %v", err)
@@ -166,7 +144,9 @@ func main() {
 		RenewDeadline: 10 * time.Second,
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: run,
+			OnStartedLeading: func(ctx context.Context) {
+				run(ctx, kubeCfg, kubeClient)
+			},
 			OnStoppedLeading: func() {
 				logrus.Fatalf("leader election lost")
 			},
@@ -176,37 +156,38 @@ func main() {
 	panic("unreachable")
 }
 
-func run(ctx context.Context) {
-	cfg := newControllerConfig()
+func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
+	// Create a client for our API so that we can create shared index informers for our API types.
+	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
+
+	// Create a new controller configuration object.
+	cfg := newControllerConfig(kubeClient, natsClient)
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
 	}
+	// Initialize the controller for NatsCluster resources.
+	c := controller.NewNatsClusterController(cfg)
 
+	// Start the garbage collector.
 	go periodicFullGC(cfg.KubeCli, cfg.Namespace, gcInterval)
 
+	// Start the chaos engine.
 	startChaos(context.Background(), cfg.KubeCli, cfg.Namespace, chaosLevel)
 
-	for {
-		c := controller.New(cfg)
-		err := c.Run(ctx)
-		switch err {
-		case controller.ErrVersionOutdated:
-		default:
-			logrus.Fatalf("controller Run() ended with failure: %v", err)
-		}
+	// Run the controller for NatsCluster resources.
+	if err := c.Run(ctx); err != nil {
+		logrus.Fatalf("unexpected error while running the main control loop: %v", err)
 	}
 }
 
-func newControllerConfig() controller.Config {
-	kubecli := kubernetesutil.MustNewKubeClient()
-
+func newControllerConfig(kubeClient kubernetes.Interface, natsClient natsclientset.Interface) controller.Config {
 	var (
 		err            error
 		serviceAccount string
 	)
 
 	if len(local.KubeConfigPath) == 0 {
-		serviceAccount, err = getMyPodServiceAccount(kubecli)
+		serviceAccount, err = getMyPodServiceAccount(kubeClient.CoreV1())
 		if err != nil {
 			logrus.Fatalf("fail to get my pod's service account: %v", err)
 		}
@@ -219,9 +200,9 @@ func newControllerConfig() controller.Config {
 	cfg := controller.Config{
 		Namespace:      namespace,
 		ServiceAccount: serviceAccount,
-		KubeCli:        kubecli,
+		KubeCli:        kubeClient.CoreV1(),
 		KubeExtCli:     kubernetesutil.MustNewKubeExtClient(),
-		OperatorCli:    kubernetesutil.MustNewOperatorClient(),
+		OperatorCli:    natsClient,
 	}
 
 	return cfg

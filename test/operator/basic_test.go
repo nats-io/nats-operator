@@ -8,10 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/client"
-	"github.com/nats-io/nats-operator/pkg/controller"
-	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +15,12 @@ import (
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	k8srestapi "k8s.io/client-go/rest"
 	k8sclientcmd "k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/client"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/controller"
+	"github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
 func TestRegisterCRD(t *testing.T) {
@@ -282,13 +284,12 @@ func newController() (*controller.Controller, error) {
 		Namespace:   "default",
 		KubeCli:     cl.kc,
 		KubeExtCli:  cl.kcrdc,
-		OperatorCli: cl.ocli,
+		OperatorCli: kubernetes.MustNewNatsClientFromConfig(cl.config),
 	}
-	c := controller.New(config)
 
-	// FIXME: These are set on the package
-	controller.MasterHost = cl.config.Host
-	controller.KubeHttpCli = cl.restcli.Client
+	// Initialize the controller for NatsCluster resources.
+	c := controller.NewNatsClusterController(config)
+
 	return c, nil
 }
 
