@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -27,16 +27,16 @@ import (
 
 type NatsClusterCR interface {
 	// Create creates a NATS cluster CR with the desired CR
-	Create(ctx context.Context, cl *spec.NatsCluster) (*spec.NatsCluster, error)
+	Create(ctx context.Context, cl *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error)
 
 	// Get returns the specified NATS cluster CR
-	Get(ctx context.Context, namespace, name string) (*spec.NatsCluster, error)
+	Get(ctx context.Context, namespace, name string) (*v1alpha2.NatsCluster, error)
 
 	// Delete deletes the specified NATS cluster CR
 	Delete(ctx context.Context, namespace, name string) error
 
 	// Update updates the NATS cluster CR.
-	Update(ctx context.Context, natsCluster *spec.NatsCluster) (*spec.NatsCluster, error)
+	Update(ctx context.Context, natsCluster *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error)
 }
 
 type natsClusterCR struct {
@@ -60,12 +60,12 @@ func NewCRClient(cfg *rest.Config) (NatsClusterCR, error) {
 // TODO: make this private so that we don't expose RESTClient once operator code uses this client instead of REST calls
 func New(cfg *rest.Config) (*rest.RESTClient, *runtime.Scheme, error) {
 	crScheme := runtime.NewScheme()
-	if err := spec.AddToScheme(crScheme); err != nil {
+	if err := v1alpha2.AddToScheme(crScheme); err != nil {
 		return nil, nil, err
 	}
 
 	config := *cfg
-	config.GroupVersion = &spec.SchemeGroupVersion
+	config.GroupVersion = &v1alpha2.SchemeGroupVersion
 	config.APIPath = "/apis"
 	config.ContentType = runtime.ContentTypeJSON
 	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: serializer.NewCodecFactory(crScheme)}
@@ -78,25 +78,25 @@ func New(cfg *rest.Config) (*rest.RESTClient, *runtime.Scheme, error) {
 	return client, crScheme, nil
 }
 
-func (c *natsClusterCR) Create(ctx context.Context, natsCluster *spec.NatsCluster) (*spec.NatsCluster, error) {
+func (c *natsClusterCR) Create(ctx context.Context, natsCluster *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error) {
 	if len(natsCluster.Namespace) == 0 {
 		return nil, errors.New("need to set metadata.Namespace in NATS cluster CR")
 	}
-	result := &spec.NatsCluster{}
+	result := &v1alpha2.NatsCluster{}
 	err := c.client.Post().Context(ctx).
 		Namespace(natsCluster.Namespace).
-		Resource(spec.CRDResourcePlural).
+		Resource(v1alpha2.CRDResourcePlural).
 		Body(natsCluster).
 		Do().
 		Into(result)
 	return result, err
 }
 
-func (c *natsClusterCR) Get(ctx context.Context, namespace, name string) (*spec.NatsCluster, error) {
-	result := &spec.NatsCluster{}
+func (c *natsClusterCR) Get(ctx context.Context, namespace, name string) (*v1alpha2.NatsCluster, error) {
+	result := &v1alpha2.NatsCluster{}
 	err := c.client.Get().Context(ctx).
 		Namespace(namespace).
-		Resource(spec.CRDResourcePlural).
+		Resource(v1alpha2.CRDResourcePlural).
 		Name(name).
 		Do().
 		Into(result)
@@ -106,23 +106,23 @@ func (c *natsClusterCR) Get(ctx context.Context, namespace, name string) (*spec.
 func (c *natsClusterCR) Delete(ctx context.Context, namespace, name string) error {
 	return c.client.Delete().Context(ctx).
 		Namespace(namespace).
-		Resource(spec.CRDResourcePlural).
+		Resource(v1alpha2.CRDResourcePlural).
 		Name(name).
 		Do().
 		Error()
 }
 
-func (c *natsClusterCR) Update(ctx context.Context, natsCluster *spec.NatsCluster) (*spec.NatsCluster, error) {
+func (c *natsClusterCR) Update(ctx context.Context, natsCluster *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error) {
 	if len(natsCluster.Namespace) == 0 {
 		return nil, errors.New("need to set metadata.Namespace in NATS cluster CR")
 	}
 	if len(natsCluster.Name) == 0 {
 		return nil, errors.New("need to set metadata.Name in NATS cluster CR")
 	}
-	result := &spec.NatsCluster{}
+	result := &v1alpha2.NatsCluster{}
 	err := c.client.Put().Context(ctx).
 		Namespace(natsCluster.Namespace).
-		Resource(spec.CRDResourcePlural).
+		Resource(v1alpha2.CRDResourcePlural).
 		Name(natsCluster.Name).
 		Body(natsCluster).
 		Do().

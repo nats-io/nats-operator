@@ -20,7 +20,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kwatch "k8s.io/apimachinery/pkg/watch"
@@ -53,7 +53,7 @@ func pollEvent(decoder *json.Decoder) (*Event, *metav1.Status, error) {
 
 	ev := &Event{
 		Type:   re.Type,
-		Object: &spec.NatsCluster{},
+		Object: &v1alpha2.NatsCluster{},
 	}
 	err = json.Unmarshal(re.Object, ev.Object)
 	if err != nil {

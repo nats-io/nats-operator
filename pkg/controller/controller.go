@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/cluster"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
 
@@ -50,7 +50,7 @@ var (
 
 type Event struct {
 	Type   kwatch.EventType
-	Object *spec.NatsCluster
+	Object *v1alpha2.NatsCluster
 }
 
 type Controller struct {
@@ -72,7 +72,7 @@ type Config struct {
 	PVProvisioner  string
 	KubeCli        corev1client.CoreV1Interface
 	KubeExtCli     apiextensionsclient.Interface
-	OperatorCli    natsalphav2client.PkgSpecInterface
+	OperatorCli    natsalphav2client.NatsV1alpha2Interface
 }
 
 func (c *Config) Validate() error {
@@ -326,7 +326,7 @@ func (c *Controller) watch(watchVersion string) (<-chan *Event, <-chan error) {
 	return eventCh, errCh
 }
 
-func (c *Controller) isClustersCacheStale(currentClusters []spec.NatsCluster) bool {
+func (c *Controller) isClustersCacheStale(currentClusters []v1alpha2.NatsCluster) bool {
 	if len(c.clusterRVs) != len(currentClusters) {
 		return true
 	}

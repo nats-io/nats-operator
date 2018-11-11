@@ -10,8 +10,8 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/client"
 	"github.com/nats-io/nats-operator/pkg/controller"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,16 +85,16 @@ func TestCreateConfigSecret(t *testing.T) {
 	name := "test-nats-cluster-1"
 	namespace := "default"
 	var size = 3
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
 		},
@@ -169,16 +169,16 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 	}
 
 	var size = 3
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
 		},
@@ -229,7 +229,7 @@ type clients struct {
 	restcli *k8srestapi.RESTClient
 	config  *k8srestapi.Config
 	ncli    client.NatsClusterCR
-	ocli    *natsalphav2client.PkgSpecClient
+	ocli    *natsalphav2client.NatsV1alpha2Client
 }
 
 func newKubeClients() (*clients, error) {

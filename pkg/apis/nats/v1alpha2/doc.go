@@ -1,2 +1,2 @@
 // +k8s:deepcopy-gen=package
-package spec
+package v1alpha2
