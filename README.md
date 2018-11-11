@@ -410,21 +410,23 @@ $ docker build -f docker/reloader/Dockerfile . <image:tag>
 
 You'll need Docker `17.06.0-ce` or higher.
 
-### Updating the `NatsCluster` type (code generation)
+### Updating the `NatsCluster` and `NatsServiceRole` types (code generation)
 
-If you are adding a new field to the `NatsCluster`, then you have to
-get the `deepcopy-gen` tools first.
-
-```
-$ go get -u github.com/kubernetes/gengo/examples/deepcopy-gen
-```
-
-Then run the code generation script in order to recreate
-`pkg/spec/zz_generated.deepcopy.go` with the required methods to
-support that field filled in:
+If you are adding a new field to the `NatsCluster` or `NatsServiceRole` types in  `pkg/apis/nats/v1alpha2`, then you must run the code generation step after doing so:
 
 ```sh
-$ ./hack/codegen.sh
+$ make gen
+```
+
+This will update the following files and directories in order to reflect the changes:
+
+```text
+pkg
+├── apis
+│   └── nats
+│       └── v1alpha2
+│           └── zz_generated.deepcopy.go (GENERATED)
+└── client (GENERATED)
 ```
 
 ### Running outside the cluster for debugging
