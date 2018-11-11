@@ -16,23 +16,64 @@ package kubernetes
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"github.com/sirupsen/logrus"
+	extsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	watchapi "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/watch"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
+	contextutil "github.com/nats-io/nats-operator/pkg/util/context"
+)
+
+const (
+	// waitCRDReadyTimeout is the maximum period of time we wait for each CRD to be ready (i.e. established).
+	waitCRDReadyTimeout = 30 * time.Second
 )
 
 var (
-	ErrCRDAlreadyExists = errors.New("crd already exists")
+	// crds contains all the custom resource definitions that nats-operator registers upon starting.
+	crds = []*extsv1beta1.CustomResourceDefinition{
+		// NatsCluster
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: v1alpha2.CRDName,
+			},
+			Spec: extsv1beta1.CustomResourceDefinitionSpec{
+				Group:   v1alpha2.SchemeGroupVersion.Group,
+				Version: v1alpha2.SchemeGroupVersion.Version,
+				Scope:   extsv1beta1.NamespaceScoped,
+				Names: extsv1beta1.CustomResourceDefinitionNames{
+					Plural:     v1alpha2.CRDResourcePlural,
+					Kind:       v1alpha2.CRDResourceKind,
+					ShortNames: []string{"nats"},
+				},
+			},
+		},
+		// NatsServiceRole
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: v1alpha2.ServiceRoleCRDName,
+			},
+			Spec: extsv1beta1.CustomResourceDefinitionSpec{
+				Group:   v1alpha2.SchemeGroupVersion.Group,
+				Version: v1alpha2.SchemeGroupVersion.Version,
+				Scope:   extsv1beta1.NamespaceScoped,
+				Names: extsv1beta1.CustomResourceDefinitionNames{
+					Plural: v1alpha2.ServiceRoleCRDResourcePlural,
+					Kind:   v1alpha2.ServiceRoleCRDResourceKind,
+				},
+			},
+		},
+	}
 )
 
 // TODO: replace this package with Operator client
@@ -84,100 +125,111 @@ func readClusterCR(b []byte) (*v1alpha2.NatsCluster, error) {
 	return cluster, nil
 }
 
-func CreateCRD(clientset apiextensionsclient.Interface) error {
-	// Lookup in case the CRDs are both present already.
-	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.CRDName, metav1.GetOptions{})
-	_, err2 := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.ServiceRoleCRDName, metav1.GetOptions{})
-	if err == nil && err2 == nil {
-		return ErrCRDAlreadyExists
-	}
+// MustNewKubeExtClient creates a new client for the apiextensions.k8s.io/v1beta1 API.
+func MustNewKubeExtClient(cfg *rest.Config) extsclientset.Interface {
+	return extsclientset.NewForConfigOrDie(cfg)
+}
 
-	// NatsCluster
-	crd := &apiextensionsv1beta1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: v1alpha2.CRDName,
-		},
-		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-			Group:   v1alpha2.SchemeGroupVersion.Group,
-			Version: v1alpha2.SchemeGroupVersion.Version,
-			Scope:   apiextensionsv1beta1.NamespaceScoped,
-			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural:     v1alpha2.CRDResourcePlural,
-				Kind:       v1alpha2.CRDResourceKind,
-				ShortNames: []string{"nats"},
-			},
-		},
+// InitCRDs registers the CRDs for the nats.io/v1alpha2 API and waits for them to become ready.
+func InitCRDs(extsClient extsclientset.Interface) error {
+	for _, crd := range crds {
+		// Create the CustomResourceDefinition in the api.
+		if err := createOrUpdateCRD(crd, extsClient); err != nil {
+			return err
+		}
 	}
+	return WaitCRDs(extsClient)
+}
 
-	_, err = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if err != nil && !IsKubernetesResourceAlreadyExistError(err) {
+// WaitCRDs waits for the CRDs to become ready.
+func WaitCRDs(extsClient extsclientset.Interface) error {
+	for _, crd := range crds {
+		// Wait for the CustomResourceDefinition to be established.
+		if err := waitCRDReady(crd, extsClient); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createOrUpdateCRD creates or updates the specified custom resource definition according to the provided specification.
+func createOrUpdateCRD(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+	// Attempt to register the CRD.
+	_, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	if err == nil {
+		// Registration was successful.
+		return nil
+	}
+	if !IsKubernetesResourceAlreadyExistError(err) {
+		// The crd doesn't exist yet but we've got an unexpected error while registering it.
 		return err
 	}
 
-	// NatsServiceRole
-	crd = &apiextensionsv1beta1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: v1alpha2.ServiceRoleCRDName,
-		},
-		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-			Group:   v1alpha2.SchemeGroupVersion.Group,
-			Version: v1alpha2.SchemeGroupVersion.Version,
-			Scope:   apiextensionsv1beta1.NamespaceScoped,
-			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural: v1alpha2.ServiceRoleCRDResourcePlural,
-				Kind:   v1alpha2.ServiceRoleCRDResourceKind,
-			},
-		},
+	// At this point the CRD already exists but its spec may differ.
+	// This can happen, for instance, if the user has tampered with the CRD.
+	// Hence, we do our best to bring in line with our expectations.
+	// Fetch the latest version of the CRD.
+	d, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{})
+	if err != nil {
+		// We've failed to fetch the latest version of the CRD, so return accordingly.
+		return err
 	}
-	_, err2 = clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if err2 != nil && !IsKubernetesResourceAlreadyExistError(err2) {
-		return err2
+	if reflect.DeepEqual(d.Spec, crd.Spec) {
+		// The specs match, so there's nothing to do.
+		return nil
 	}
-
+	// Attempt to update the CRD by setting its spec to the expected value.
+	d.Spec = crd.Spec
+	if _, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Update(d); err != nil {
+		return err
+	}
 	return nil
 }
 
-func WaitCRDReady(clientset apiextensionsclient.Interface) error {
-	err := retryutil.Retry(5*time.Second, 20, func() (bool, error) {
-		crd, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.CRDName, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-		for _, cond := range crd.Status.Conditions {
-			switch cond.Type {
-			case apiextensionsv1beta1.Established:
-				if cond.Status == apiextensionsv1beta1.ConditionTrue {
-					return true, nil
-				}
-			case apiextensionsv1beta1.NamesAccepted:
-				if cond.Status == apiextensionsv1beta1.ConditionFalse {
-					return false, fmt.Errorf("Name conflict: %v", cond.Reason)
-				}
-			}
-		}
-		return false, nil
+// waitCRDReady blocks until the specified custom resource definition has been established and is ready for being used.
+func waitCRDReady(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+	// Grab a ListerWatcher with which we can watch the CRD.
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = byCoordinates(crd.Name, crd.Namespace).String()
+			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
+			options.FieldSelector = byCoordinates(crd.Name, crd.Namespace).String()
+			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(options)
+		},
+	}
+
+	// Watch for updates to the specified CRD until it reaches the "Established" state.
+	last, err := watch.UntilWithSync(contextutil.WithTimeout(waitCRDReadyTimeout), lw, &extsv1beta1.CustomResourceDefinition{}, nil, func(event watchapi.Event) (bool, error) {
+		// Grab the current resource from the event.
+		obj := event.Object.(*extsv1beta1.CustomResourceDefinition)
+		// Return true if and only if the CRD is ready.
+		return isReady(obj), nil
 	})
 	if err != nil {
-		return fmt.Errorf("wait CRD created failed: %v", err)
+		// We've got an error while watching the specified CRD.
+		return err
 	}
+	if last == nil {
+		// We've got no events for the CRD, which most probably means registration is stuck.
+		return fmt.Errorf("no events received for crd %q", crd.Name)
+	}
+
+	// At this point we are sure the CRD is ready, so we return.
+	logrus.Debugf("crd %q established", crd.Spec.Names.Kind)
 	return nil
 }
 
-func MustNewKubeExtClient() apiextensionsclient.Interface {
-	var (
-		cfg *rest.Config
-		err error
-	)
-
-	if len(local.KubeConfigPath) == 0 {
-		cfg, err = InClusterConfig()
-	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+// isReady returns whether the specified CRD is ready to be used, by searching for "Established" in its conditions.
+func isReady(crd *extsv1beta1.CustomResourceDefinition) bool {
+	for _, cond := range crd.Status.Conditions {
+		switch cond.Type {
+		case extsv1beta1.Established:
+			if cond.Status == extsv1beta1.ConditionTrue {
+				return true
+			}
+		}
 	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	return apiextensionsclient.NewForConfigOrDie(cfg)
+	return false
 }
