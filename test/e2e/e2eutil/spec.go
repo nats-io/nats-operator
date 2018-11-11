@@ -15,32 +15,32 @@
 package e2eutil
 
 import (
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewCluster(genName string, size int) *spec.NatsCluster {
-	return &spec.NatsCluster{
+func NewCluster(genName string, size int) *v1alpha2.NatsCluster {
+	return &v1alpha2.NatsCluster{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: genName,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size: size,
 		},
 	}
 }
 
-func ClusterWithSize(cl *spec.NatsCluster, size int) *spec.NatsCluster {
+func ClusterWithSize(cl *v1alpha2.NatsCluster, size int) *v1alpha2.NatsCluster {
 	cl.Spec.Size = size
 	return cl
 }
 
-func ClusterWithVersion(cl *spec.NatsCluster, version string) *spec.NatsCluster {
+func ClusterWithVersion(cl *v1alpha2.NatsCluster, version string) *v1alpha2.NatsCluster {
 	cl.Spec.Version = version
 	return cl
 }

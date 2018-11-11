@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
 	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
@@ -60,7 +60,7 @@ func TestPauseControl(t *testing.T) {
 		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
 	}
 
-	updateFunc := func(cl *spec.NatsCluster) {
+	updateFunc := func(cl *v1alpha2.NatsCluster) {
 		cl.Spec.Paused = true
 	}
 	if testNats, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc); err != nil {
@@ -81,7 +81,7 @@ func TestPauseControl(t *testing.T) {
 		t.Fatalf("cluster should not be recovered: control is paused")
 	}
 
-	updateFunc = func(cl *spec.NatsCluster) {
+	updateFunc = func(cl *v1alpha2.NatsCluster) {
 		cl.Spec.Paused = false
 	}
 	if testNats, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc); err != nil {
@@ -145,7 +145,7 @@ func TestResizeCluster3To5(t *testing.T) {
 		t.Fatalf("failed to create NATS cluster with 3 members: %v", err)
 	}
 
-	updateFunc := func(cl *spec.NatsCluster) {
+	updateFunc := func(cl *v1alpha2.NatsCluster) {
 		cl = e2eutil.ClusterWithSize(cl, 5)
 	}
 	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
@@ -175,7 +175,7 @@ func TestResizeCluster5To3(t *testing.T) {
 		t.Fatalf("failed to create NATS cluster with 5 members: %v", err)
 	}
 
-	updateFunc := func(cl *spec.NatsCluster) {
+	updateFunc := func(cl *v1alpha2.NatsCluster) {
 		cl = e2eutil.ClusterWithSize(cl, 3)
 	}
 	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)

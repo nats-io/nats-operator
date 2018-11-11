@@ -18,18 +18,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
-
-	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
 var (
@@ -40,20 +39,15 @@ var (
 
 // NatsClusterCRUpdateFunc is a function to be used when atomically
 // updating a Cluster CR.
-type NatsClusterCRUpdateFunc func(*spec.NatsCluster)
+type NatsClusterCRUpdateFunc func(*v1alpha2.NatsCluster)
 
-func WatchClusters(host, ns string, httpClient *http.Client, resourceVersion string) (*http.Response, error) {
-	return httpClient.Get(fmt.Sprintf("%s/apis/%s/namespaces/%s/%s?watch=true&resourceVersion=%s",
-		host, spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural, resourceVersion))
-}
-
-func GetClusterList(restcli rest.Interface, ns string) (*spec.NatsClusterList, error) {
+func GetClusterList(restcli rest.Interface, ns string) (*v1alpha2.NatsClusterList, error) {
 	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw()
 	if err != nil {
 		return nil, err
 	}
 
-	clusters := &spec.NatsClusterList{}
+	clusters := &v1alpha2.NatsClusterList{}
 	if err := json.Unmarshal(b, clusters); err != nil {
 		return nil, err
 	}
@@ -61,11 +55,11 @@ func GetClusterList(restcli rest.Interface, ns string) (*spec.NatsClusterList, e
 }
 
 func listClustersURI(ns string) string {
-	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural)
+	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural)
 }
 
-func GetClusterCRDObject(restcli rest.Interface, ns, name string) (*spec.NatsCluster, error) {
-	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural, name)
+func GetClusterCRDObject(restcli rest.Interface, ns, name string) (*v1alpha2.NatsCluster, error) {
+	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural, name)
 	b, err := restcli.Get().RequestURI(uri).DoRaw()
 	if err != nil {
 		return nil, err
@@ -73,8 +67,8 @@ func GetClusterCRDObject(restcli rest.Interface, ns, name string) (*spec.NatsClu
 	return readClusterCR(b)
 }
 
-func UpdateClusterCRDObject(restcli rest.Interface, ns string, c *spec.NatsCluster) (*spec.NatsCluster, error) {
-	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", spec.SchemeGroupVersion.String(), ns, spec.CRDResourcePlural, c.Name)
+func UpdateClusterCRDObject(restcli rest.Interface, ns string, c *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error) {
+	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural, c.Name)
 	b, err := restcli.Put().RequestURI(uri).Body(c).DoRaw()
 	if err != nil {
 		return nil, err
@@ -82,8 +76,8 @@ func UpdateClusterCRDObject(restcli rest.Interface, ns string, c *spec.NatsClust
 	return readClusterCR(b)
 }
 
-func readClusterCR(b []byte) (*spec.NatsCluster, error) {
-	cluster := &spec.NatsCluster{}
+func readClusterCR(b []byte) (*v1alpha2.NatsCluster, error) {
+	cluster := &v1alpha2.NatsCluster{}
 	if err := json.Unmarshal(b, cluster); err != nil {
 		return nil, fmt.Errorf("read cluster CR from json data failed: %v", err)
 	}
@@ -92,8 +86,8 @@ func readClusterCR(b []byte) (*spec.NatsCluster, error) {
 
 func CreateCRD(clientset apiextensionsclient.Interface) error {
 	// Lookup in case the CRDs are both present already.
-	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDName, metav1.GetOptions{})
-	_, err2 := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.ServiceRoleCRDName, metav1.GetOptions{})
+	_, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.CRDName, metav1.GetOptions{})
+	_, err2 := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.ServiceRoleCRDName, metav1.GetOptions{})
 	if err == nil && err2 == nil {
 		return ErrCRDAlreadyExists
 	}
@@ -101,15 +95,15 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 	// NatsCluster
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: spec.CRDName,
+			Name: v1alpha2.CRDName,
 		},
 		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-			Group:   spec.SchemeGroupVersion.Group,
-			Version: spec.SchemeGroupVersion.Version,
+			Group:   v1alpha2.SchemeGroupVersion.Group,
+			Version: v1alpha2.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.NamespaceScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural:     spec.CRDResourcePlural,
-				Kind:       spec.CRDResourceKind,
+				Plural:     v1alpha2.CRDResourcePlural,
+				Kind:       v1alpha2.CRDResourceKind,
 				ShortNames: []string{"nats"},
 			},
 		},
@@ -123,15 +117,15 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 	// NatsServiceRole
 	crd = &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: spec.ServiceRoleCRDName,
+			Name: v1alpha2.ServiceRoleCRDName,
 		},
 		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-			Group:   spec.SchemeGroupVersion.Group,
-			Version: spec.SchemeGroupVersion.Version,
+			Group:   v1alpha2.SchemeGroupVersion.Group,
+			Version: v1alpha2.SchemeGroupVersion.Version,
 			Scope:   apiextensionsv1beta1.NamespaceScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural: spec.ServiceRoleCRDResourcePlural,
-				Kind:   spec.ServiceRoleCRDResourceKind,
+				Plural: v1alpha2.ServiceRoleCRDResourcePlural,
+				Kind:   v1alpha2.ServiceRoleCRDResourceKind,
 			},
 		},
 	}
@@ -145,7 +139,7 @@ func CreateCRD(clientset apiextensionsclient.Interface) error {
 
 func WaitCRDReady(clientset apiextensionsclient.Interface) error {
 	err := retryutil.Retry(5*time.Second, 20, func() (bool, error) {
-		crd, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDName, metav1.GetOptions{})
+		crd, err := clientset.ApiextensionsV1beta1().CustomResourceDefinitions().Get(v1alpha2.CRDName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

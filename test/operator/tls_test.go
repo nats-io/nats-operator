@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
@@ -30,19 +30,19 @@ func TestCreateTLSSetup(t *testing.T) {
 	name := "nats"
 	namespace := "default"
 	var size = 3
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
-			TLS: &spec.TLSConfig{
+			TLS: &v1alpha2.TLSConfig{
 				ServerSecret: "nats-certs",
 				RoutesSecret: "nats-routes-tls",
 			},
