@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
 func TestConfigMapReload_Servers(t *testing.T) {
@@ -23,8 +25,12 @@ func TestConfigMapReload_Servers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
+
 	name := "test-nats-cluster-reload-1"
 	namespace := "default"
 
@@ -134,8 +140,12 @@ func TestConfigSecretReload_Auth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
+
 	name := "test-nats-cluster-reload-auth-1"
 	namespace := "default"
 
@@ -359,6 +369,11 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
+
 	var (
 		userRoleName      = "nats-user-2"
 		adminUserRoleName = "nats-admin-user"
@@ -412,9 +427,6 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 			Namespace: namespace,
 		},
 	}
-
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
 
 	_, err = cl.kc.ServiceAccounts(namespace).Create(userServiceAccount)
 	if err != nil {

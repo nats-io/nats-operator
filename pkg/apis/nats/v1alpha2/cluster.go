@@ -50,7 +50,7 @@ type NatsCluster struct {
 }
 
 // GetGroupVersionKind returns a GroupVersionKind based on the current GroupVersion and the specified Kind.
-func (c* NatsCluster) GetGroupVersionKind() schema.GroupVersionKind {
+func (c *NatsCluster) GetGroupVersionKind() schema.GroupVersionKind {
 	return SchemeGroupVersion.WithKind(CRDResourceKind)
 }
 
