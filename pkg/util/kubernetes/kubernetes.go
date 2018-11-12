@@ -74,8 +74,8 @@ func GetPodNames(pods []*v1.Pod) []string {
 	return res
 }
 
-func MakeNATSImage(version string) string {
-	return fmt.Sprintf("nats:%v", version)
+func MakeNATSImage(version string, serverImage string) string {
+	return fmt.Sprintf("%s:%v", serverImage, version)
 }
 
 func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
@@ -545,7 +545,7 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	container := natsPodContainer(clusterName, cs.Version)
+	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage)
 	container = containerWithLivenessProbe(container, natsLivenessProbe())
 
 	// In case TLS was enabled as part of the NATS cluster
