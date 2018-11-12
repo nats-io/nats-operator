@@ -27,7 +27,7 @@ import (
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(clusterName, version string) v1.Container {
+func natsPodContainer(clusterName, version string, serverImage string) v1.Container {
 	return v1.Container{
 		Env: []v1.EnvVar{
 			{
@@ -40,7 +40,7 @@ func natsPodContainer(clusterName, version string) v1.Container {
 			},
 		},
 		Name:  "nats",
-		Image: MakeNATSImage(version),
+		Image: MakeNATSImage(version, serverImage),
 		Ports: []v1.ContainerPort{
 			{
 				Name:          "cluster",

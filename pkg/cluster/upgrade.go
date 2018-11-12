@@ -36,7 +36,7 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 	oldpod := pod.DeepCopy()
 
 	c.logger.Infof("upgrading the NATS member %v from %s to %s", pod.GetName(), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
-	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version)
+	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version, c.cluster.Spec.ServerImage)
 	pod.Labels[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
 	kubernetesutil.SetNATSVersion(pod, c.cluster.Spec.Version)
 

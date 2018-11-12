@@ -74,6 +74,8 @@ type ClusterSpec struct {
 	//
 	Version string `json:"version"`
 
+	ServerImage string `json:"serverImage"`
+
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
 
@@ -188,6 +190,9 @@ func (c *ClusterSpec) Validate() error {
 func (c *ClusterSpec) Cleanup() {
 	if len(c.Version) == 0 {
 		c.Version = constants.DefaultNatsVersion
+	}
+	if len(c.ServerImage) == 0 {
+		c.ServerImage = constants.DefaultServerImage
 	}
 
 	c.Version = strings.TrimLeft(c.Version, "v")
