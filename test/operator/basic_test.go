@@ -2,7 +2,6 @@ package operatortests
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +10,7 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	k8srestapi "k8s.io/client-go/rest"
@@ -24,6 +23,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/controller"
 	contextutil "github.com/nats-io/nats-operator/pkg/util/context"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	testutil "github.com/nats-io/nats-operator/test/util"
 )
 
 func TestRegisterCRD(t *testing.T) {
@@ -34,7 +34,7 @@ func TestRegisterCRD(t *testing.T) {
 
 	// Create a context with a timeout of 10 seconds.
 	// This should provide enough time for the CRDs to be registered, and is small enough for the test not to take long.
-	ctx := contextutil.WithTimeout(10*time.Second)
+	ctx := contextutil.WithTimeout(10 * time.Second)
 
 	// Run the controller for NatsCluster resources in the foreground.
 	// It will stop when the context times out, and the test will proceed to verify that the CRDs have been are created.
@@ -116,24 +116,19 @@ func TestCreateConfigSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for the pods to be created
-	params := k8smetav1.ListOptions{
-		LabelSelector: fmt.Sprintf("app=nats,nats_cluster=%s", name),
-	}
-	var podList *k8sv1.PodList
-	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
-		podList, err = cl.kc.Pods(namespace).List(params)
-		if err != nil {
-			return false, err
-		}
-		if len(podList.Items) < size {
-			return false, nil
-		}
-
-		return true, nil
+	// Wait for the cluster to reach the desired size.
+	err = testutil.WaitForNatsClusterCondition(cl.ocli, cluster, func(event watch.Event) (bool, error) {
+		newCluster := event.Object.(*v1alpha2.NatsCluster)
+		return newCluster.Status.Size == size, nil
 	})
 	if err != nil {
-		t.Errorf("Error waiting for pods to be created: %s", err)
+		t.Errorf("failed to wait for cluster size: %v", err)
+	}
+
+	// List all pods belonging to the NatsCluster resource.
+	pods, err := cl.kc.Pods(cluster.Namespace).List(kubernetesutil.ClusterListOpt(cluster.Name))
+	if err != nil {
+		t.Errorf("failed to list pods for cluster: %v", err)
 	}
 
 	cm, err := cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
@@ -144,7 +139,7 @@ func TestCreateConfigSecret(t *testing.T) {
 	if !ok {
 		t.Error("Config map was missing")
 	}
-	for _, pod := range podList.Items {
+	for _, pod := range pods.Items {
 		if !strings.Contains(string(conf), pod.Name) {
 			t.Errorf("Could not find pod %q in config", pod.Name)
 		}
@@ -204,24 +199,19 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Wait for the pods to be created
-	params := k8smetav1.ListOptions{
-		LabelSelector: fmt.Sprintf("app=nats,nats_cluster=%s", name),
-	}
-	var podList *k8sv1.PodList
-	err = k8swaitutil.Poll(3*time.Second, 1*time.Minute, func() (bool, error) {
-		podList, err = cl.kc.Pods(namespace).List(params)
-		if err != nil {
-			return false, err
-		}
-		if len(podList.Items) < size {
-			return false, nil
-		}
-
-		return true, nil
+	// Wait for the cluster to reach the desired size.
+	err = testutil.WaitForNatsClusterCondition(cl.ocli, cluster, func(event watch.Event) (bool, error) {
+		newCluster := event.Object.(*v1alpha2.NatsCluster)
+		return newCluster.Status.Size == size, nil
 	})
 	if err != nil {
-		t.Errorf("Error waiting for pods to be created: %s", err)
+		t.Errorf("failed to wait for cluster size: %v", err)
+	}
+
+	// List all pods belonging to the NatsCluster resource.
+	pods, err := cl.kc.Pods(cluster.Namespace).List(kubernetesutil.ClusterListOpt(cluster.Name))
+	if err != nil {
+		t.Errorf("failed to list pods for cluster: %v", err)
 	}
 
 	cm, err = cl.kc.Secrets(namespace).Get(name, k8smetav1.GetOptions{})
@@ -232,7 +222,7 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 	if !ok {
 		t.Error("Config map was missing")
 	}
-	for _, pod := range podList.Items {
+	for _, pod := range pods.Items {
 		if !strings.Contains(string(conf), pod.Name) {
 			t.Errorf("Could not find pod %q in config", pod.Name)
 		}
@@ -240,12 +230,12 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 }
 
 type clients struct {
-	kc         k8sclient.CoreV1Interface
-	kcrdc      k8scrdclient.Interface
-	restcli    *k8srestapi.RESTClient
-	config     *k8srestapi.Config
-	ncli       client.NatsClusterCR
-	ocli       *natsalphav2client.NatsV1alpha2Client
+	kc      k8sclient.CoreV1Interface
+	kcrdc   k8scrdclient.Interface
+	restcli *k8srestapi.RESTClient
+	config  *k8srestapi.Config
+	ncli    client.NatsClusterCR
+	ocli    *natsalphav2client.NatsV1alpha2Client
 
 	// kubeClient is an interface for a client the the Kubernetes base APIs.
 	kubeClient kubernetes.Interface
@@ -287,8 +277,8 @@ func newKubeClients() (*clients, error) {
 		ncli:    ncli,
 		// Use the already existing client for our API.
 		// TODO Remove and use natsClient alone everywhere in the test suite.
-		ocli:    natsClient.NatsV1alpha2().(*natsalphav2client.NatsV1alpha2Client),
-		config:  cfg,
+		ocli:   natsClient.NatsV1alpha2().(*natsalphav2client.NatsV1alpha2Client),
+		config: cfg,
 
 		kubeClient: kubeClient,
 		natsClient: natsClient,

@@ -99,32 +99,6 @@ func listClustersURI(ns string) string {
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural)
 }
 
-func GetClusterCRDObject(restcli rest.Interface, ns, name string) (*v1alpha2.NatsCluster, error) {
-	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural, name)
-	b, err := restcli.Get().RequestURI(uri).DoRaw()
-	if err != nil {
-		return nil, err
-	}
-	return readClusterCR(b)
-}
-
-func UpdateClusterCRDObject(restcli rest.Interface, ns string, c *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error) {
-	uri := fmt.Sprintf("/apis/%s/namespaces/%s/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural, c.Name)
-	b, err := restcli.Put().RequestURI(uri).Body(c).DoRaw()
-	if err != nil {
-		return nil, err
-	}
-	return readClusterCR(b)
-}
-
-func readClusterCR(b []byte) (*v1alpha2.NatsCluster, error) {
-	cluster := &v1alpha2.NatsCluster{}
-	if err := json.Unmarshal(b, cluster); err != nil {
-		return nil, fmt.Errorf("read cluster CR from json data failed: %v", err)
-	}
-	return cluster, nil
-}
-
 // MustNewKubeExtClient creates a new client for the apiextensions.k8s.io/v1beta1 API.
 func MustNewKubeExtClient(cfg *rest.Config) extsclientset.Interface {
 	return extsclientset.NewForConfigOrDie(cfg)
@@ -191,11 +165,11 @@ func waitCRDReady(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclie
 	// Grab a ListerWatcher with which we can watch the CRD.
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = byCoordinates(crd.Name, crd.Namespace).String()
+			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
 			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().List(options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
-			options.FieldSelector = byCoordinates(crd.Name, crd.Namespace).String()
+			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
 			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(options)
 		},
 	}

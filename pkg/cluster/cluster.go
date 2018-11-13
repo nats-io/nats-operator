@@ -15,514 +15,397 @@
 package cluster
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"math"
 	"reflect"
-	"strconv"
+	"sort"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/kubernetes/pkg/util/slice"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
+	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/debug"
-	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	stringutil "github.com/nats-io/nats-operator/pkg/util/strings"
 )
 
 var (
-	reconcileInterval         = 5 * time.Second
 	podTerminationGracePeriod = int64(5)
 )
 
-type clusterEventType string
-
-const (
-	eventDeleteCluster clusterEventType = "Delete"
-	eventModifyCluster clusterEventType = "Modify"
-)
-
-type clusterEvent struct {
-	typ     clusterEventType
-	cluster *v1alpha2.NatsCluster
-}
-
 type Config struct {
-	ServiceAccount string
-	KubeCli        corev1client.CoreV1Interface
-	OperatorCli    natsalphav2client.NatsV1alpha2Interface
+	KubeCli               corev1client.CoreV1Interface
+	OperatorCli           natsalphav2client.NatsV1alpha2Interface
+	PodLister             corev1listers.PodLister
+	SecretLister          corev1listers.SecretLister
+	ServiceLister         corev1listers.ServiceLister
+	NatsServiceRoleLister natslisters.NatsServiceRoleLister
 }
 
 type Cluster struct {
+	// logger is the logger to use during the current iteration.
 	logger *logrus.Entry
-	// debug logger for self hosted cluster
+	// debugLogger is the debug logger to use during the current iteration.
 	debugLogger *debug.DebugLogger
-
+	// config holds the clients and listers required for the reconciler to operate.
 	config Config
-
+	// cluster holds the NatsCluster resource which we are going to reconcile.
 	cluster *v1alpha2.NatsCluster
-
-	// in memory state of the cluster
-	// status is the source of truth after Cluster struct is materialized.
-	status        v1alpha2.ClusterStatus
-	memberCounter int
-
-	eventCh chan *clusterEvent
-	stopCh  chan struct{}
-
-	tlsConfig *tls.Config
-
-	gc *garbagecollection.GC
+	// originalCluster holds the original, unmodified NatsCluster resource.
+	// Used to create a patch in the end of the reconcile loop.
+	originalCluster *v1alpha2.NatsCluster
 }
 
-func New(config Config, cl *v1alpha2.NatsCluster, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
-	lg := logrus.WithField("pkg", "cluster").WithField("cluster-name", cl.Name)
+// New returns a new instance of the reconciler for NatsCluster resources.
+func New(config Config, cl *v1alpha2.NatsCluster) *Cluster {
+	return &Cluster{
+		logger:          logrus.WithField("pkg", "cluster").WithField("cluster-name", cl.Name),
+		debugLogger:     debug.New(cl.Name),
+		config:          config,
+		cluster:         cl,
+		originalCluster: cl.DeepCopy(),
+	}
+}
 
-	c := &Cluster{
-		logger:      lg,
-		debugLogger: debug.New(cl.Name),
-		config:      config,
-		cluster:     cl,
-		eventCh:     make(chan *clusterEvent, 100),
-		stopCh:      make(chan struct{}),
-		status:      cl.Status.Copy(),
-		gc:          garbagecollection.New(config.KubeCli, cl.Namespace),
+// Reconcile looks at the current state of the associated NatsCluster resource and attempts to drive it towards the desired state.
+func (c *Cluster) Reconcile() error {
+	// Exit immediately in case the NatsCluster resource is marked as paused.
+	if c.cluster.Spec.Paused {
+		c.logger.Infof("control is paused, skipping reconciliation")
+		c.cluster.Status.PauseControl()
+		return c.updateCluster()
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	// Mark the NatsCluster resource as being active.
+	c.cluster.Status.Control()
 
-		if err := c.setup(); err != nil {
-			c.logger.Errorf("cluster failed to setup: %v", err)
-			if c.status.Phase != v1alpha2.ClusterPhaseFailed {
-				c.status.SetReason(err.Error())
-				c.status.SetPhase(v1alpha2.ClusterPhaseFailed)
-				if err := c.updateCRStatus(); err != nil {
-					c.logger.Errorf("failed to update cluster phase (%v): %v", v1alpha2.ClusterPhaseFailed, err)
-				}
-			}
-			return
+	// Take note of the current time so we can later report the duration of the current iteration.
+	start := time.Now()
+
+	// Make sure that both the client and management services for the current cluster have been created.
+	if err := c.checkServices(); err != nil {
+		return fmt.Errorf("failed to create services: %v", err)
+	}
+
+	// Make sure that the configuration secret for the current cluster has been created.
+	if err := c.checkConfigSecret(); err != nil {
+		return fmt.Errorf("failed to create config secret: %s", err)
+	}
+
+	// If the current NatsCluster resource has authentication configured, make sure that the configuration is in sync with the secrets.
+	if c.cluster.Spec.Auth != nil {
+		err := c.checkClientAuthUpdate()
+		if err != nil {
+			return fmt.Errorf("failed to update auth data in config secret: %v", err)
 		}
-		c.run(stopC)
-	}()
+	}
 
-	return c
-}
-
-func (c *Cluster) setup() error {
-	err := c.cluster.Spec.Validate()
+	// Poll pods in order to understand which are running and which are pending.
+	_, pending, err := c.pollPods()
 	if err != nil {
-		return fmt.Errorf("invalid cluster spec: %v", err)
+		reconcileFailed.WithLabelValues("failed to poll pods").Inc()
+		return fmt.Errorf("failed to poll pods: %v", err)
 	}
 
-	var shouldCreateCluster bool
-	switch c.status.Phase {
-	case v1alpha2.ClusterPhaseNone:
-		shouldCreateCluster = true
-	case v1alpha2.ClusterPhaseCreating:
-		return errCreatedCluster
-	case v1alpha2.ClusterPhaseRunning:
-		shouldCreateCluster = false
-
-	default:
-		return fmt.Errorf("unexpected cluster phase: %s", c.status.Phase)
+	// If there are pods in pending state, exit cleanly and wait for the next reconcile iteration (which will happen as soon as these pods become running/succeeded/failed).
+	// This should not happen often in practice, as createPod waits for pods to be running before returning, but it is still a good safety measure.
+	if len(pending) > 0 {
+		c.logger.Infof("skipping reconciliation as there are %d pending pods (%v)", len(pending), kubernetesutil.GetPodNames(pending))
+		return nil
 	}
 
-	if shouldCreateCluster {
-		return c.create()
+	// Reconcile the size and version of the cluster.
+	if err := c.checkPods(); err != nil {
+		reconcileFailed.WithLabelValues("failed to reconcile pods").Inc()
+		return fmt.Errorf("failed to reconcile pods: %v", err)
 	}
+
+	// Mark the cluster as ready.
+	c.cluster.Status.SetReadyCondition()
+
+	// Update the status of the NatsCluster resource.
+	if err := c.updateCluster(); err != nil {
+		reconcileFailed.WithLabelValues("failed to update status").Inc()
+		return fmt.Errorf("failed to update status: %v", err)
+	}
+
+	// Take note of the time it took to perform the current iteration and return.
+	reconcileHistogram.WithLabelValues(c.name()).Observe(time.Since(start).Seconds())
 	return nil
 }
 
-func (c *Cluster) create() error {
-	c.status.SetPhase(v1alpha2.ClusterPhaseCreating)
-
-	if err := c.updateCRStatus(); err != nil {
-		return fmt.Errorf("cluster create: failed to update cluster phase (%v): %v", v1alpha2.ClusterPhaseCreating, err)
-	}
-	c.logClusterCreation()
-
-	c.gc.CollectCluster(c.cluster.Name, c.cluster.UID)
-
-	if err := c.setupServices(); err != nil {
-		return fmt.Errorf("cluster create: fail to create client service LB: %v", err)
-	}
-	if err := c.setupConfigMap(); err != nil {
-		return fmt.Errorf("cluster create: fail to create shared config map: %s", err)
-	}
-	return nil
-}
-
-func (c *Cluster) Delete() {
-	c.send(&clusterEvent{typ: eventDeleteCluster})
-}
-
-func (c *Cluster) send(ev *clusterEvent) {
-	select {
-	case c.eventCh <- ev:
-		l, ecap := len(c.eventCh), cap(c.eventCh)
-		if l > int(float64(ecap)*0.8) {
-			c.logger.Warningf("eventCh buffer is almost full [%d/%d]", l, ecap)
-		}
-	case <-c.stopCh:
-	}
-}
-
-func (c *Cluster) run(stopC <-chan struct{}) {
-	clusterFailed := false
-
-	defer func() {
-		if clusterFailed {
-			c.reportFailedStatus()
-
-			c.logger.Infof("deleting the failed cluster")
-			c.delete()
-		}
-
-		close(c.stopCh)
-	}()
-
-	c.status.SetPhase(v1alpha2.ClusterPhaseRunning)
-	if err := c.updateCRStatus(); err != nil {
-		c.logger.Warningf("update initial CR status failed: %v", err)
-	}
-	c.logger.Infof("start running...")
-
-	// Track the account service roles for changes.
-	cRoles := make(map[types.UID]v1alpha2.NatsServiceRole)
-	var secretLastResourceVersion string
-	var rerr error
-	for {
-		select {
-		case <-stopC:
-			return
-		case event := <-c.eventCh:
-			switch event.typ {
-			case eventModifyCluster:
-				if isSpecEqual(event.cluster.Spec, c.cluster.Spec) {
-					break
-				}
-				// TODO: we can't handle another upgrade while an upgrade is in progress
-				c.logSpecUpdate(event.cluster.Spec)
-
-				c.cluster = event.cluster
-
-			case eventDeleteCluster:
-				c.logger.Infof("cluster is deleted by the user")
-				clusterFailed = true
-				return
-			default:
-				panic("unknown event type" + event.typ)
-			}
-
-		case <-time.After(reconcileInterval):
-			start := time.Now()
-
-			if c.cluster.Spec.Paused {
-				c.status.PauseControl()
-				c.logger.Infof("control is paused, skipping reconciliation")
-				continue
-			} else {
-				c.status.Control()
-			}
-
-			if c.cluster.Spec.Auth != nil {
-				err := checkClientAuthUpdate(c, secretLastResourceVersion, cRoles)
-				if err != nil {
-					c.logger.Errorf("failed to update auth: %v", err)
-					continue
-				}
-			}
-
-			running, pending, err := c.pollPods()
-			if err != nil {
-				c.logger.Errorf("fail to poll pods: %v", err)
-				reconcileFailed.WithLabelValues("failed to poll pods").Inc()
-				continue
-			}
-
-			if len(pending) > 0 {
-				// Pod startup might take long, e.g. pulling image. It would deterministically become running or succeeded/failed later.
-				c.logger.Infof("skip reconciliation: running (%v), pending (%v)", kubernetesutil.GetPodNames(running), kubernetesutil.GetPodNames(pending))
-				reconcileFailed.WithLabelValues("not all pods are running").Inc()
-				continue
-			}
-
-			rerr = c.reconcile(running)
-			if rerr != nil {
-				c.logger.Errorf("failed to reconcile: %v", rerr)
-				break
-			}
-
-			if err := c.updateCRStatus(); err != nil {
-				c.logger.Warningf("periodic update CR status failed: %v", err)
-			}
-
-			reconcileHistogram.WithLabelValues(c.name()).Observe(time.Since(start).Seconds())
-		}
-
-		if rerr != nil {
-			reconcileFailed.WithLabelValues(rerr.Error()).Inc()
-		}
-
-		if isFatalError(rerr) {
-			clusterFailed = true
-			c.status.SetReason(rerr.Error())
-
-			c.logger.Errorf("cluster failed: %v", rerr)
-			return
-		}
-	}
-}
-
-func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles map[types.UID]v1alpha2.NatsServiceRole) error {
+func (c *Cluster) checkClientAuthUpdate() error {
 	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
-		// Look for updates in the secret used for auth then
-		// trigger config reload in case there are new updates.
-		authSecret := c.cluster.Spec.Auth.ClientsAuthSecret
-		result, err := c.config.KubeCli.Secrets(c.cluster.Namespace).Get(authSecret, metav1.GetOptions{})
-		if err == nil && secretLastResourceVersion != result.ResourceVersion {
-			secretLastResourceVersion = result.ResourceVersion
-			return c.updateConfigMap()
+		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
+		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
+		result, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(c.cluster.Spec.Auth.ClientsAuthSecret)
+		if err != nil {
+			return err
+		}
+		if c.cluster.GetClientAuthSecretResourceVersion() != result.ResourceVersion {
+			c.cluster.SetClientAuthSecretResourceVersion(result.ResourceVersion)
+			return c.updateConfigSecret()
 		}
 	} else if c.cluster.Spec.Auth.EnableServiceAccounts {
+		// Get the hash of the comma-separated list of NatsServiceRole UIDs associated with the current NATS cluster.
+		currentHash := c.cluster.GetNatsServiceRolesHash()
+
 		// Lookup for service roles that may have been created.
 		// TODO(wallyqs): Should also get secrets in case they were deleted
 		// so that they get recreated in case of manual deletion, this would
 		// enable revoking on the fly the tokens since reload would override
 		// the previous credentials.
-		roleSelector := map[string]string{
-			"nats_cluster": c.cluster.Name,
-		}
-		roles, err := c.config.OperatorCli.NatsServiceRoles(c.cluster.Namespace).List(metav1.ListOptions{
-			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
-		})
+		roles, err := c.config.NatsServiceRoleLister.NatsServiceRoles(c.cluster.Namespace).List(kubernetesutil.NatsServiceRoleLabelSelectorForCluster(c.cluster.Name))
 		if err != nil {
 			return err
 		}
 
-		var shouldUpdate bool
+		// Sort NatsServiceRole resources by their UID so we can get predictable results.
+		sort.Slice(roles, func(i, j int) bool {
+			return roles[i].UID < roles[j].UID
+		})
 
-		// Check in case there were changes/additions in the number of roles.
-		aRoles := make(map[types.UID]v1alpha2.NatsServiceRole)
-		for _, role := range roles.Items {
-
-			// Update in case not present or the resource version is different.
-			cRole, ok := cRoles[role.UID]
-			if !ok {
-				shouldUpdate = true
-			} else if cRole.ResourceVersion != role.ResourceVersion {
-				shouldUpdate = true
-			}
-			aRoles[role.UID] = role
-			cRoles[role.UID] = role
+		// Compute the hash of the comma-separated list of NatsServiceRole UIDs and corresponding resource versions targeting the current NATS cluster.
+		desiredUIDs := make([]string, len(roles))
+		for _, role := range roles {
+			desiredUIDs = append(desiredUIDs, fmt.Sprintf("%s:%s", role.UID, role.ResourceVersion))
 		}
+		desiredHash := stringutil.HashSlice(desiredUIDs)
 
-		// Check in case there were deletions in the number of roles.
-		for uid := range cRoles {
-			if _, ok := aRoles[uid]; !ok {
-				shouldUpdate = true
-
-				// Stop tracking this role.
-				delete(cRoles, uid)
-			}
+		// Update the configuration if the hashes differ.
+		if currentHash != desiredHash {
+			c.cluster.SetNatsServiceRolesHash(desiredHash)
+			return c.updateConfigSecret()
 		}
-		if shouldUpdate {
-			return c.updateConfigMap()
+	}
+	return nil
+}
+
+// checkServices makes sure that the client and management services exist.
+func (c *Cluster) checkServices() error {
+	var (
+		// mustCreateClientService indicates whether we must create the client service.
+		mustCreateClientService bool
+		// mustCreateManagementService indicates whether we must create the management service.
+		mustCreateManagementService bool
+	)
+
+	// Check whether the client service already exists.
+	if _, err := c.config.ServiceLister.Services(c.cluster.Namespace).Get(kubernetesutil.ClientServiceName(c.cluster.Name)); err != nil {
+		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			// The client service does not exist, so we must create it.
+			mustCreateClientService = true
+		} else {
+			// We've got an unexpected error while getting the service.
+			return err
+		}
+	}
+
+	// Create the client service if required.
+	if mustCreateClientService {
+		if err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
+			return err
+		}
+	}
+
+	// Check whether we need to create the management service.
+	if _, err := c.config.ServiceLister.Services(c.cluster.Namespace).Get(kubernetesutil.ManagementServiceName(c.cluster.Name)); err != nil {
+		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			// The management service does not exist, so we must create it.
+			mustCreateManagementService = true
+		} else {
+			// We've got an unexpected error while getting the service.
+			return err
+		}
+	}
+
+	// Create the management service if required.
+	if mustCreateManagementService {
+		if err := kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func isSpecEqual(s1, s2 v1alpha2.ClusterSpec) bool {
-	if s1.Size != s2.Size || s1.Paused != s2.Paused || s1.Version != s2.Version {
-		return false
-	}
-	return true
-}
+// checkConfigSecret makes sure that the secret used to hold the configuration for the current NATS cluster exists.
+func (c *Cluster) checkConfigSecret() error {
+	var (
+		// mustCreateSecret indicates whether we must create the configuration secret.
+		mustCreateSecret bool
+	)
 
-func (c *Cluster) Update(cl *v1alpha2.NatsCluster) {
-	c.send(&clusterEvent{
-		typ:     eventModifyCluster,
-		cluster: cl,
-	})
-}
-
-func (c *Cluster) delete() {
-	c.gc.CollectCluster(c.cluster.Name, garbagecollection.NullUID)
-}
-
-func (c *Cluster) setupServices() error {
-	err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner())
-	if err != nil {
-		return err
+	// Check whether the secret backing up the configuration already exists.
+	if _, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(kubernetesutil.ConfigSecret(c.cluster.Name)); err != nil {
+		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			// The configmap does not exist, so we must create it.
+			mustCreateSecret = true
+		} else {
+			// We've got an unexpected error while getting the configmap.
+			return err
+		}
 	}
 
-	return kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner())
+	// Create the secret if required.
+	if mustCreateSecret {
+		return kubernetesutil.CreateConfigSecret(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+	}
+
+	return nil
 }
 
-func (c *Cluster) setupConfigMap() error {
-	return kubernetesutil.CreateConfigMap(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
+func (c *Cluster) updateConfigSecret() error {
+	return kubernetesutil.UpdateConfigSecret(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
 }
 
-func (c *Cluster) updateConfigMap() error {
-	return kubernetesutil.UpdateConfigMap(c.config.KubeCli, c.config.OperatorCli, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner())
-}
-
+// createPod creates a pod using the first available name.
+// Pod names are of the form "<natscluster-name>-<idx>", where "<idx>" is a base-16 integer.
 func (c *Cluster) createPod() (*v1.Pod, error) {
-	var name string
-
-	// Grab the names of the nodes that ought to be in the cluster
-	// and use the first one that is not in the list.
-	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
+	// Grab the list of currently running and pending pods.
+	// It is acceptable to call pollPods everytime we create a new pod as it uses the pod lister (instead of hitting the Kubernetes API directly).
+	running, pending, err := c.pollPods()
 	if err != nil {
 		return nil, err
 	}
-	clusterPods := make([]string, 0)
-	for _, pod := range podList.Items {
-		// Skip pods that have failed
-		switch pod.Status.Phase {
-		case "Failed":
-			continue
-		}
-		clusterPods = append(clusterPods, pod.Name)
+	pods := append(running, pending...)
+
+	// Grab a slice containing all existing pod names.
+	podNames := make([]string, len(pods))
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
 	}
 
-	// Restore from the number of currently available nodes already.
-	// currentNames := strings.Split(cNames, ",")
-	if len(clusterPods) >= c.cluster.Spec.Size {
-		// Some of the nodes might be failing but still skip creating
-		// new ones until old ones are not being observed anymore.
-		return nil, fmt.Errorf("nats: maximum cluster size")
-	}
-NextName:
+	var (
+		name string
+	)
+
+	// Use the first name not found in the podNames slice.
 	for i := 1; i <= c.cluster.Spec.Size; i++ {
-		n := strconv.AppendInt([]byte(""), int64(i), 16)
-		cName := fmt.Sprintf("%s-%s", c.cluster.Name, n)
-		// Reuse first name not found in the list that was in the config map
-		var found bool
-		for _, pname := range clusterPods {
-			if pname == cName {
-				found = true
-				continue NextName
-			}
-		}
-		if !found {
-			name = cName
-			break NextName
+		name = fmt.Sprintf("%s-%x", c.cluster.Name, i)
+		if !slice.ContainsString(podNames, name, nil) {
+			break
 		}
 	}
+
+	// Create the pod.
 	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
-	return c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for the pod to be running and ready.
+	c.logger.Infof("waiting for pod %q to become ready", pod.Name)
+	if err := kubernetesutil.WaitUntilPodReady(c.config.KubeCli, pod); err != nil {
+		return nil, err
+	}
+	c.logger.Infof("pod %q became ready", pod.Name)
+
+	// Append the newly created pod to the slice of existing pods.
+	pods = append(pods, pod)
+	return pod, err
 }
 
-func (c *Cluster) removePod(name string) error {
-	ns := c.cluster.Namespace
-	opts := metav1.NewDeleteOptions(podTerminationGracePeriod)
-	err := c.config.KubeCli.Pods(ns).Delete(name, opts)
+// removePod removes the specified pod from the current NATS cluster.
+func (c *Cluster) removePod(pod *v1.Pod) error {
+	// Delete the specified pod.
+	err := c.config.KubeCli.Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(podTerminationGracePeriod))
 	if err != nil {
 		if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
 		}
 		if c.isDebugLoggerEnabled() {
-			c.debugLogger.LogMessage(fmt.Sprintf("pod (%s) not found while trying to delete it", name))
+			c.debugLogger.LogMessage(fmt.Sprintf("pod %q not found while trying to delete it", pod.Name))
 		}
+		// Exit in order to avoid waiting for a pod that doesn't exist anymore.
+		return nil
+	}
+	// Wait until the specified pod has been deleted.
+	err = kubernetesutil.WaitUntilPodCondition(c.config.KubeCli, pod, func(event watch.Event) (bool, error) {
+		return event.Type == watch.Deleted, nil
+	})
+	if err != nil {
+		return err
 	}
 	if c.isDebugLoggerEnabled() {
-		c.debugLogger.LogPodDeletion(name)
+		c.debugLogger.LogPodDeletion(pod.Name)
 	}
 	return nil
 }
 
+// pollPods lists pods belonging to the current NATS cluster, and returns the list of running and pending pods.
 func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
-	podList, err := c.config.KubeCli.Pods(c.cluster.Namespace).List(kubernetesutil.ClusterListOpt(c.cluster.Name))
+	// List existing pods belonging to the current NATS cluster.
+	pods, err := c.config.PodLister.Pods(c.cluster.Namespace).List(kubernetesutil.LabelSelectorForCluster(c.cluster.Name))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
 	}
 
-	for i := range podList.Items {
-		pod := &podList.Items[i]
+	// Iterate over pods in order to obtain a list of running and pending ones.
+	for _, pod := range pods {
+		// Ignore pods without owner references.
 		if len(pod.OwnerReferences) < 1 {
-			c.logger.Warningf("pollPods: ignore pod %v: no owner", pod.Name)
+			c.logger.Warningf("ignoring orphaned pod %q", pod.Name)
 			continue
 		}
+		// Ignore pods with invalid owner references.
 		if pod.OwnerReferences[0].UID != c.cluster.UID {
-			c.logger.Warningf("pollPods: ignore pod %v: owner (%v) is not %v",
-				pod.Name, pod.OwnerReferences[0].UID, c.cluster.UID)
+			c.logger.Warningf("ignoring pod %q with unexpected owner %q", pod.Name, pod.OwnerReferences[0].UID)
 			continue
 		}
+		// Compute the list of running and pending pods.
+		// TODO: Take into account failed pods, so they can be handled as well, or use an adequate restart policy when creating pods.
 		switch pod.Status.Phase {
 		case v1.PodRunning:
 			running = append(running, pod)
 		case v1.PodPending:
 			pending = append(pending, pod)
+		default:
+			c.logger.Warningf("ignoring pod %q with unexpected phase %q", pod.Name, pod.Status.Phase)
 		}
 	}
 
+	// Sort running and pending pods by their name in order to keep existing scale up/down behavior intact.
+	sort.Slice(running, func(i, j int) bool {
+		return running[i].Name < running[j].Name
+	})
+	sort.Slice(pending, func(i, j int) bool {
+		return pending[i].Name < pending[j].Name
+	})
+
+	// Return the computed lists of running and pending pods.
 	return running, pending, nil
 }
 
-func (c *Cluster) updateCRStatus() error {
-	if reflect.DeepEqual(c.cluster.Status, c.status) {
+// updateCluster patches the current NatsCluster resource in order for it to reflect the current state.
+func (c *Cluster) updateCluster() error {
+	// Return if there are no changes.
+	if reflect.DeepEqual(c.originalCluster, c.cluster) {
 		return nil
 	}
 
-	newCluster := c.cluster
-	newCluster.Status = c.status
-	newCluster, err := kubernetesutil.UpdateClusterCRDObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, newCluster)
+	patchBytes, err := kubernetesutil.CreatePatch(c.originalCluster, c.cluster, &v1alpha2.NatsCluster{})
 	if err != nil {
-		return fmt.Errorf("failed to update CR status: %v", err)
+		return err
 	}
 
-	c.cluster = newCluster
-
+	// Patch the NatsCluster resource.
+	_, err = c.config.OperatorCli.NatsClusters(c.cluster.Namespace).Patch(c.cluster.Name, types.MergePatchType, patchBytes)
+	if err != nil {
+		return fmt.Errorf("failed to update status: %v", err)
+	}
 	return nil
-}
-
-func (c *Cluster) reportFailedStatus() {
-	retryInterval := 5 * time.Second
-
-	f := func() (bool, error) {
-		c.status.SetPhase(v1alpha2.ClusterPhaseFailed)
-		err := c.updateCRStatus()
-		if err == nil || kubernetesutil.IsKubernetesResourceNotFoundError(err) {
-			return true, nil
-		}
-
-		if !apierrors.IsConflict(err) {
-			c.logger.Warningf("retry report status in %v: fail to update: %v", retryInterval, err)
-			return false, nil
-		}
-
-		cl, err := kubernetesutil.GetClusterCRDObject(c.config.KubeCli.RESTClient(), c.cluster.Namespace, c.cluster.Name)
-		if err != nil {
-			// Update (PUT) will return conflict even if object is deleted since we have UID set in object.
-			// Because it will check UID first and return something like:
-			// "Precondition failed: UID in precondition: 0xc42712c0f0, UID in object meta: ".
-			if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
-				return true, nil
-			}
-			c.logger.Warningf("retry report status in %v: fail to get latest version: %v", retryInterval, err)
-			return false, nil
-		}
-		c.cluster = cl
-		return false, nil
-
-	}
-
-	retryutil.Retry(retryInterval, math.MaxInt32, f)
 }
 
 func (c *Cluster) name() string {
@@ -538,31 +421,6 @@ func (c *Cluster) logClusterCreation() {
 	c.logger.Info("creating cluster with Spec:")
 	for _, m := range strings.Split(string(specBytes), "\n") {
 		c.logger.Info(m)
-	}
-}
-
-func (c *Cluster) logSpecUpdate(newSpec v1alpha2.ClusterSpec) {
-	oldSpecBytes, err := json.MarshalIndent(c.cluster.Spec, "", "    ")
-	if err != nil {
-		c.logger.Errorf("failed to marshal cluster spec: %v", err)
-	}
-	newSpecBytes, err := json.MarshalIndent(newSpec, "", "    ")
-	if err != nil {
-		c.logger.Errorf("failed to marshal cluster spec: %v", err)
-	}
-
-	c.logger.Infof("spec update: Old Spec:")
-	for _, m := range strings.Split(string(oldSpecBytes), "\n") {
-		c.logger.Info(m)
-	}
-
-	c.logger.Infof("New Spec:")
-	for _, m := range strings.Split(string(newSpecBytes), "\n") {
-		c.logger.Info(m)
-	}
-
-	if c.isDebugLoggerEnabled() {
-		c.debugLogger.LogClusterSpecUpdate(string(oldSpecBytes), string(newSpecBytes))
 	}
 }
 
