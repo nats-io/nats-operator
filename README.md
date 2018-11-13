@@ -409,39 +409,3 @@ $ docker build -f docker/reloader/Dockerfile . <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.
-
-### Updating the `NatsCluster` and `NatsServiceRole` types (code generation)
-
-If you are adding a new field to the `NatsCluster` or `NatsServiceRole` types in  `pkg/apis/nats/v1alpha2`, then you must run the code generation step after doing so:
-
-```sh
-$ make gen
-```
-
-This will update the following files and directories in order to reflect the changes:
-
-```text
-pkg
-├── apis
-│   └── nats
-│       └── v1alpha2
-│           └── zz_generated.deepcopy.go (GENERATED)
-└── client (GENERATED)
-```
-
-### Running outside the cluster for debugging
-
-For debugging purposes, it is also possible to run the operator 
-outside of the cluster without having to build an image:
-
-```
-MY_POD_NAMESPACE=default MY_POD_NAME=nats-operator go run cmd/operator/main.go --debug-kube-config-path=$HOME/.kube/config
-```
-
-### Direct access to the cluster
-
-For debugging and development you might want to access the NATS cluster directly. For example, if you created the cluster with name `example-nats-cluster` in namespace `nats-io` you can forward ports of the pod with name `example-nats-cluster-1` as follows:
-
-```
-$ kubectl port-forward -n nats-io example-nats-cluster-1 4222:4222
-```
