@@ -1,4 +1,4 @@
-// Copyright 2017 The nats-operator Authors
+// Copyright 2018 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package kubernetes
+package strings
 
 import (
-	"fmt"
-
-	"k8s.io/apimachinery/pkg/fields"
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 )
 
-// ByCoordinates returns a field selector that can be used to filter Kubernetes resources based on their name and namespace.
-func ByCoordinates(namespace, name string) fields.Selector {
-	return fields.ParseSelectorOrDie(fmt.Sprintf("metadata.name==%s,metadata.namespace==%s", name, namespace))
+// HashSlice creates an unique identifier for a given slice of strings.
+func HashSlice(s []string) string {
+	h := sha256.New()
+	h.Write([]byte(strings.Join(s[:], ",")))
+	return hex.EncodeToString(h.Sum(nil))
 }

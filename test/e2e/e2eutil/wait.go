@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/constants"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
@@ -255,7 +255,7 @@ func WaitUntilOperatorReady(kubecli corev1.CoreV1Interface, namespace, name stri
 func countRoutes(kubecli corev1.CoreV1Interface, namespace, name string) (int, error) {
 	// Check the "/routez" endpoint for the number of established routes.
 	b, err := kubecli.
-	    RESTClient().
+		RESTClient().
 		Get().
 		Namespace(namespace).
 		Resource("pods").

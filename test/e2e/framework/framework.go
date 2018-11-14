@@ -105,7 +105,7 @@ func (f *Framework) SetupNatsOperator() error {
 				{
 					Name:            "nats-operator",
 					Image:           f.opImage,
-					ImagePullPolicy: v1.PullAlways,
+					ImagePullPolicy: v1.PullIfNotPresent,
 					Command:         cmd,
 					Env: []v1.EnvVar{
 						{
@@ -130,7 +130,7 @@ func (f *Framework) SetupNatsOperator() error {
 					},
 				},
 			},
-			RestartPolicy: v1.RestartPolicyNever,
+			RestartPolicy:      v1.RestartPolicyNever,
 			ServiceAccountName: "nats-operator",
 		},
 	}

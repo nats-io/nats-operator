@@ -118,3 +118,8 @@ func (c *genericController) enqueue(obj interface{}) {
 		c.workqueue.AddRateLimited(key)
 	}
 }
+
+// enqueueByCoordinates takes a namespace and a name and puts "namespace/name" onto the work queue.
+func (c *genericController) enqueueByCoordinates(namespace, name string) {
+	c.workqueue.AddRateLimited(fmt.Sprintf("%s/%s", namespace, name))
+}
