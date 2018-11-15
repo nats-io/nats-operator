@@ -38,12 +38,20 @@ rules:
 # Allow actions on basic Kubernetes objects
 - apiGroups: [""]
   resources:
-  - configmaps
-  - secrets
-  - pods
   - services
   - serviceaccounts
   - serviceaccounts/token
-  - endpoints
+  verbs: ["get"]
+- apiGroups: [""]
+  resources:
   - events
-  verbs: ["*"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources:
+  - endpoints
+  - secrets
+  verbs: ["list", "get", "update"]
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["list", "get", "create"]
