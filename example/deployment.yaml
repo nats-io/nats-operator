@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: nats-operator
-        image: connecteverything/nats-operator:0.2.3-v1alpha2
+        image: connecteverything/nats-operator:0.3.0-v1alpha2
         imagePullPolicy: Always
         ports:
         - name: readyz
