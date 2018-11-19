@@ -1,8 +1,9 @@
-sudo: required
+dist: xenial
 
 language: go
 go:
 - "1.10.x"
+go_import_path: github.com/nats-io/nats-operator
 
 env:
 - KUBERNETES_CONFIG_FILE=$HOME/.kube/config CHANGE_MINIKUBE_NONE_USER=true
@@ -13,15 +14,15 @@ install:
 
 before_script:
 - go version
-- curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.10.0/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-- curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.28.0/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
-- sudo minikube start --vm-driver=none --kubernetes-version=v1.10.0 --bootstrapper=localkube --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" --extra-config=apiserver.service-account-signing-key-file=/var/lib/localkube/certs/apiserver.key --extra-config=apiserver.service-account-issuer=api --extra-config=apiserver.service-account-api-audiences=api --extra-config=apiserver.service-account-key-file=/var/lib/localkube/certs/sa.pub
+- curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.10.10/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+- curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.30.0/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+- curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v0.18.0/skaffold-linux-amd64 && chmod +x skaffold && sudo mv skaffold /usr/local/bin/
+- sudo minikube start --vm-driver=none --kubernetes-version=v1.10.10 --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key --extra-config=apiserver.service-account-issuer=api --extra-config=apiserver.service-account-api-audiences=api --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub
 - minikube update-context
 - JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}'; until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do sleep 1; done
 
 script:
 - kubectl cluster-info
-- cd $GOPATH/src/github.com/nats-io/nats-operator/test/ && ./prepare-secrets.sh
-- cd $GOPATH/src/github.com/nats-io/nats-operator/test/operator/ && go test ./... -v
+- cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/reloader/ && go test ./... -v
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/rbac && ./rbac-test.sh

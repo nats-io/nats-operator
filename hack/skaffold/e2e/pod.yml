@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nats-operator-e2e
+spec:
+  containers:
+  - name: nats-operator-e2e
+    image: gcr.io/project-id/nats-operator-e2e
+    args:
+    - /nats-operator-e2e
+    - -test.v
+  # TODO: Create and use a nats-operator-e2e service account.
+  serviceAccountName: nats-operator
+  restartPolicy: Never

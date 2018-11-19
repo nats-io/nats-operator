@@ -57,7 +57,7 @@ pkg
 To build the `nats-operator` binary, you must run:
 
 ```console
-$ make build
+$ make build.operator
 ```
 
 This will build a static binary targeting `linux-amd64`, suitable to be copied over to a container image.
@@ -90,3 +90,39 @@ $ make run PROFILE=gke
 ```
 
 To stop execution and cleanup the deployment, hit `Ctrl+C`.
+
+## Testing
+
+`nats-operator` includes an end-to-end test suite that is used to validate the implementation.
+As the test suite depends on having certain, advanced features enabled on the target Kubernetes cluster, Minikube is currently the only supported environment for running the test suite.
+To launch a Minikube cluster suitable for running the end-to-end test suite, you may run:
+
+```console
+$ minikube start \
+    --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
+    --extra-config=apiserver.service-account-issuer=api \
+    --extra-config=apiserver.service-account-api-audiences=api \
+    --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub \
+    --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" \
+    --kubernetes-version=v1.10.10
+```
+
+Then, to run the test suite against the resulting Minikube cluster, you may simply run:
+
+```console
+$ make e2e
+```
+
+Executing this command will do several things in background:
+
+1. Create the TLS secrets required for testing if they don't exist already.
+1. Build the `nats-operator` binary locally.
+1. Build a container image containing the `nats-operator` binary and deploy it to the Kubernetes cluster.
+1. Build the `nats-operator-e2e` binary (which contains the test suite) locally.
+1. Build a container image containing the `nats-operator-e2e` binary and deploy it to the Kubernetes cluster.
+1. Wait for the `nats-operator` and `nats-operator-e2e` pods to be running.
+1. Start streaming logs from the `nats-operator-e2e` pod and wait for it to terminate.
+1. Delete the `nats-operator` and `nats-operator-e2e` pods.
+1. Exit with the same exit code as the main container of the `nats-operator-e2e` pod.
+
+This allows for running the test suite from _within_ the Kubernetes cluster (hence allowing for full connectivity to the pod network) while keeping the whole process simple enough to be used in day-to-day development and CI.

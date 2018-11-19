@@ -1,3 +1,10 @@
+SHELL := /bin/bash
+
+# build.e2e builds the nats-operator-e2e test binary.
+.PHONY: build.e2e
+build.e2e:
+	@GOOS=linux GOARCH=amd64 go test -c -o build/nats-operator-e2e ./test/e2e/*.go
+
 # build.operator builds the nats-operator binary.
 .PHONY: build.operator
 build.operator: gen
@@ -23,13 +30,24 @@ dep:
 		git fetch origin && \
 		git checkout -f kubernetes-$(KUBERNETES_VERSION) --quiet
 
-# run deploys nats-operator to the Kubernetes cluster targeted by the current kubeconfig.
+# e2e runs the end-to-end test suite.
+.PHONY: e2e
+e2e: KUBECONFIG ?= $(HOME)/.kube/config
+e2e:
+	@./test/prepare-secrets.sh
+	MODE=run PROFILE=local TARGET=operator $(MAKE) run
+	MODE=run PROFILE=local TARGET=e2e $(MAKE) run
+	@go test -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -wait
+
+# run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run
+.SECONDEXPANSION:
 run: MODE ?= dev
 run: PROFILE ?= local
-run: build.operator
+run: TARGET ?= operator
+run: build.$$(TARGET)
 run:
-	@skaffold $(MODE) -f $(PWD)/hack/skaffold/operator/skaffold.yml -p $(PROFILE)
+	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -p $(PROFILE)
 
 # gen executes the code generation step.
 .PHONY: gen

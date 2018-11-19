@@ -121,7 +121,7 @@ func main() {
 
 	// Parse the specified kubeconfig and grab both a configuration object and a Kubernetes client.
 	// The configuration object is required to create clients for our API later on.
-	kubeCfg := kubernetesutil.MustNewKubeConfig()
+	kubeCfg := kubernetesutil.MustNewKubeConfig(local.KubeConfigPath)
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(kubeCfg)
 
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)

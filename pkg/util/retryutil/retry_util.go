@@ -15,6 +15,7 @@
 package retryutil
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -59,4 +60,25 @@ func Retry(interval time.Duration, maxRetries int, f ConditionFunc) error {
 		<-tick.C
 	}
 	return &RetryError{maxRetries}
+}
+
+// RetryWithContext retries f every interval until the specified context times out.
+func RetryWithContext(ctx context.Context, interval time.Duration, f ConditionFunc) error {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("the context timeout has been reached")
+		case <-tick.C:
+			r, err := f()
+			if err != nil {
+				return err
+			}
+			if r {
+				return nil
+			}
+		}
+	}
 }
