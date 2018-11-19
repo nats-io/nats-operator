@@ -1,4 +1,4 @@
-FROM golang:1.10-alpine3.8 AS builder
+FROM golang:1.11-alpine3.8 AS builder
 WORKDIR $GOPATH/src/github.com/nats-io/nats-operator/
 RUN apk add --update git
 RUN go get -u github.com/golang/dep/cmd/dep
