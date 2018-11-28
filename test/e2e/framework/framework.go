@@ -19,19 +19,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/client"
-	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	"github.com/nats-io/nats-operator/pkg/util/probe"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
-
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/client"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/pkg/util/probe"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
 )
 
 var Global *Framework
@@ -132,6 +131,7 @@ func (f *Framework) SetupNatsOperator() error {
 				},
 			},
 			RestartPolicy: v1.RestartPolicyNever,
+			ServiceAccountName: "nats-operator",
 		},
 	}
 
