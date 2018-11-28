@@ -42,7 +42,6 @@ import (
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/debug/local"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
@@ -429,6 +428,14 @@ func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	if err != nil {
 		return err
 	}
+	// Make sure that the secret has the required labels.
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	for key, val := range LabelsForCluster(clusterName) {
+		cm.Labels[key] = val
+	}
+	// Update the configuration.
 	cm.Data[constants.ConfigFileName] = rawConfig
 
 	_, err = kubecli.Secrets(ns).Update(cm)
@@ -671,15 +678,15 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 }
 
 // MustNewKubeConfig builds a configuration object by either reading from the specified kubeconfig file or by using an in-cluster config.
-func MustNewKubeConfig() *rest.Config {
+func MustNewKubeConfig(kubeconfig string) *rest.Config {
 	var (
 		cfg *rest.Config
 		err error
 	)
-	if len(local.KubeConfigPath) == 0 {
+	if len(kubeconfig) == 0 {
 		cfg, err = InClusterConfig()
 	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 	if err != nil {
 		panic(err)

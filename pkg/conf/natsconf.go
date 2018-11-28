@@ -77,3 +77,12 @@ func Marshal(conf *ServerConfig) ([]byte, error) {
 
 	return buf2.Bytes(), nil
 }
+
+// Unmarshal attempts to parse the specified byte array as JSON as a ServerConfig object.
+func Unmarshal(conf []byte) (*ServerConfig, error) {
+	res := &ServerConfig{}
+	if err := json.Unmarshal(conf, res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}

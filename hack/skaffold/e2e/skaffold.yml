@@ -1,0 +1,24 @@
+apiVersion: skaffold/v1alpha5
+kind: Config
+build:
+  artifacts:
+  # "gcr.io/project-id/nats-operator-e2e" is used to make it easy to support both local (Minikube, ...) and GKE deployments.
+  # To deploy to GKE, "project-id" must be replaced by the correct project ID, and the Cloud Build API must be enabled for said project.
+  - image: gcr.io/project-id/nats-operator-e2e
+    docker:
+      # Use a Dockerfile specific for end-to-end testing only.
+      dockerfile: hack/skaffold/e2e/Dockerfile
+deploy:
+  kubectl:
+    manifests:
+    # Deploy the end-to-end test suite pod.
+    - hack/skaffold/e2e/pod.yml
+profiles:
+- name: gke
+  build:
+    # For the "gke" profile, we must use the Google Cloud Build API to build the image.
+    googleCloudBuild: {}
+- name: local
+  build:
+    # For the "local" profile, we must perform the build locally.
+    local: {}

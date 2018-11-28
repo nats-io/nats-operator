@@ -21,39 +21,9 @@ import (
 	"github.com/nats-io/nats-operator/pkg/util/context"
 )
 
-// TestCreateCluster creates a NatsCluster resource and waits for the full mesh to be formed.
-func TestCreateCluster(t *testing.T) {
-	var (
-		size    = 3
-		version = "1.3.0"
-	)
-
-	var (
-		natsCluster *natsv1alpha2.NatsCluster
-		err         error
-	)
-
-	// Create a NatsCluster resource with three members.
-	if natsCluster, err = f.CreateCluster("test-nats-", size, version); err != nil {
-		t.Fatal(err)
-	}
-	// Make sure we cleanup the NatsCluster resource after we're done testing.
-	defer func() {
-		if err = f.DeleteCluster(natsCluster); err != nil {
-			t.Error(err)
-		}
-	}()
-
-	// Wait until the full mesh is formed.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, version); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestPauseControl creates a NatsCluster resource and waits for the full mesh to be formed.
-// Then, it pauses control of the NatsCluster resource and scales it up to five nodes, expecting the operation to NOT be performed.
-// Finally, it resumes control of the NatsCluster resource and waits for the full five-node mesh to be formed.
-func TestPauseControl(t *testing.T) {
+// TestResizeClusterFrom3To5 creates a NatsCluster resource with three members and waits for the full mesh to be formed.
+// Then, it sets a size of 5 in the NatsCluster resource and waits for the scale-up operation to complete.
+func TestResizeClusterFrom3To5(t *testing.T) {
 	var (
 		initialSize = 3
 		finalSize   = 5
@@ -76,33 +46,60 @@ func TestPauseControl(t *testing.T) {
 		}
 	}()
 
-	// Wait until the full mesh is formed.
+	// Wait until the full mesh is formed with the initial size.
 	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, initialSize, version); err != nil {
 		t.Fatal(err)
 	}
 
-	// Pause control of the cluster.
-	natsCluster.Spec.Paused = true
-	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
-		t.Fatal(err)
-	}
-
-	// Scale the cluster up to five members
+	// Scale the cluster up to five members.
 	natsCluster.Spec.Size = finalSize
 	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
 		t.Fatal(err)
 	}
-	// Make sure that the full mesh is NOT formed with the current size (5) within the timeout period.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err == nil {
-		t.Fatalf("the full mesh has formed while control is paused")
+
+	// Wait until the full mesh is formed with the final size.
+	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestResizeClusterFrom5To3 creates a NatsCluster resource with five members and waits for the full mesh to be formed.
+// Then, it sets a size of 3 in the NatsCluster resource and waits for the scale-down operation to complete.
+func TestResizeClusterFrom5To3(t *testing.T) {
+	var (
+		initialSize = 5
+		finalSize   = 3
+		version     = "1.3.0"
+	)
+
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	if natsCluster, err = f.CreateCluster("test-nats-", initialSize, version); err != nil {
+		t.Fatal(err)
+	}
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Wait until the full mesh is formed with the initial size.
+	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, initialSize, version); err != nil {
+		t.Fatal(err)
 	}
 
-	// Resume control of the cluster.
-	natsCluster.Spec.Paused = false
+	// Scale the cluster down to three members.
+	natsCluster.Spec.Size = finalSize
 	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
 		t.Fatal(err)
 	}
-	// Make sure that the full mesh is formed with the current size, since control has been resumed.
+
+	// Wait until the full mesh is formed with the final size.
 	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
 	}

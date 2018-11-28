@@ -15,158 +15,105 @@
 package framework
 
 import (
-	"flag"
+	"bufio"
 	"fmt"
-	"time"
+	"io"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/kubernetes"
 
-	"github.com/nats-io/nats-operator/pkg/client"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	"github.com/nats-io/nats-operator/pkg/util/probe"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
 )
 
-var Global *Framework
+const (
+	// natsOperatorPodName is the name of the nats-operator pod.
+	natsOperatorPodName = "nats-operator"
+	// natsOperatorE2ePodName is the name of the nats-operator-e2e pod.
+	natsOperatorE2ePodName = "nats-operator-e2e"
+)
 
+// Framework encapsulates the configuration for the current run, and provides helper methods to be used during testing.
 type Framework struct {
-	opImage    string
-	KubeClient corev1.CoreV1Interface
-	CRClient   client.NatsClusterCR
-	Namespace  string
+	// KubeClient is an interface to the Kubernetes base APIs.
+	KubeClient kubernetes.Interface
+	// Namespace is the namespace in which we are running.
+	Namespace string
+	// NatsClient is an interface to the nats.io/v1alpha2 API.
+	NatsClient natsclient.Interface
 }
 
-// Setup setups a test framework and points "Global" to it.
-func Setup() error {
-	kubeconfig := flag.String("kubeconfig", "", "kube config path, e.g. $HOME/.kube/config")
-	opImage := flag.String("operator-image", "", "operator image, e.g. nats-io/nats-operator")
-	ns := flag.String("namespace", "default", "e2e test namespace")
-	flag.Parse()
-
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		return err
+// New returns a new instance of the testing framework.
+func New(kubeconfig, namespace string) *Framework {
+	config := kubernetesutil.MustNewKubeConfig(kubeconfig)
+	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(config)
+	natsClient := kubernetesutil.MustNewNatsClientFromConfig(config)
+	return &Framework{
+		KubeClient: kubeClient,
+		Namespace:  namespace,
+		NatsClient: natsClient,
 	}
-	cli, err := corev1.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-	crClient, err := client.NewCRClient(config)
-	if err != nil {
-		return err
-	}
-
-	Global = &Framework{
-		KubeClient: cli,
-		CRClient:   crClient,
-		Namespace:  *ns,
-		opImage:    *opImage,
-	}
-	return Global.setup()
 }
 
-func Teardown() error {
-	if err := Global.deleteNatsOperator(); err != nil {
-		return err
+// Cleanup deletes the nats-operator and nats-operator-e2e pods, ignoring errors.
+func (f *Framework) Cleanup() {
+	for _, pod := range []string{natsOperatorPodName, natsOperatorE2ePodName} {
+		f.KubeClient.CoreV1().Pods(f.Namespace).Delete(pod, &metav1.DeleteOptions{})
 	}
-	// TODO: check all deleted and wait
-	Global = nil
-	logrus.Info("e2e teardown successfully")
-	return nil
 }
 
-func (f *Framework) setup() error {
-	if err := f.SetupNatsOperator(); err != nil {
-		return fmt.Errorf("failed to setup NATS operator: %v", err)
-	}
-	logrus.Info("NATS operator created successfully")
-
-	logrus.Info("e2e setup successfully")
-	return nil
-}
-
-func (f *Framework) SetupNatsOperator() error {
-	// TODO: unify this and the yaml file in example/
-	cmd := []string{"/usr/local/bin/nats-operator"}
-
-	pod := &v1.Pod{
+// WaitForNatsOperator waits for the nats-operator pod to be running and ready.
+func (f *Framework) WaitForNatsOperator() error {
+	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
+	return kubernetesutil.WaitUntilPodReady(f.KubeClient.CoreV1(), &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   "nats-operator",
-			Labels: map[string]string{"name": "nats-operator"},
+			Namespace: f.Namespace,
+			Name:      natsOperatorPodName,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:            "nats-operator",
-					Image:           f.opImage,
-					ImagePullPolicy: v1.PullIfNotPresent,
-					Command:         cmd,
-					Env: []v1.EnvVar{
-						{
-							Name:      "MY_POD_NAMESPACE",
-							ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
-						},
-						{
-							Name:      "MY_POD_NAME",
-							ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.name"}},
-						},
-					},
-					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							HTTPGet: &v1.HTTPGetAction{
-								Path: probe.HTTPReadyzEndpoint,
-								Port: intstr.IntOrString{Type: intstr.Int, IntVal: 8080},
-							},
-						},
-						InitialDelaySeconds: 3,
-						PeriodSeconds:       3,
-						FailureThreshold:    3,
-					},
-				},
-			},
-			RestartPolicy:      v1.RestartPolicyNever,
-			ServiceAccountName: "nats-operator",
-		},
-	}
-
-	p, err := kubernetesutil.CreateAndWaitPod(f.KubeClient, f.Namespace, pod, 60*time.Second)
-	if err != nil {
-		return err
-	}
-	logrus.Infof("NATS operator pod is running on node (%s)", p.Spec.NodeName)
-
-	return e2eutil.WaitUntilOperatorReady(f.KubeClient, f.Namespace, "nats-operator")
+	})
 }
 
-func (f *Framework) DeleteNatsOperatorCompletely() error {
-	err := f.deleteNatsOperator()
-	if err != nil {
-		return err
-	}
-	// On k8s 1.6.1, grace period isn't accurate. It took ~10s for operator pod to completely disappear.
-	// We work around by increasing the wait time. Revisit this later.
-	err = retryutil.Retry(5*time.Second, 6, func() (bool, error) {
-		_, err := f.KubeClient.Pods(f.Namespace).Get("nats-operator", metav1.GetOptions{})
-		if err == nil {
-			return false, nil
-		}
-		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
-			return true, nil
-		}
-		return false, err
+// WaitForNatsOperatorE2ePodTermination waits for the nats-operator pod to be running and ready.
+// It then starts streaming logs and returns the pod's exit code, or an error if any error was found during the process.
+func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
+	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
+	err := kubernetesutil.WaitUntilPodReady(f.KubeClient.CoreV1(), &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: f.Namespace,
+			Name:      natsOperatorPodName,
+		},
 	})
 	if err != nil {
-		return fmt.Errorf("fail to wait NATS operator pod gone from API: %v", err)
+		return -1, err
 	}
-	return nil
-}
 
-func (f *Framework) deleteNatsOperator() error {
-	return f.KubeClient.Pods(f.Namespace).Delete("nats-operator", metav1.NewDeleteOptions(1))
+	// Start streaming logs for the nats-operator-e2e until we receive io.EOF.
+	req := f.KubeClient.CoreV1().Pods(f.Namespace).GetLogs(natsOperatorE2ePodName, &v1.PodLogOptions{
+		Follow: true,
+	})
+	r, err := req.Stream()
+	if err != nil {
+		return -1, err
+	}
+	defer r.Close()
+	b := bufio.NewReader(r)
+	for {
+		// Read a single line from the logs, and output it.
+		l, err := b.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return -1, err
+		}
+		if err == io.EOF {
+			break
+		}
+		fmt.Print(l)
+	}
+
+	// Grab the first (and single) container's exit code so we can use it as our own exit code.
+	pod, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get(natsOperatorE2ePodName, metav1.GetOptions{})
+	if err != nil {
+		return -1, err
+	}
+	return int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode), nil
 }

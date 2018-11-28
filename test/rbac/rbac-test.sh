@@ -9,8 +9,8 @@ minikube status | grep Running && {
     minikube stop
 }
 
-# Start minikube with policy enabled
-sudo minikube start  --vm-driver=none --kubernetes-version=v1.10.0 --bootstrapper=localkube --extra-config=apiserver.Authorization.Mode=RBAC --feature-gates=PodShareProcessNamespace=true
+# Start minikube using the default bootstrapper (kubeadm), which already enforces RBAC by default.
+sudo minikube start  --vm-driver=none --kubernetes-version=v1.10.10 --feature-gates=PodShareProcessNamespace=true
 minikube update-context
 
 # Wait once again for cluster to be ready
