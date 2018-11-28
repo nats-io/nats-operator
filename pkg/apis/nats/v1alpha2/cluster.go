@@ -21,10 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/constants"
-
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -46,6 +47,11 @@ type NatsCluster struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              ClusterSpec   `json:"spec"`
 	Status            ClusterStatus `json:"status"`
+}
+
+// GetGroupVersionKind returns a GroupVersionKind based on the current GroupVersion and the specified Kind.
+func (c* NatsCluster) GetGroupVersionKind() schema.GroupVersionKind {
+	return SchemeGroupVersion.WithKind(CRDResourceKind)
 }
 
 func (c *NatsCluster) AsOwner() metav1.OwnerReference {

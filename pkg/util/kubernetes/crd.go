@@ -18,18 +18,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
-
-	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
 var (
@@ -41,11 +40,6 @@ var (
 // NatsClusterCRUpdateFunc is a function to be used when atomically
 // updating a Cluster CR.
 type NatsClusterCRUpdateFunc func(*v1alpha2.NatsCluster)
-
-func WatchClusters(host, ns string, httpClient *http.Client, resourceVersion string) (*http.Response, error) {
-	return httpClient.Get(fmt.Sprintf("%s/apis/%s/namespaces/%s/%s?watch=true&resourceVersion=%s",
-		host, v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural, resourceVersion))
-}
 
 func GetClusterList(restcli rest.Interface, ns string) (*v1alpha2.NatsClusterList, error) {
 	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw()
