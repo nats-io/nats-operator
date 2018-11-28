@@ -25,10 +25,10 @@ import (
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -127,7 +127,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 }
 
 // addTLSConfig fills in the TLS configuration to be used in the config map.
-func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	if cs.TLS == nil {
 		return
 	}
@@ -150,11 +150,11 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 
 func addAuthConfig(
 	kubecli corev1client.CoreV1Interface,
-	operatorcli natsalphav2client.PkgSpecInterface,
+	operatorcli natsalphav2client.NatsV1alpha2Interface,
 	ns string,
 	clusterName string,
 	sconfig *natsconf.ServerConfig,
-	cs spec.ClusterSpec,
+	cs v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
 	if cs.Auth == nil {
@@ -329,7 +329,7 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 }
 
 // CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
-func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
@@ -373,7 +373,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 
 // UpdateConfigMap applies the new configuration of the cluster,
 // such as modifying the routes available in the cluster.
-func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -523,7 +523,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -676,7 +676,7 @@ func MustNewKubeClient() corev1client.CoreV1Interface {
 	return corev1client.NewForConfigOrDie(cfg)
 }
 
-func MustNewOperatorClient() natsalphav2client.PkgSpecInterface {
+func MustNewOperatorClient() natsalphav2client.NatsV1alpha2Interface {
 	var (
 		cfg *rest.Config
 		err error

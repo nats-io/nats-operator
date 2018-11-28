@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package spec
+package v1alpha2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,6 +37,11 @@ var (
 	CRDName            = CRDResourcePlural + "." + groupName
 	ServiceRoleCRDName = ServiceRoleCRDResourcePlural + "." + groupName
 )
+
+// Resource takes an unqualified resource and returns a group-qualified GroupResource.
+func Resource(resource string) schema.GroupResource {
+	return SchemeGroupVersion.WithResource(resource).GroupResource()
+}
 
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.
 func addKnownTypes(s *runtime.Scheme) error {

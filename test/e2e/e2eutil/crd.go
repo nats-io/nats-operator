@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/client"
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
@@ -28,7 +28,7 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
-func CreateCluster(t *testing.T, crClient client.NatsClusterCR, namespace string, cl *spec.NatsCluster) (*spec.NatsCluster, error) {
+func CreateCluster(t *testing.T, crClient client.NatsClusterCR, namespace string, cl *v1alpha2.NatsCluster) (*v1alpha2.NatsCluster, error) {
 	cl.Namespace = namespace
 	res, err := crClient.Create(context.TODO(), cl)
 	if err != nil {
@@ -39,12 +39,12 @@ func CreateCluster(t *testing.T, crClient client.NatsClusterCR, namespace string
 	return res, nil
 }
 
-func UpdateCluster(crClient client.NatsClusterCR, cl *spec.NatsCluster, maxRetries int, updateFunc kubernetesutil.NatsClusterCRUpdateFunc) (*spec.NatsCluster, error) {
+func UpdateCluster(crClient client.NatsClusterCR, cl *v1alpha2.NatsCluster, maxRetries int, updateFunc kubernetesutil.NatsClusterCRUpdateFunc) (*v1alpha2.NatsCluster, error) {
 	return AtomicUpdateClusterCR(crClient, cl.Name, cl.Namespace, maxRetries, updateFunc)
 }
 
-func AtomicUpdateClusterCR(crClient client.NatsClusterCR, name, namespace string, maxRetries int, updateFunc kubernetesutil.NatsClusterCRUpdateFunc) (*spec.NatsCluster, error) {
-	result := &spec.NatsCluster{}
+func AtomicUpdateClusterCR(crClient client.NatsClusterCR, name, namespace string, maxRetries int, updateFunc kubernetesutil.NatsClusterCRUpdateFunc) (*v1alpha2.NatsCluster, error) {
+	result := &v1alpha2.NatsCluster{}
 	err := retryutil.Retry(1*time.Second, maxRetries, func() (done bool, err error) {
 		natsCluster, err := crClient.Get(context.TODO(), namespace, name)
 		if err != nil {
@@ -65,7 +65,7 @@ func AtomicUpdateClusterCR(crClient client.NatsClusterCR, name, namespace string
 	return result, err
 }
 
-func DeleteCluster(t *testing.T, crClient client.NatsClusterCR, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
+func DeleteCluster(t *testing.T, crClient client.NatsClusterCR, kubeClient corev1.CoreV1Interface, cl *v1alpha2.NatsCluster) error {
 	t.Logf("deleting NATS cluster: %v", cl.Name)
 	err := crClient.Delete(context.TODO(), cl.Namespace, cl.Name)
 	if err != nil {

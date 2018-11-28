@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -148,7 +148,7 @@ func podWithAntiAffinity(pod *v1.Pod, ls *metav1.LabelSelector) *v1.Pod {
 	return pod
 }
 
-func applyPodPolicy(clusterName string, pod *v1.Pod, policy *spec.PodPolicy) {
+func applyPodPolicy(clusterName string, pod *v1.Pod, policy *v1alpha2.PodPolicy) {
 	if policy == nil {
 		return
 	}

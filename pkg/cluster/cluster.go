@@ -27,8 +27,8 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/sirupsen/logrus"
@@ -54,13 +54,13 @@ const (
 
 type clusterEvent struct {
 	typ     clusterEventType
-	cluster *spec.NatsCluster
+	cluster *v1alpha2.NatsCluster
 }
 
 type Config struct {
 	ServiceAccount string
 	KubeCli        corev1client.CoreV1Interface
-	OperatorCli    natsalphav2client.PkgSpecInterface
+	OperatorCli    natsalphav2client.NatsV1alpha2Interface
 }
 
 type Cluster struct {
@@ -70,11 +70,11 @@ type Cluster struct {
 
 	config Config
 
-	cluster *spec.NatsCluster
+	cluster *v1alpha2.NatsCluster
 
 	// in memory state of the cluster
 	// status is the source of truth after Cluster struct is materialized.
-	status        spec.ClusterStatus
+	status        v1alpha2.ClusterStatus
 	memberCounter int
 
 	eventCh chan *clusterEvent
@@ -85,7 +85,7 @@ type Cluster struct {
 	gc *garbagecollection.GC
 }
 
-func New(config Config, cl *spec.NatsCluster, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
+func New(config Config, cl *v1alpha2.NatsCluster, stopC <-chan struct{}, wg *sync.WaitGroup) *Cluster {
 	lg := logrus.WithField("pkg", "cluster").WithField("cluster-name", cl.Name)
 
 	c := &Cluster{
@@ -105,11 +105,11 @@ func New(config Config, cl *spec.NatsCluster, stopC <-chan struct{}, wg *sync.Wa
 
 		if err := c.setup(); err != nil {
 			c.logger.Errorf("cluster failed to setup: %v", err)
-			if c.status.Phase != spec.ClusterPhaseFailed {
+			if c.status.Phase != v1alpha2.ClusterPhaseFailed {
 				c.status.SetReason(err.Error())
-				c.status.SetPhase(spec.ClusterPhaseFailed)
+				c.status.SetPhase(v1alpha2.ClusterPhaseFailed)
 				if err := c.updateCRStatus(); err != nil {
-					c.logger.Errorf("failed to update cluster phase (%v): %v", spec.ClusterPhaseFailed, err)
+					c.logger.Errorf("failed to update cluster phase (%v): %v", v1alpha2.ClusterPhaseFailed, err)
 				}
 			}
 			return
@@ -128,11 +128,11 @@ func (c *Cluster) setup() error {
 
 	var shouldCreateCluster bool
 	switch c.status.Phase {
-	case spec.ClusterPhaseNone:
+	case v1alpha2.ClusterPhaseNone:
 		shouldCreateCluster = true
-	case spec.ClusterPhaseCreating:
+	case v1alpha2.ClusterPhaseCreating:
 		return errCreatedCluster
-	case spec.ClusterPhaseRunning:
+	case v1alpha2.ClusterPhaseRunning:
 		shouldCreateCluster = false
 
 	default:
@@ -146,10 +146,10 @@ func (c *Cluster) setup() error {
 }
 
 func (c *Cluster) create() error {
-	c.status.SetPhase(spec.ClusterPhaseCreating)
+	c.status.SetPhase(v1alpha2.ClusterPhaseCreating)
 
 	if err := c.updateCRStatus(); err != nil {
-		return fmt.Errorf("cluster create: failed to update cluster phase (%v): %v", spec.ClusterPhaseCreating, err)
+		return fmt.Errorf("cluster create: failed to update cluster phase (%v): %v", v1alpha2.ClusterPhaseCreating, err)
 	}
 	c.logClusterCreation()
 
@@ -193,14 +193,14 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 		close(c.stopCh)
 	}()
 
-	c.status.SetPhase(spec.ClusterPhaseRunning)
+	c.status.SetPhase(v1alpha2.ClusterPhaseRunning)
 	if err := c.updateCRStatus(); err != nil {
 		c.logger.Warningf("update initial CR status failed: %v", err)
 	}
 	c.logger.Infof("start running...")
 
 	// Track the account service roles for changes.
-	cRoles := make(map[types.UID]spec.NatsServiceRole)
+	cRoles := make(map[types.UID]v1alpha2.NatsServiceRole)
 	var secretLastResourceVersion string
 	var rerr error
 	for {
@@ -286,7 +286,7 @@ func (c *Cluster) run(stopC <-chan struct{}) {
 	}
 }
 
-func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles map[types.UID]spec.NatsServiceRole) error {
+func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles map[types.UID]v1alpha2.NatsServiceRole) error {
 	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
 		// Look for updates in the secret used for auth then
 		// trigger config reload in case there are new updates.
@@ -315,7 +315,7 @@ func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles 
 		var shouldUpdate bool
 
 		// Check in case there were changes/additions in the number of roles.
-		aRoles := make(map[types.UID]spec.NatsServiceRole)
+		aRoles := make(map[types.UID]v1alpha2.NatsServiceRole)
 		for _, role := range roles.Items {
 
 			// Update in case not present or the resource version is different.
@@ -346,14 +346,14 @@ func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles 
 	return nil
 }
 
-func isSpecEqual(s1, s2 spec.ClusterSpec) bool {
+func isSpecEqual(s1, s2 v1alpha2.ClusterSpec) bool {
 	if s1.Size != s2.Size || s1.Paused != s2.Paused || s1.Version != s2.Version {
 		return false
 	}
 	return true
 }
 
-func (c *Cluster) Update(cl *spec.NatsCluster) {
+func (c *Cluster) Update(cl *v1alpha2.NatsCluster) {
 	c.send(&clusterEvent{
 		typ:     eventModifyCluster,
 		cluster: cl,
@@ -495,7 +495,7 @@ func (c *Cluster) reportFailedStatus() {
 	retryInterval := 5 * time.Second
 
 	f := func() (bool, error) {
-		c.status.SetPhase(spec.ClusterPhaseFailed)
+		c.status.SetPhase(v1alpha2.ClusterPhaseFailed)
 		err := c.updateCRStatus()
 		if err == nil || kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return true, nil
@@ -541,7 +541,7 @@ func (c *Cluster) logClusterCreation() {
 	}
 }
 
-func (c *Cluster) logSpecUpdate(newSpec spec.ClusterSpec) {
+func (c *Cluster) logSpecUpdate(newSpec v1alpha2.ClusterSpec) {
 	oldSpecBytes, err := json.MarshalIndent(c.cluster.Spec, "", "    ")
 	if err != nil {
 		c.logger.Errorf("failed to marshal cluster spec: %v", err)

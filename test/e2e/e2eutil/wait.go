@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
@@ -40,14 +40,14 @@ var (
 	retryInterval  = 10 * time.Second
 )
 
-type acceptFunc func(*spec.NatsCluster) bool
+type acceptFunc func(*v1alpha2.NatsCluster) bool
 type filterFunc func(*v1.Pod) bool
 
 type routez struct {
 	RouteCount int `json:"num_routes"`
 }
 
-func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
+func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *v1alpha2.NatsCluster) ([]string, error) {
 	var names []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
 		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
@@ -76,7 +76,7 @@ func WaitUntilPodSizeReached(t *testing.T, kubeClient corev1.CoreV1Interface, si
 	return names, nil
 }
 
-func WaitUntilPodSizeAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *spec.NatsCluster) ([]string, error) {
+func WaitUntilPodSizeAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, size, retries int, cl *v1alpha2.NatsCluster) ([]string, error) {
 	var names []string
 	err := retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
 		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
@@ -116,7 +116,7 @@ func WaitUntilPodSizeAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Inte
 	return names, nil
 }
 
-func WaitUntilPodSizeAndVersionAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *spec.NatsCluster) error {
+func WaitUntilPodSizeAndVersionAndRoutesReached(t *testing.T, kubeClient corev1.CoreV1Interface, version string, size, retries int, cl *v1alpha2.NatsCluster) error {
 	return retryutil.Retry(retryInterval, retries, func() (done bool, err error) {
 		var names []string
 		podList, err := kubeClient.Pods(cl.Namespace).List(kubernetesutil.ClusterListOpt(cl.Name))
@@ -162,7 +162,7 @@ func getVersionFromImage(image string) string {
 	return strings.Split(image, ":")[1]
 }
 
-func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *spec.NatsCluster) error {
+func waitResourcesDeleted(t *testing.T, kubeClient corev1.CoreV1Interface, cl *v1alpha2.NatsCluster) error {
 	undeletedPods, err := WaitPodsDeleted(kubeClient, cl.Namespace, 3, kubernetesutil.ClusterListOpt(cl.Name))
 	if err != nil {
 		if retryutil.IsRetryFailure(err) && len(undeletedPods) > 0 {

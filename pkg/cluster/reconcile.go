@@ -15,7 +15,7 @@
 package cluster
 
 import (
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 
 	"k8s.io/api/core/v1"
@@ -76,7 +76,7 @@ func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
 	return nil
 }
 
-func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) error {
+func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs v1alpha2.ClusterSpec) error {
 	c.logger.Warningf("Cluster version doesn't match, reconciling...")
 	pod := pickPodToUpgrade(pods, cs.Version)
 	kubernetesutil.SetNATSVersion(pod, cs.Version)
@@ -85,7 +85,7 @@ func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) error {
 }
 
 // needsUpgrade determines whether cluster needs upgrade or not.
-func needsUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) bool {
+func needsUpgrade(pods []*v1.Pod, cs v1alpha2.ClusterSpec) bool {
 	return len(pods) == cs.Size && pickPodToUpgrade(pods, cs.Version) != nil
 }
 

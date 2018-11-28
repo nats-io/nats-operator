@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
@@ -31,19 +31,19 @@ func TestConfigMapReload_Servers(t *testing.T) {
 	// Start with a single node, then wait for the reload event
 	// due to increasing size of the cluster.
 	var size = 1
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
-			Pod: &spec.PodPolicy{
+			Pod: &v1alpha2.PodPolicy{
 				EnableConfigReload: true,
 			},
 		},
@@ -172,22 +172,22 @@ func TestConfigSecretReload_Auth(t *testing.T) {
 	// Start with a single node, then wait for the reload event
 	// due to increasing size of the cluster.
 	var size = 1
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
-			Pod: &spec.PodPolicy{
+			Pod: &v1alpha2.PodPolicy{
 				EnableConfigReload: true,
 			},
-			Auth: &spec.AuthConfig{
+			Auth: &v1alpha2.AuthConfig{
 				ClientsAuthSecret:  authSecretName,
 				ClientsAuthTimeout: 10,
 			},
@@ -365,18 +365,18 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		namespace         = "default"
 		clusterName       = "test-nats-roles-cluster-reload-auth-2"
 	)
-	userRole := &spec.NatsServiceRole{
+	userRole := &v1alpha2.NatsServiceRole{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.ServiceRoleCRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.ServiceRoleCRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      userRoleName,
 			Namespace: namespace,
 			Labels:    map[string]string{"nats_cluster": clusterName},
 		},
-		Spec: spec.ServiceRoleSpec{
-			Permissions: spec.Permissions{
+		Spec: v1alpha2.ServiceRoleSpec{
+			Permissions: v1alpha2.Permissions{
 				Publish:   []string{"foo.bar"},
 				Subscribe: []string{"foo.*"},
 			},
@@ -389,18 +389,18 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 		},
 	}
 
-	adminUserRole := &spec.NatsServiceRole{
+	adminUserRole := &v1alpha2.NatsServiceRole{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.ServiceRoleCRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.ServiceRoleCRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      adminUserRoleName,
 			Namespace: namespace,
 			Labels:    map[string]string{"nats_cluster": clusterName},
 		},
-		Spec: spec.ServiceRoleSpec{
-			Permissions: spec.Permissions{
+		Spec: v1alpha2.ServiceRoleSpec{
+			Permissions: v1alpha2.Permissions{
 				Publish:   []string{">"},
 				Subscribe: []string{">"},
 			},
@@ -435,22 +435,22 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 
 	// Create cluster with service accounts support enabled.
 	var size = 1
-	cluster := &spec.NatsCluster{
+	cluster := &v1alpha2.NatsCluster{
 		TypeMeta: k8smetav1.TypeMeta{
-			Kind:       spec.CRDResourceKind,
-			APIVersion: spec.SchemeGroupVersion.String(),
+			Kind:       v1alpha2.CRDResourceKind,
+			APIVersion: v1alpha2.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: k8smetav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: namespace,
 		},
-		Spec: spec.ClusterSpec{
+		Spec: v1alpha2.ClusterSpec{
 			Size:    size,
 			Version: "1.1.0",
-			Pod: &spec.PodPolicy{
+			Pod: &v1alpha2.PodPolicy{
 				EnableConfigReload: true,
 			},
-			Auth: &spec.AuthConfig{
+			Auth: &v1alpha2.AuthConfig{
 				EnableServiceAccounts: true,
 				ClientsAuthTimeout:    10,
 			},
@@ -574,7 +574,7 @@ func TestConfigNatsServiceRolesReload_Auth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	userRole.Spec.Permissions = spec.Permissions{
+	userRole.Spec.Permissions = v1alpha2.Permissions{
 		Publish:   []string{"foo.bar"},
 		Subscribe: []string{"foo.*", "hello.world"},
 	}
