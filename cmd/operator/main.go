@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
+	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -157,11 +158,13 @@ func main() {
 }
 
 func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
+	// Create a client for the apiextensions.k8s.io/v1beta1 so that we can register our CRDs.
+	extsClient := kubernetesutil.MustNewKubeExtClient(kubeCfg)
 	// Create a client for our API so that we can create shared index informers for our API types.
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
 
 	// Create a new controller configuration object.
-	cfg := newControllerConfig(kubeClient, natsClient)
+	cfg := newControllerConfig(kubeClient, extsClient, natsClient)
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
 	}
@@ -169,10 +172,10 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	c := controller.NewNatsClusterController(cfg)
 
 	// Start the garbage collector.
-	go periodicFullGC(cfg.KubeCli, cfg.Namespace, gcInterval)
+	go periodicFullGC(cfg.KubeCli.CoreV1(), cfg.Namespace, gcInterval)
 
 	// Start the chaos engine.
-	startChaos(context.Background(), cfg.KubeCli, cfg.Namespace, chaosLevel)
+	startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.Namespace, chaosLevel)
 
 	// Run the controller for NatsCluster resources.
 	if err := c.Run(ctx); err != nil {
@@ -180,7 +183,7 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	}
 }
 
-func newControllerConfig(kubeClient kubernetes.Interface, natsClient natsclientset.Interface) controller.Config {
+func newControllerConfig(kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
 	var (
 		err            error
 		serviceAccount string
@@ -200,8 +203,8 @@ func newControllerConfig(kubeClient kubernetes.Interface, natsClient natsclients
 	cfg := controller.Config{
 		Namespace:      namespace,
 		ServiceAccount: serviceAccount,
-		KubeCli:        kubeClient.CoreV1(),
-		KubeExtCli:     kubernetesutil.MustNewKubeExtClient(),
+		KubeCli:        kubeClient,
+		KubeExtCli:     extsClient,
 		OperatorCli:    natsClient,
 	}
 

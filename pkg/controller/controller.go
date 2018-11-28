@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	kwatch "k8s.io/apimachinery/pkg/watch"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
@@ -67,7 +67,7 @@ type Config struct {
 	Namespace      string
 	ServiceAccount string
 	PVProvisioner  string
-	KubeCli        corev1client.CoreV1Interface
+	KubeCli        kubernetes.Interface
 	KubeExtCli     extsclient.Interface
 	OperatorCli    natsclient.Interface
 }
@@ -139,8 +139,8 @@ func (c *Controller) handleEvent(eventType kwatch.EventType, obj *v1alpha2.NatsC
 
 func (c *Controller) Run(ctx context.Context) error {
 	// Register our CRDs, waiting for them to become ready.
-	err := c.initCRD()
-	if err != nil && err != kubernetesutil.ErrCRDAlreadyExists {
+	err := kubernetesutil.InitCRDs(c.KubeExtCli)
+	if err != nil {
 		return err
 	}
 
@@ -239,16 +239,7 @@ func (c *Controller) handleClusterEvent(eventType kwatch.EventType, obj *v1alpha
 func (c *Controller) makeClusterConfig() cluster.Config {
 	return cluster.Config{
 		ServiceAccount: c.Config.ServiceAccount,
-		KubeCli:        c.KubeCli,
+		KubeCli:        c.KubeCli.CoreV1(),
 		OperatorCli:    c.OperatorCli.NatsV1alpha2(),
 	}
-}
-
-// initCRD registers the CRDs for our API and waits for them to become ready.
-func (c *Controller) initCRD() error {
-	err := kubernetesutil.CreateCRD(c.KubeExtCli)
-	if err != nil {
-		return err
-	}
-	return kubernetesutil.WaitCRDReady(c.KubeExtCli)
 }

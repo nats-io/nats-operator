@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/debug"
-	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/debug"
+	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/sirupsen/logrus"
@@ -330,7 +330,7 @@ func checkClientAuthUpdate(c *Cluster, secretLastResourceVersion string, cRoles 
 		}
 
 		// Check in case there were deletions in the number of roles.
-		for uid, _ := range cRoles {
+		for uid := range cRoles {
 			if _, ok := aRoles[uid]; !ok {
 				shouldUpdate = true
 

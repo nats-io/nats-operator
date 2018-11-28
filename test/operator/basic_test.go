@@ -12,15 +12,18 @@ import (
 	k8scrdclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	k8sclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	k8srestapi "k8s.io/client-go/rest"
 	k8sclientcmd "k8s.io/client-go/tools/clientcmd"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/client"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/controller"
-	"github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	contextutil "github.com/nats-io/nats-operator/pkg/util/context"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
 func TestRegisterCRD(t *testing.T) {
@@ -28,23 +31,27 @@ func TestRegisterCRD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
-	// Run the operator controller in the background.
-	go func() {
-		err := c.Run(ctx)
-		if err != nil && err != context.Canceled {
-			t.Fatal(err)
-		}
-	}()
+	// Create a context with a timeout of 10 seconds.
+	// This should provide enough time for the CRDs to be registered, and is small enough for the test not to take long.
+	ctx := contextutil.WithTimeout(10*time.Second)
+
+	// Run the controller for NatsCluster resources in the foreground.
+	// It will stop when the context times out, and the test will proceed to verify that the CRDs have been are created.
+	if err := c.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	cl, err := newKubeClients()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	// This should have already happened within the 10 seconds that the controller was running, but it's OK to explicitly wait.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
 
 	// Confirm that the resource has been created.
 	result, err := cl.kcrdc.ApiextensionsV1beta1().
@@ -81,8 +88,11 @@ func TestCreateConfigSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
 
 	name := "test-nats-cluster-1"
 	namespace := "default"
@@ -150,8 +160,12 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
+
 	name := "test-nats-cluster-2"
 	namespace := "default"
 
@@ -226,12 +240,17 @@ func TestReplacePresentConfigSecret(t *testing.T) {
 }
 
 type clients struct {
-	kc      k8sclient.CoreV1Interface
-	kcrdc   k8scrdclient.Interface
-	restcli *k8srestapi.RESTClient
-	config  *k8srestapi.Config
-	ncli    client.NatsClusterCR
-	ocli    *natsalphav2client.NatsV1alpha2Client
+	kc         k8sclient.CoreV1Interface
+	kcrdc      k8scrdclient.Interface
+	restcli    *k8srestapi.RESTClient
+	config     *k8srestapi.Config
+	ncli       client.NatsClusterCR
+	ocli       *natsalphav2client.NatsV1alpha2Client
+
+	// kubeClient is an interface for a client the the Kubernetes base APIs.
+	kubeClient kubernetes.Interface
+	// natsClient is an interface for a client for our API.
+	natsClient natsclient.Interface
 }
 
 func newKubeClients() (*clients, error) {
@@ -240,10 +259,12 @@ func newKubeClients() (*clients, error) {
 	if kubeconfig := os.Getenv("KUBERNETES_CONFIG_FILE"); kubeconfig != "" {
 		cfg, err = k8sclientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
-	kc, err := k8sclient.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
+
+	// Create a client for the Kubernetes base APIs.
+	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(cfg)
+	// Create a client for our API.
+	natsClient := kubernetesutil.MustNewNatsClientFromConfig(cfg)
+
 	kcrdc, err := k8scrdclient.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -256,18 +277,21 @@ func newKubeClients() (*clients, error) {
 	if err != nil {
 		return nil, err
 	}
-	ocli, err := natsalphav2client.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
 
 	cl := &clients{
-		kc:      kc,
+		// Use the already existing client for the Kubernetes base APIs.
+		// TODO Remove and use kubeClient alone everywhere in the test suite.
+		kc:      kubeClient.CoreV1(),
 		kcrdc:   kcrdc,
 		restcli: restcli,
 		ncli:    ncli,
-		ocli:    ocli,
+		// Use the already existing client for our API.
+		// TODO Remove and use natsClient alone everywhere in the test suite.
+		ocli:    natsClient.NatsV1alpha2().(*natsalphav2client.NatsV1alpha2Client),
 		config:  cfg,
+
+		kubeClient: kubeClient,
+		natsClient: natsClient,
 	}
 	return cl, nil
 }
@@ -282,9 +306,9 @@ func newController() (*controller.Controller, error) {
 	// delete propagation policy for deleting the namespace.
 	config := controller.Config{
 		Namespace:   "default",
-		KubeCli:     cl.kc,
+		KubeCli:     cl.kubeClient,
 		KubeExtCli:  cl.kcrdc,
-		OperatorCli: kubernetes.MustNewNatsClientFromConfig(cl.config),
+		OperatorCli: cl.natsClient,
 	}
 
 	// Initialize the controller for NatsCluster resources.

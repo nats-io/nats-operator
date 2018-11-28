@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	k8sv1 "k8s.io/api/core/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8swaitutil "k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
 func TestCreateTLSSetup(t *testing.T) {
@@ -24,8 +26,11 @@ func TestCreateTLSSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Wait for the CRD to be registered in the background.
-	time.Sleep(10 * time.Second)
+
+	// Wait for the CRDs to become ready.
+	if err := kubernetesutil.WaitCRDs(cl.kcrdc); err != nil {
+		t.Fatal(err)
+	}
 
 	name := "nats"
 	namespace := "default"
