@@ -28,6 +28,13 @@ import (
 	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
+const (
+	// clientAuthSecretResourceVersionAnnotationKey is the key of the annotation that holds the last-observed resource version of the secret containing authentication data for the NATS cluster.
+	clientAuthSecretResourceVersionAnnotationKey = "nats.io/cas"
+	// natsServiceRolesHashAnnotationKey is the key of the annotation that holds the hash of the comma-separated list of NatsServiceRole UIDs associated with the NATS cluster.
+	natsServiceRolesHashAnnotationKey = "nats.io/nsr"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type NatsClusterList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -281,6 +288,11 @@ func (cs *ClusterStatus) Control() {
 	cs.ControlPaused = false
 }
 
+// SetSize sets the current size of the cluster.
+func (cs *ClusterStatus) SetSize(size int) {
+	cs.Size = size
+}
+
 func (cs *ClusterStatus) SetCurrentVersion(v string) {
 	cs.CurrentVersion = v
 }
@@ -307,12 +319,10 @@ func (cs *ClusterStatus) AppendScalingDownCondition(from, to int) {
 	cs.appendCondition(c)
 }
 
-func (cs *ClusterStatus) AppendUpgradingCondition(to string, member string) {
-	reason := fmt.Sprintf("upgrading cluster member %s version to %v", member, to)
-
+func (cs *ClusterStatus) AppendUpgradingCondition(from, to string) {
 	c := ClusterCondition{
 		Type:           ClusterConditionUpgrading,
-		Reason:         reason,
+		Reason:         fmt.Sprintf("upgrading cluster version from %s to %s", from, to),
 		TransitionTime: time.Now().Format(time.RFC3339),
 	}
 	cs.appendCondition(c)
@@ -321,7 +331,7 @@ func (cs *ClusterStatus) AppendUpgradingCondition(to string, member string) {
 func (cs *ClusterStatus) SetReadyCondition() {
 	c := ClusterCondition{
 		Type:           ClusterConditionReady,
-		Reason:         "Current cluster state matches target state.",
+		Reason:         "current state matches desired state",
 		TransitionTime: time.Now().Format(time.RFC3339),
 	}
 
@@ -345,5 +355,45 @@ func (cs *ClusterStatus) appendCondition(c ClusterCondition) {
 }
 
 func scalingReason(from, to int) string {
-	return fmt.Sprintf("Current cluster size: %d, desired cluster size: %d", from, to)
+	return fmt.Sprintf("scaling cluster from %d to %d peers", from, to)
+}
+
+// GetClientAuthSecretResourceVersion returns the last-observed resource version of the secret containing authentication data for the NATS cluster.
+func (c *NatsCluster) GetClientAuthSecretResourceVersion() string {
+	if c.Annotations == nil {
+		return ""
+	}
+	res, ok := c.Annotations[clientAuthSecretResourceVersionAnnotationKey]
+	if !ok {
+		return ""
+	}
+	return res
+}
+
+// SetClientAuthSecretResourceVersion sets the last-observed resource version of the secret containing authentication data for the NATS cluster.
+func (c *NatsCluster) SetClientAuthSecretResourceVersion(v string) {
+	if c.Annotations == nil {
+		c.Annotations = make(map[string]string, 1)
+	}
+	c.Annotations[clientAuthSecretResourceVersionAnnotationKey] = v
+}
+
+// GetNatsServiceRolesHash returns the hash of the comma-separated list of NatsServiceRole UIDs associated with the NATS cluster.
+func (c *NatsCluster) GetNatsServiceRolesHash() string {
+	if c.Annotations == nil {
+		return ""
+	}
+	res, ok := c.Annotations[natsServiceRolesHashAnnotationKey]
+	if !ok {
+		return ""
+	}
+	return res
+}
+
+// SetNatsServiceRolesHash sets the hash of the comma-separated list of NatsServiceRole UIDs associated with the NATS cluster.
+func (c *NatsCluster) SetNatsServiceRolesHash(v string) {
+	if c.Annotations == nil {
+		c.Annotations = make(map[string]string, 1)
+	}
+	c.Annotations[natsServiceRolesHashAnnotationKey] = v
 }

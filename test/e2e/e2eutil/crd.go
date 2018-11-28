@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/client"
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/client"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 
