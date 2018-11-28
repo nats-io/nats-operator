@@ -409,37 +409,3 @@ $ docker build -f docker/reloader/Dockerfile . <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.
-
-### Updating the `NatsCluster` type (code generation)
-
-If you are adding a new field to the `NatsCluster`, then you have to
-get the `deepcopy-gen` tools first.
-
-```
-$ go get -u github.com/kubernetes/gengo/examples/deepcopy-gen
-```
-
-Then run the code generation script in order to recreate
-`pkg/spec/zz_generated.deepcopy.go` with the required methods to
-support that field filled in:
-
-```sh
-$ ./hack/codegen.sh
-```
-
-### Running outside the cluster for debugging
-
-For debugging purposes, it is also possible to run the operator 
-outside of the cluster without having to build an image:
-
-```
-MY_POD_NAMESPACE=default MY_POD_NAME=nats-operator go run cmd/operator/main.go --debug-kube-config-path=$HOME/.kube/config
-```
-
-### Direct access to the cluster
-
-For debugging and development you might want to access the NATS cluster directly. For example, if you created the cluster with name `example-nats-cluster` in namespace `nats-io` you can forward ports of the pod with name `example-nats-cluster-1` as follows:
-
-```
-$ kubectl port-forward -n nats-io example-nats-cluster-1 4222:4222
-```

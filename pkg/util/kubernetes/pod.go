@@ -15,15 +15,22 @@
 package kubernetes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/spec"
-
+	"github.com/Azure/draft/pkg/kube/podutil"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	watchapi "k8s.io/apimachinery/pkg/watch"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/watch"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
 // natsPodContainer returns a NATS server pod container spec.
@@ -148,7 +155,7 @@ func podWithAntiAffinity(pod *v1.Pod, ls *metav1.LabelSelector) *v1.Pod {
 	return pod
 }
 
-func applyPodPolicy(clusterName string, pod *v1.Pod, policy *spec.PodPolicy) {
+func applyPodPolicy(clusterName string, pod *v1.Pod, policy *v1alpha2.PodPolicy) {
 	if policy == nil {
 		return
 	}
@@ -194,4 +201,50 @@ func PodSpecToPrettyJSON(pod *v1.Pod) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+// WaitUntilPodCondition establishes a watch on the specified pod and blocks until the specified condition function is satisfied.
+func WaitUntilPodCondition(kubeClient corev1.CoreV1Interface, pod *v1.Pod, fn watch.ConditionFunc) error {
+	// Create a selector that targets the specified pod.
+	fs := ByCoordinates(pod.Namespace, pod.Name)
+	// Grab a ListerWatcher with which we can watch the pod.
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.Pods(pod.Namespace).List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.Pods(pod.Namespace).Watch(options)
+		},
+	}
+	// Watch for updates to the specified pod until fn is satisfied.
+	last, err := watch.UntilWithSync(context.TODO(), lw, &v1.Pod{}, nil, fn)
+	if err != nil {
+		return err
+	}
+	if last == nil {
+		return fmt.Errorf("no events received for pod %q", ResourceKey(pod))
+	}
+	return nil
+}
+
+// isPodRunningAndReady returns whether the specified pod is running, ready and has its ".status.podIP" field populated.
+func isPodRunningAndReady(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodRunning && podutil.IsPodReady(pod) && pod.Status.PodIP != ""
+}
+
+// WaitUntilPodReady establishes a watch on the specified pod and blocks until the pod is running, ready and has its ".status.podIP" field populated.
+func WaitUntilPodReady(kubeClient corev1.CoreV1Interface, pod *v1.Pod) error {
+	return WaitUntilPodCondition(kubeClient, pod, func(event watchapi.Event) (bool, error) {
+		switch event.Type {
+		case watchapi.Error:
+			return false, fmt.Errorf("got event of type error: %+v", event.Object)
+		case watchapi.Deleted:
+			return false, fmt.Errorf("pod %q has been deleted", pod.Name)
+		default:
+			pod = event.Object.(*v1.Pod)
+			return isPodRunningAndReady(pod), nil
+		}
+	})
 }

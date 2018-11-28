@@ -22,13 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/conf"
-	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/debug/local"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,10 +30,19 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8srand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // for gcp auth
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/conf"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
 const (
@@ -90,6 +92,11 @@ func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, n
 	return err
 }
 
+// ClientServiceName returns the name of the client service based on the specified cluster name.
+func ClientServiceName(clusterName string) string {
+	return clusterName
+}
+
 func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
 	ports := []v1.ServicePort{{
 		Name:       "client",
@@ -98,7 +105,7 @@ func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns s
 		Protocol:   v1.ProtocolTCP,
 	}}
 	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, clusterName, clusterName, ns, "", ports, owner, selectors, false)
+	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false)
 }
 
 func ManagementServiceName(clusterName string) string {
@@ -127,7 +134,7 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 }
 
 // addTLSConfig fills in the TLS configuration to be used in the config map.
-func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
+func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	if cs.TLS == nil {
 		return
 	}
@@ -150,11 +157,11 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs spec.ClusterSpec) {
 
 func addAuthConfig(
 	kubecli corev1client.CoreV1Interface,
-	operatorcli natsalphav2client.PkgSpecInterface,
+	operatorcli natsalphav2client.NatsV1alpha2Interface,
 	ns string,
 	clusterName string,
 	sconfig *natsconf.ServerConfig,
-	cs spec.ClusterSpec,
+	cs v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
 	if cs.Auth == nil {
@@ -328,8 +335,13 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	return retPod, nil
 }
 
-// CreateConfigMap creates the config map that is shared by NATS servers in a cluster.
-func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+// ConfigSecret returns the name of the secret that contains the configuration for the NATS cluster with the specified name.
+func ConfigSecret(clusterName string) string {
+	return clusterName
+}
+
+// CreateConfigSecret creates the secret that contains the configuration file for a given NATS cluster..
+func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
@@ -351,7 +363,7 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 	labels := LabelsForCluster(clusterName)
 	cm := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   clusterName,
+			Name:   ConfigSecret(clusterName),
 			Labels: labels,
 		},
 		Data: map[string][]byte{
@@ -371,9 +383,9 @@ func CreateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 	return nil
 }
 
-// UpdateConfigMap applies the new configuration of the cluster,
+// UpdateConfigSecret applies the new configuration of the cluster,
 // such as modifying the routes available in the cluster.
-func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.PkgSpecInterface, clusterName, ns string, cluster spec.ClusterSpec, owner metav1.OwnerReference) error {
+func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -416,6 +428,14 @@ func UpdateConfigMap(kubecli corev1client.CoreV1Interface, operatorcli natsalpha
 	if err != nil {
 		return err
 	}
+	// Make sure that the secret has the required labels.
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	for key, val := range LabelsForCluster(clusterName) {
+		cm.Labels[key] = val
+	}
+	// Update the configuration.
 	cm.Data[constants.ConfigFileName] = rawConfig
 
 	_, err = kubecli.Secrets(ns).Update(cm)
@@ -523,7 +543,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -657,42 +677,31 @@ func NewNatsPodSpec(name, clusterName string, cs spec.ClusterSpec, owner metav1.
 	return pod
 }
 
-func MustNewKubeClient() corev1client.CoreV1Interface {
+// MustNewKubeConfig builds a configuration object by either reading from the specified kubeconfig file or by using an in-cluster config.
+func MustNewKubeConfig(kubeconfig string) *rest.Config {
 	var (
 		cfg *rest.Config
 		err error
 	)
-
-	if len(local.KubeConfigPath) == 0 {
+	if len(kubeconfig) == 0 {
 		cfg, err = InClusterConfig()
 	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
+		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
-
 	if err != nil {
 		panic(err)
 	}
-
-	return corev1client.NewForConfigOrDie(cfg)
+	return cfg
 }
 
-func MustNewOperatorClient() natsalphav2client.PkgSpecInterface {
-	var (
-		cfg *rest.Config
-		err error
-	)
+// MustNewKubeClientFromConfig builds a Kubernetes client based on the specified configuration object.
+func MustNewKubeClientFromConfig(cfg *rest.Config) kubernetes.Interface {
+	return kubernetes.NewForConfigOrDie(cfg)
+}
 
-	if len(local.KubeConfigPath) == 0 {
-		cfg, err = InClusterConfig()
-	} else {
-		cfg, err = clientcmd.BuildConfigFromFlags("", local.KubeConfigPath)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	return natsalphav2client.NewForConfigOrDie(cfg)
+// MustNewNatsClientFromConfig builds a client for our API based on the specified configuration object.
+func MustNewNatsClientFromConfig(cfg *rest.Config) natsclient.Interface {
+	return natsclient.NewForConfigOrDie(cfg)
 }
 
 func InClusterConfig() (*rest.Config, error) {
@@ -721,8 +730,20 @@ func IsKubernetesResourceNotFoundError(err error) bool {
 // We are using internal api types for cluster related.
 func ClusterListOpt(clusterName string) metav1.ListOptions {
 	return metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(LabelsForCluster(clusterName)).String(),
+		LabelSelector: LabelSelectorForCluster(clusterName).String(),
 	}
+}
+
+// LabelSelectorForCluster returns a label selector that matches resources belonging to the NATS cluster with the specified name.
+func LabelSelectorForCluster(clusterName string) labels.Selector {
+	return labels.SelectorFromSet(LabelsForCluster(clusterName))
+}
+
+// NatsServiceRoleLabelSelectorForCuster returns a label selector that matches NatsServiceRole resources referencing the NATS cluster with the specified name.
+func NatsServiceRoleLabelSelectorForCluster(clusterName string) labels.Selector {
+	return labels.SelectorFromSet(map[string]string{
+		LabelClusterNameKey: clusterName,
+	})
 }
 
 func LabelsForCluster(clusterName string) map[string]string {
@@ -757,4 +778,13 @@ func mergeLabels(l1, l2 map[string]string) {
 // UniquePodName generates a unique name for the Pod.
 func UniquePodName() string {
 	return fmt.Sprintf("nats-%s", k8srand.String(10))
+}
+
+// ResourceKey returns the "namespace/name" key that represents the specified resource.
+func ResourceKey(obj interface{}) string {
+	res, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return "(unknown)"
+	}
+	return res
 }

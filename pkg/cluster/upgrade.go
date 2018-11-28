@@ -24,9 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// upgradePod upgrades the specified pod to the desired version for the current NATS cluster.
 func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
-	c.status.AppendUpgradingCondition(c.cluster.Spec.Version, oldPod.GetName())
-
 	ns := c.cluster.Namespace
 
 	pod, err := c.config.KubeCli.Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
@@ -49,6 +48,14 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 	if err != nil {
 		return fmt.Errorf("fail to update the NATS member (%s): %v", pod.GetName(), err)
 	}
+
+	// Wait for the pod to be running and ready.
+	c.logger.Infof("waiting for pod %q to become ready", pod.Name)
+	if err := kubernetesutil.WaitUntilPodReady(c.config.KubeCli, pod); err != nil {
+		return err
+	}
+	c.logger.Infof("pod %q became ready", pod.Name)
+
 	c.logger.Infof("finished upgrading the NATS member %v", pod.GetName())
 	return nil
 }
