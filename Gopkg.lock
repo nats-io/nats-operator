@@ -10,14 +10,6 @@
   version = "v0.33.0"
 
 [[projects]]
-  digest = "1:7e77c179d2f1df5c29550c9822dccda4ce31745e70464f16cacc713a1f0413ef"
-  name = "github.com/Azure/draft"
-  packages = ["pkg/kube/podutil"]
-  pruneopts = ""
-  revision = "5433afea1421810ae9d828631d8651de913b347a"
-  version = "v0.16.0"
-
-[[projects]]
   branch = "master"
   digest = "1:c0bec5f9b98d0bc872ff5e834fac186b807b656683bd29cb82fb207a1513fabb"
   name = "github.com/beorn7/perks"
@@ -668,7 +660,10 @@
 [[projects]]
   digest = "1:6061aa42761235df375f20fa4a1aa6d1845cba3687575f3adb2ef3f3bc540af5"
   name = "k8s.io/kubernetes"
-  packages = ["pkg/util/slice"]
+  packages = [
+    "pkg/api/v1/pod",
+    "pkg/util/slice",
+  ]
   pruneopts = ""
   revision = "17c77c7898218073f14c8d573582e8d2313dc740"
   version = "v1.12.2"
@@ -677,7 +672,6 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/Azure/draft/pkg/kube/podutil",
     "github.com/fsnotify/fsnotify",
     "github.com/nats-io/go-nats",
     "github.com/pkg/errors",
@@ -721,6 +715,7 @@
     "k8s.io/client-go/tools/watch",
     "k8s.io/client-go/util/flowcontrol",
     "k8s.io/client-go/util/workqueue",
+    "k8s.io/kubernetes/pkg/api/v1/pod",
     "k8s.io/kubernetes/pkg/util/slice",
   ]
   solver-name = "gps-cdcl"
