@@ -16,6 +16,11 @@ To run `nats-operator`, you additionally need the following software:
 * [`skaffold`](https://github.com/GoogleContainerTools/skaffold)
 * [Kubernetes](https://kubernetes.io/) ([Minikube](https://github.com/kubernetes/minikube), [Docker Desktop](https://www.docker.com/products/docker-desktop) or [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/)).
 
+If you plan on running the end-to-end test suite, you additionally need the following software:
+
+* [`cfssl`](https://github.com/cloudflare/cfssl)
+* [`cfssljson`](https://github.com/cloudflare/cfssl)
+
 ## Cloning the repository
 
 To start developing `nats-operator`, you first need to clone the repository into your `$GOPATH` and switch directories into the freshly cloned repo:
@@ -126,3 +131,19 @@ Executing this command will do several things in background:
 1. Exit with the same exit code as the main container of the `nats-operator-e2e` pod.
 
 This allows for running the test suite from _within_ the Kubernetes cluster (hence allowing for full connectivity to the pod network) while keeping the whole process simple enough to be used in day-to-day development and CI.
+
+### Testing in a different namespace
+
+By default, the end-to-end test suite tests an installation of `nats-operator` in the `default` namespace.
+It is however possible to test installation in a different namespace.
+In order to do so, you must first create the desired namespace (in the example below, `nats-io`):
+
+```console
+$ kubectl create namespace nats-io
+```
+
+Then, to run the test suite against the resulting namespace, you may simply run:
+
+```console
+$ NAMESPACE=nats-io make e2e
+```

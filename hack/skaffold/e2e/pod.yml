@@ -8,7 +8,14 @@ spec:
     image: gcr.io/project-id/nats-operator-e2e
     args:
     - /nats-operator-e2e
+    - -namespace
+    - "$(NAMESPACE)"
     - -test.v
+    env:
+    - name: NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
   # TODO: Create and use a nats-operator-e2e service account.
   serviceAccountName: nats-operator
   restartPolicy: Never

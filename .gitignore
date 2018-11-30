@@ -10,3 +10,7 @@ vendor
 
 # Build
 build/
+
+# CSRs and TLS material
+test/certs/*.csr
+test/certs/*.pem

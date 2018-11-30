@@ -33,21 +33,26 @@ dep:
 # e2e runs the end-to-end test suite.
 .PHONY: e2e
 e2e: KUBECONFIG ?= $(HOME)/.kube/config
+e2e: NAMESPACE ?= default
 e2e:
-	@./test/prepare-secrets.sh
-	MODE=run PROFILE=local TARGET=operator $(MAKE) run
-	MODE=run PROFILE=local TARGET=e2e $(MAKE) run
-	@go test -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -wait
+	@./test/prepare-secrets.sh $(NAMESPACE)
+	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
+	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
+	@go test -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
 
 # run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run
 .SECONDEXPANSION:
 run: MODE ?= dev
+run: NAMESPACE ?= default
 run: PROFILE ?= local
 run: TARGET ?= operator
 run: build.$$(TARGET)
 run:
-	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -p $(PROFILE)
+	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -n $(NAMESPACE) -p $(PROFILE)
+	@if [[ "${TARGET}" == "operator" ]]; then \
+		./hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
+	fi
 
 # gen executes the code generation step.
 .PHONY: gen
