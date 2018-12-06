@@ -231,6 +231,31 @@ func (f *Framework) WaitUntilExpectedRoutesInConfig(ctx context.Context, natsClu
 	})
 }
 
+// WaitUntilFullMesh waits until all the pods belonging to the specified NatsCluster report the expected number of routes.
+// This function is a weaker variant of WaitUntilFullMeshWithVersion and should only be called in very specific use cases.
+func (f *Framework) WaitUntilFullMesh(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, expectedSize int) error {
+	// Wait for the expected size and version to be reported on the NatsCluster resource.
+	err := f.WaitUntilNatsClusterCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
+		nc := event.Object.(*natsv1alpha2.NatsCluster)
+		return nc.Status.Size == expectedSize, nil
+	})
+	if err != nil {
+		return err
+	}
+	// Wait for all the pods to report the expected routes and version.
+	return retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
+		// Check whether the full mesh has formed with the expected size.
+		m, err := f.NatsClusterHasExpectedRouteCount(natsCluster, expectedSize)
+		if err != nil {
+			return false, nil
+		}
+		if !m {
+			return false, nil
+		}
+		return true, nil
+	})
+}
+
 // WaitUntilFullMeshWithVersion waits until all the pods belonging to the specified NatsCluster report the expected number of routes and the expected version.
 func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, expectedSize int, expectedVersion string) error {
 	// Wait for the expected size and version to be reported on the NatsCluster resource.
