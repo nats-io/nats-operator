@@ -46,7 +46,7 @@ func natsPodContainer(clusterName, version string, serverImage string) v1.Contai
 				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
 			},
 		},
-		Name:  "nats",
+		Name:  constants.NatsContainerName,
 		Image: MakeNATSImage(version, serverImage),
 		Ports: []v1.ContainerPort{
 			{

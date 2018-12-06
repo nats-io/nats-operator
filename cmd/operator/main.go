@@ -165,7 +165,7 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
 
 	// Create a new controller configuration object.
-	cfg := newControllerConfig(kubeClient, extsClient, natsClient)
+	cfg := newControllerConfig(kubeCfg, kubeClient, extsClient, natsClient)
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
 	}
@@ -184,7 +184,7 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	}
 }
 
-func newControllerConfig(kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
+func newControllerConfig(kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
 	var (
 		err            error
 		serviceAccount string
@@ -207,6 +207,7 @@ func newControllerConfig(kubeClient kubernetes.Interface, extsClient extsclients
 		KubeCli:        kubeClient,
 		KubeExtCli:     extsClient,
 		OperatorCli:    natsClient,
+		KubeConfig:     kubeConfig,
 	}
 
 	return cfg

@@ -599,7 +599,7 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 
 	// Rely on the shared configuration map for configuring the cluster.
 	cmd := []string{
-		"/gnatsd",
+		constants.NatsBinaryPath,
 		"-c",
 		constants.ConfigFilePath,
 		"-P",
