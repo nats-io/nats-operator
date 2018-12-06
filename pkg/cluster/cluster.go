@@ -52,10 +52,12 @@ const (
 	// defaultNatsLameDuckDuration is the default duration for the "lame duck" mode.
 	// https://github.com/nats-io/gnatsd/blob/master/server/const.go#L136-L138
 	defaultNatsLameDuckDuration = 2 * time.Minute
-	// podReadinessTimeout is the maximum amount of time we wait for a pod to be ready after we create/upgrade it.
-	podReadinessTimeout         = 5 * time.Minute
 	// podDeletionTimeout is the maximum amount of time we wait for a pod to be actually deleted from the Kubernetes API after we delete it.
-	podDeletionTimeout          = 3 * time.Minute
+	podDeletionTimeout = 3 * time.Minute
+	// podExecTimeout is the maximum amount of time we wait for an "exec" call to a container in a pod to produce a result.
+	podExecTimeout = 10 * time.Second
+	// podReadinessTimeout is the maximum amount of time we wait for a pod to be ready after we create/upgrade it.
+	podReadinessTimeout = 5 * time.Minute
 )
 
 type Config struct {
@@ -503,23 +505,26 @@ func (c *Cluster) isDebugLoggerEnabled() bool {
 // Otherwise, it returns an error which should be handled by the caller.
 func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
 	// Try to place NATS in "lame duck" mode by sending the "gnatsd" process the "ldm" signal.
+	// We wait for at most "podExecTimeout" for the "exec" command to return a result.
+	ctx, fn := context.WithTimeout(context.Background(), podExecTimeout)
+	defer fn()
 	args := []string{
 		constants.NatsBinaryPath,
 		"-sl",
 		fmt.Sprintf("ldm=%s", constants.PidFilePath),
 	}
-	exitCode, _, _, err := kubernetesutil.ExecInContainer(c.config.KubeClient, c.config.KubeConfig, pod.Namespace, pod.Name, constants.NatsContainerName, args...)
-	if err != nil {
-		return fmt.Errorf("failed to place nats in \"lame duck\" mode: %v", err)
+	exitCode, _, _, err := kubernetesutil.ExecInContainer(ctx, c.config.KubeClient, c.config.KubeConfig, pod.Namespace, pod.Name, constants.NatsContainerName, args...)
+	if exitCode == 0 || err == context.DeadlineExceeded {
+		// At this point, we were either explicitly successful at placing the NATS instance in "lame duck" mode, or the "exec" command has timed out and we don't know its result.
+		// In the latter case, it may still be possible that the NATS instance has been placed in "lame duck" mode.
+		// Hence, we should wait for the pod to reach the "Terminated" state in both scenarios.
+		return c.waitNatsContainerTermination(pod)
 	}
-	// Double-check the command's exit code just to be on the safe side.
-	if exitCode != 0 {
-		return fmt.Errorf("failed to place nats in \"lame duck\" mode (exit code: %d)", exitCode)
-	}
+	return fmt.Errorf("failed to place nats in \"lame duck\" mode: %v", err)
+}
 
-	// At this point, NATS has been placed in "lame duck" mode.
-	// We must now wait until the main container terminates before returning.
-
+// waitNatsContainerTermination blocks until the "nats" container of the specified pod reaches the "Terminated" state, or until twice the value of ".spec.lameDuckDuration".
+func (c *Cluster) waitNatsContainerTermination(pod *v1.Pod) error {
 	// If no value for the duration of the "lame duck" mode has been specified, we use the default.
 	var ldDuration int64
 	if c.cluster.Spec.LameDuckDurationSeconds == nil {
@@ -527,7 +532,7 @@ func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
 	} else {
 		ldDuration = *c.cluster.Spec.LameDuckDurationSeconds
 	}
-	// Wait for at most twice the specified (or default) duration for the "lame duck" mode, so that we don't fail too early but also ot wait for too long.
+	// Wait for at most twice the specified (or default) duration for the "lame duck" mode, so that we don't fail too early but also don't wait for too long.
 	ctx, fn := context.WithTimeout(context.Background(), time.Duration(2*ldDuration)*time.Second)
 	defer fn()
 	return kubernetesutil.WaitUntilPodCondition(ctx, c.config.KubeClient.CoreV1(), pod, func(event watch.Event) (bool, error) {

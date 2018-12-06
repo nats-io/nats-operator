@@ -16,6 +16,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"context"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -24,9 +25,9 @@ import (
 	executil "k8s.io/client-go/util/exec"
 )
 
-// ExecInContainer runs a command in the specified container, blocking until the command finishes execution.
+// ExecInContainer runs a command in the specified container, blocking until the command finishes execution or the specified context times out.
 // It returns the command's exit code (if available), its output (stdout and stderr) and the associated error (if any).
-func ExecInContainer(kubeClient kubernetes.Interface, kubeCfg *rest.Config, podNamespace, podName, containerName string, args ...string) (int, string, string, error) {
+func ExecInContainer(ctx context.Context, kubeClient kubernetes.Interface, kubeCfg *rest.Config, podNamespace, podName, containerName string, args ...string) (int, string, string, error) {
 	var (
 		err      error
 		exitCode int
@@ -60,12 +61,24 @@ func ExecInContainer(kubeClient kubernetes.Interface, kubeCfg *rest.Config, podN
 	}
 
 	// Perform the request and attempt to extract the command's exit code so it can be returned.
-	if err = executor.Stream(streamOptions); err != nil {
-		if ceErr, ok := err.(executil.CodeExitError); ok {
-			exitCode = ceErr.Code
-		} else {
-			exitCode = -1
+	doneCh := make(chan struct{})
+	go func() {
+		if err = executor.Stream(streamOptions); err != nil {
+			if ceErr, ok := err.(executil.CodeExitError); ok {
+				exitCode = ceErr.Code
+			} else {
+				exitCode = -1
+			}
 		}
+		// Signal that the call to "Stream()" has finished.
+		close(doneCh)
+	}()
+
+	// Wait for the call to "Stream()" to finish or until the specified timeout.
+	select {
+	case <-doneCh:
+		return exitCode, stdout.String(), stderr.String(), err
+	case <-ctx.Done():
+		return -1, "", "", ctx.Err()
 	}
-	return exitCode, stdout.String(), stderr.String(), err
 }
