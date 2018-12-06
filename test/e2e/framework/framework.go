@@ -16,8 +16,10 @@ package framework
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +34,8 @@ const (
 	natsOperatorPodName = "nats-operator"
 	// natsOperatorE2ePodName is the name of the nats-operator-e2e pod.
 	natsOperatorE2ePodName = "nats-operator-e2e"
+	// podReadinessTimeout is the maximum amount of time we wait for the nats-operator / nats-operator-e2e pods to be running and ready.
+	podReadinessTimeout = 5 * time.Minute
 )
 
 // Framework encapsulates the configuration for the current run, and provides helper methods to be used during testing.
@@ -66,7 +70,9 @@ func (f *Framework) Cleanup() {
 // WaitForNatsOperator waits for the nats-operator pod to be running and ready.
 func (f *Framework) WaitForNatsOperator() error {
 	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
-	return kubernetesutil.WaitUntilPodReady(f.KubeClient.CoreV1(), &v1.Pod{
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+	return kubernetesutil.WaitUntilPodReady(ctx, f.KubeClient.CoreV1(), &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: f.Namespace,
 			Name:      natsOperatorPodName,
@@ -78,7 +84,9 @@ func (f *Framework) WaitForNatsOperator() error {
 // It then starts streaming logs and returns the pod's exit code, or an error if any error was found during the process.
 func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
-	err := kubernetesutil.WaitUntilPodReady(f.KubeClient.CoreV1(), &v1.Pod{
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+	err := kubernetesutil.WaitUntilPodReady(ctx, f.KubeClient.CoreV1(), &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: f.Namespace,
 			Name:      natsOperatorPodName,

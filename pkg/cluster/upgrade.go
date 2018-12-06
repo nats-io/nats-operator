@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
@@ -61,7 +62,9 @@ func (c *Cluster) upgradeRunningPod(oldPod *v1.Pod) error {
 
 	// Wait for the pod to be running and ready.
 	c.logger.Infof("waiting for pod %q to become ready", pod.Name)
-	if err := kubernetesutil.WaitUntilPodReady(c.config.KubeCli, pod); err != nil {
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+	if err := kubernetesutil.WaitUntilPodReady(ctx, c.config.KubeCli, pod); err != nil {
 		return err
 	}
 	c.logger.Infof("pod %q became ready", pod.Name)
