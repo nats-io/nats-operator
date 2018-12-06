@@ -47,6 +47,14 @@ func TestConfMarshal(t *testing.T) {
 		},
 		{
 			input: &ServerConfig{
+				LameDuckDuration: "2m",
+			},
+			output: `{
+  "lame_duck_duration": "2m"
+}`,
+		},
+		{
+			input: &ServerConfig{
 				Port:     4222,
 				HTTPPort: 8222,
 				Cluster: &ClusterConfig{

@@ -349,6 +349,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 			Port: int(constants.ClusterPort),
 		},
 	}
+	// Observe .spec.lameDuckDurationSeconds if specified.
+	if cluster.LameDuckDurationSeconds != nil {
+		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
+	}
 	addTLSConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {

@@ -73,6 +73,11 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(AuthConfig)
 		**out = **in
 	}
+	if in.LameDuckDurationSeconds != nil {
+		in, out := &in.LameDuckDurationSeconds, &out.LameDuckDurationSeconds
+		*out = new(int64)
+		**out = **in
+	}
 	return
 }
 
