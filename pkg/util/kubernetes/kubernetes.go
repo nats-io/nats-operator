@@ -63,6 +63,7 @@ func GetNATSVersion(pod *v1.Pod) string {
 
 func SetNATSVersion(pod *v1.Pod, version string) {
 	pod.Annotations[versionAnnotationKey] = version
+	pod.Labels[LabelClusterVersionKey] = version
 }
 
 func GetPodNames(pods []*v1.Pod) []string {

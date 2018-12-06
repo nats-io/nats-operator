@@ -25,7 +25,18 @@ import (
 )
 
 // upgradePod upgrades the specified pod to the desired version for the current NATS cluster.
-func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
+// In order to do that, we first try to make NATS enter the "lame duck" mode.
+// If we succeed, we adopt a special upgrade procedure since the pod (or at least its "nats" container) will have been terminated and can't be upgraded directly.
+// If we fail, we stick to the usual method of upgrading the container's "image" field to the desired version.
+func (c *Cluster) upgradePod(pod *v1.Pod) error {
+	if err := c.enterLameDuckModeAndWaitTermination(pod); err != nil {
+		c.logger.Warn(err)
+		return c.upgradeRunningPod(pod)
+	}
+	return c.upgradeTerminatedPod(pod)
+}
+
+func (c *Cluster) upgradeRunningPod(oldPod *v1.Pod) error {
 	ns := c.cluster.Namespace
 
 	pod, err := c.config.KubeCli.Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
@@ -36,7 +47,6 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 
 	c.logger.Infof("upgrading the NATS member %v from %s to %s", pod.GetName(), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
 	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version, c.cluster.Spec.ServerImage)
-	pod.Labels[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
 	kubernetesutil.SetNATSVersion(pod, c.cluster.Spec.Version)
 
 	patchdata, err := kubernetesutil.CreatePatch(oldpod, pod, v1.Pod{})
@@ -57,6 +67,18 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 	c.logger.Infof("pod %q became ready", pod.Name)
 
 	c.logger.Infof("finished upgrading the NATS member %v", pod.GetName())
+	return nil
+}
+
+// upgradeTerminatedPod upgrades the version of a pod for which one of the containers has already terminated.
+// It does this by deleting and re-creating the pod.
+func (c *Cluster) upgradeTerminatedPod(pod *v1.Pod) error {
+	if err := c.deletePod(pod); err != nil {
+		return err
+	}
+	if _, err := c.createPod(); err != nil {
+		return err
+	}
 	return nil
 }
 
