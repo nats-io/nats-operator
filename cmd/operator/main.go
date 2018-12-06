@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -95,7 +96,7 @@ func main() {
 	}
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		logrus.Infof("received signal: %v", <-c)
 		os.Exit(1)
