@@ -15,12 +15,13 @@
 package e2e
 
 import (
-	"k8s.io/api/core/v1"
+	"context"
 	"testing"
+
+	"k8s.io/api/core/v1"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/util/context"
 )
 
 // TestConfigContainsFullMesh creates a NatsCluster resource with size 3 and waits for the full mesh to be formed.
@@ -48,12 +49,16 @@ func TestConfigContainsFullMesh(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, version); err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure that the configuration file contains routes to all the pods.
-	if err = f.WaitUntilExpectedRoutesInConfig(context.WithTimeout(waitTimeout), natsCluster); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilExpectedRoutesInConfig(ctx2, natsCluster); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -101,7 +106,9 @@ func TestExistingSecretIsReplaced(t *testing.T) {
 	// Hence, we just wait for all the required routes to show up on the "nats.conf" entry.
 
 	// Wait until the configuration file contains routes to all the pods (meaning it has been replaced).
-	if err = f.WaitUntilExpectedRoutesInConfig(context.WithTimeout(waitTimeout), natsCluster); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilExpectedRoutesInConfig(ctx1, natsCluster); err != nil {
 		t.Fatal(err)
 	}
 }

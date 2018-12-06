@@ -15,10 +15,10 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/util/context"
 )
 
 // TestResizeClusterFrom3To5 creates a NatsCluster resource with three members and waits for the full mesh to be formed.
@@ -47,7 +47,9 @@ func TestResizeClusterFrom3To5(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed with the initial size.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, initialSize, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, initialSize, version); err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,7 +60,9 @@ func TestResizeClusterFrom3To5(t *testing.T) {
 	}
 
 	// Wait until the full mesh is formed with the final size.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,7 +93,9 @@ func TestResizeClusterFrom5To3(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed with the initial size.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, initialSize, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, initialSize, version); err != nil {
 		t.Fatal(err)
 	}
 
@@ -100,7 +106,9 @@ func TestResizeClusterFrom5To3(t *testing.T) {
 	}
 
 	// Wait until the full mesh is formed with the final size.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
 	}
 }

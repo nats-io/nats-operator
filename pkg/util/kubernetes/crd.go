@@ -15,6 +15,7 @@
 package kubernetes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -31,7 +32,6 @@ import (
 	"k8s.io/client-go/tools/watch"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	contextutil "github.com/nats-io/nats-operator/pkg/util/context"
 )
 
 const (
@@ -174,8 +174,10 @@ func waitCRDReady(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclie
 		},
 	}
 
-	// Watch for updates to the specified CRD until it reaches the "Established" state.
-	last, err := watch.UntilWithSync(contextutil.WithTimeout(waitCRDReadyTimeout), lw, &extsv1beta1.CustomResourceDefinition{}, nil, func(event watchapi.Event) (bool, error) {
+	// Watch for updates to the specified CRD until it reaches the "Established" state or until "waitCRDReadyTimeout" elapses.
+	ctx, fn := context.WithTimeout(context.Background(), waitCRDReadyTimeout)
+	defer fn()
+	last, err := watch.UntilWithSync(ctx, lw, &extsv1beta1.CustomResourceDefinition{}, nil, func(event watchapi.Event) (bool, error) {
 		// Grab the current resource from the event.
 		obj := event.Object.(*extsv1beta1.CustomResourceDefinition)
 		// Return true if and only if the CRD is ready.
