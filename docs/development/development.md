@@ -99,17 +99,16 @@ To stop execution and cleanup the deployment, hit `Ctrl+C`.
 ## Testing
 
 `nats-operator` includes an end-to-end test suite that is used to validate the implementation.
-As the test suite depends on having certain, advanced features enabled on the target Kubernetes cluster, Minikube is currently the only supported environment for running the test suite.
-To launch a Minikube cluster suitable for running the end-to-end test suite, you may run:
+Some tests require certain advanced features to be enabled on the target Kubernetes cluster.
+The test suite will do its best to perform feature detection on the target Kubernetes cluster and to skip tests that depend on these advanced features.
+To launch a Minikube cluster suitable for running the full end-to-end test suite, you may run:
 
 ```console
 $ minikube start \
     --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
     --extra-config=apiserver.service-account-issuer=api \
     --extra-config=apiserver.service-account-api-audiences=api \
-    --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub \
-    --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" \
-    --kubernetes-version=v1.10.10
+    --kubernetes-version=v1.12.3
 ```
 
 Then, to run the test suite against the resulting Minikube cluster, you may simply run:

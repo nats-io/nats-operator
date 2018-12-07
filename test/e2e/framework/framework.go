@@ -19,9 +19,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -38,8 +41,20 @@ const (
 	podReadinessTimeout = 5 * time.Minute
 )
 
+// ClusterFeature represents a feature that can be enabled or disabled on the target Kubernetes cluster.
+type ClusterFeature string
+
+const (
+	// TokenRequest represents the "TokenRequest" feature.
+	TokenRequest = ClusterFeature("TokenRequest")
+	// ShareProcessNamespace represents the "ShareProcessNamespace" feature.
+	ShareProcessNamespace = ClusterFeature("ShareProcessNamespace")
+)
+
 // Framework encapsulates the configuration for the current run, and provides helper methods to be used during testing.
 type Framework struct {
+	// ClusterFeatures is a map indicating whether specific cluster features have been detected in the target cluster.
+	ClusterFeatures map[ClusterFeature]bool
 	// KubeClient is an interface to the Kubernetes base APIs.
 	KubeClient kubernetes.Interface
 	// Namespace is the namespace in which we are running.
@@ -50,13 +65,19 @@ type Framework struct {
 
 // New returns a new instance of the testing framework.
 func New(kubeconfig, namespace string) *Framework {
+	// Assume that all features are disabled until we do feature detection.
+	cf := map[ClusterFeature]bool{
+		ShareProcessNamespace: false,
+		TokenRequest:          false,
+	}
 	config := kubernetesutil.MustNewKubeConfig(kubeconfig)
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(config)
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(config)
 	return &Framework{
-		KubeClient: kubeClient,
-		Namespace:  namespace,
-		NatsClient: natsClient,
+		ClusterFeatures: cf,
+		KubeClient:      kubeClient,
+		Namespace:       namespace,
+		NatsClient:      natsClient,
 	}
 }
 
@@ -64,6 +85,36 @@ func New(kubeconfig, namespace string) *Framework {
 func (f *Framework) Cleanup() {
 	for _, pod := range []string{natsOperatorPodName, natsOperatorE2ePodName} {
 		f.KubeClient.CoreV1().Pods(f.Namespace).Delete(pod, &metav1.DeleteOptions{})
+	}
+}
+
+// FeatureDetect performs feature detection on the target Kubernetes cluster.
+func (f *Framework) FeatureDetect() {
+	v, err := f.KubeClient.Discovery().ServerVersion()
+	if err != nil {
+		return
+	}
+	major, err := strconv.Atoi(strings.TrimSuffix(v.Major, "+"))
+	if err != nil {
+		return
+	}
+	minor, err := strconv.Atoi(strings.TrimSuffix(v.Minor, "+"))
+	if err != nil {
+		return
+	}
+	// The features we want to detect can only be expected in 1.12+ clusters.
+	if major == 0 || major == 1 && minor < 12 {
+		return
+	}
+	// Kubernetes 1.12 has support for PID namespace sharing enabled by default, so no more detection is necessary.
+	f.ClusterFeatures[ShareProcessNamespace] = true
+	// Detect whether the TokenRequest API is active by performing a GET request to the "/token" subresource of the "default" service account.
+	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(); err != nil {
+		if errors.IsMethodNotSupported(err) {
+			// We've got a "405 METHOD NOT ALLOWED" response instead of a "404 NOT FOUND".
+			// This means that the "/token" subresource is indeed enabled, and it is enough to conclude that the feature is supported in the current cluster.
+			f.ClusterFeatures[TokenRequest] = true
+		}
 	}
 }
 

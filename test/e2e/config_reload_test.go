@@ -26,11 +26,15 @@ import (
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/util/kubernetes"
+	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
 
 // TestConfigReloadOnResize creates a NatsCluster resource with size 1 and then scales it up to 3 members.
 // It then waits for a log message on the very first pod indicating that the configuration has been reloaded (since its configuration secret has been updated).
 func TestConfigReloadOnResize(t *testing.T) {
+	// Skip the test if "ShareProcessNamespace" is not enabled.
+	f.Require(t, framework.ShareProcessNamespace)
+
 	var (
 		initialSize = 1
 		finalSize   = 3
@@ -92,6 +96,9 @@ func TestConfigReloadOnResize(t *testing.T) {
 // Then, the test creates a NatsCluster resource that uses this secret for authentication, and makes sure that "user-1" can connect to the NATS cluster.
 // Finally, it removes the entry that corresponds to "user-1" from the authentication secret, and makes sure that "user-1" cannot connect to the NATS cluster anymore.
 func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
+	// Skip the test if "ShareProcessNamespace" is not enabled.
+	f.Require(t, framework.ShareProcessNamespace)
+
 	var (
 		username1 = "user-1"
 		username2 = "user-2"
@@ -226,6 +233,9 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 // It then created the NatsCluster resource and verifies that "nsr1" cannot subscribe to the "hello.world" subject.
 // Finally, it adds "hello.world" to the list of allowed subjects for "nsr1" and verifies that "nsr1" can now subscribe to that subject.
 func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
+	// Skip the test if "ShareProcessNamespace" or "TokenRequest" are not enabled.
+	f.Require(t, framework.ShareProcessNamespace, framework.TokenRequest)
+
 	var (
 		clusterName = "test-nats-nsr"
 		size        = 1
