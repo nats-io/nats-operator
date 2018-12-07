@@ -10,7 +10,9 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
 
 ## Requirements
 
-- Kubernetes v1.8+
+- Kubernetes v1.10+.
+  - [Configuration reloading](#configuration-reload) is only supported in Kubernetes v1.12+.
+  - [Authentication using service accounts](#auth-service-accounts) is only supported in Kubernetes v1.12+ having the `TokenRequest` API enabled.
 
 ## Getting Started
 
@@ -172,22 +174,22 @@ $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=
 
 ### Authorization
 
+<a name="auth-service-accounts"></a>
 #### Using ServiceAccounts
 
-The NATS Operator can define permissions based on Roles by using any
-present ServiceAccount in a namespace. To use this feature, it is
-necessary to use a Kubernetes +v1.10 cluster with the `TokenRequest`
-and `PodShareProcessNamespace` feature flags enabled.  To try this
-feature using `minikube` you can configure it to start as follows:
+The NATS Operator can define permissions based on Roles by using any present ServiceAccount in a namespace.
+This feature requires a Kubernetes v1.12+ cluster having the `TokenRequest` API enabled.
+To try this feature using `minikube` v0.30.0+, you can configure it to start as follows:
 
-```sh
-minikube start \
-  --feature-gates="TokenRequest=true,PodShareProcessNamespace=true" \
-  --extra-config=apiserver.service-account-signing-key-file=/var/lib/localkube/certs/apiserver.key \
+```console
+$ minikube start \
+  --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
   --extra-config=apiserver.service-account-issuer=api \
   --extra-config=apiserver.service-account-api-audiences=api \
-  --extra-config=apiserver.service-account-key-file=/var/lib/localkube/certs/sa.pub
+  --kubernetes-version=v1.12.3
 ```
+
+Please note that availability of this feature across Kubernetes offerings may vary widely.
 
 ServiceAccounts integration can then be enabled by setting the
 `enableServiceAccounts` flag to true in the `NatsCluster` configuration.
@@ -203,8 +205,10 @@ spec:
   version: "1.3.0"
 
   pod:
+    # NOTE: Only supported in Kubernetes v1.12+.
     enableConfigReload: true
   auth:
+    # NOTE: Only supported in Kubernetes v1.12+ clusters having the "TokenRequest" API enabled.
     enableServiceAccounts: true
 ```
 
@@ -357,14 +361,11 @@ spec:
     clientsAuthTimeout: 5
 ```
 
+<a name="configuration-reload"></a>
 ### Configuration Reload
 
-On Kubernetes +v1.10 clusters that have been started with support for
-sharing the process namespace (via `--feature-gates=PodShareProcessNamespace=true`),
-it is possible to enable on-the-fly reloading of configuration for the
-servers that are part of the cluster.  This can also be combined with the
-authorization support, so in case the user permissions change, then the
-servers will reload and apply the new permissions.
+On Kubernetes v1.12+ clusters it is possible to enable on-the-fly reloading of configuration for the servers that are part of the cluster.
+This can also be combined with the authorization support, so in case the user permissions change, then the servers will reload and apply the new permissions.
 
 ```yaml
 apiVersion: "nats.io/v1alpha2"
@@ -377,7 +378,7 @@ spec:
 
   pod:
     # Enable on-the-fly NATS Server config reload
-    # Note: only supported in Kubernetes clusters with PID namespace sharing enabled.
+    # NOTE: Only supported in Kubernetes v1.12+.
     enableConfigReload: true
 
     # Possible to customize version of reloader image
