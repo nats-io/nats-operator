@@ -15,10 +15,10 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/util/context"
 )
 
 // TestUpgradeCluster creates a NatsCluster resource with version 1.2.0 and waits for the full mesh to be formed.
@@ -47,7 +47,9 @@ func TestUpgradeCluster(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed with the initial version.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, initialVersion); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, initialVersion); err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,7 +60,9 @@ func TestUpgradeCluster(t *testing.T) {
 	}
 
 	// Wait until the full mesh is formed with the final version.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, finalVersion); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, size, finalVersion); err != nil {
 		t.Fatal(err)
 	}
 }

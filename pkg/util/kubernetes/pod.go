@@ -46,7 +46,7 @@ func natsPodContainer(clusterName, version string, serverImage string) v1.Contai
 				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
 			},
 		},
-		Name:  "nats",
+		Name:  constants.NatsContainerName,
 		Image: MakeNATSImage(version, serverImage),
 		Ports: []v1.ContainerPort{
 			{
@@ -204,7 +204,7 @@ func PodSpecToPrettyJSON(pod *v1.Pod) (string, error) {
 }
 
 // WaitUntilPodCondition establishes a watch on the specified pod and blocks until the specified condition function is satisfied.
-func WaitUntilPodCondition(kubeClient corev1.CoreV1Interface, pod *v1.Pod, fn watch.ConditionFunc) error {
+func WaitUntilPodCondition(ctx context.Context, kubeClient corev1.CoreV1Interface, pod *v1.Pod, fn watch.ConditionFunc) error {
 	// Create a selector that targets the specified pod.
 	fs := ByCoordinates(pod.Namespace, pod.Name)
 	// Grab a ListerWatcher with which we can watch the pod.
@@ -219,7 +219,7 @@ func WaitUntilPodCondition(kubeClient corev1.CoreV1Interface, pod *v1.Pod, fn wa
 		},
 	}
 	// Watch for updates to the specified pod until fn is satisfied.
-	last, err := watch.UntilWithSync(context.TODO(), lw, &v1.Pod{}, nil, fn)
+	last, err := watch.UntilWithSync(ctx, lw, &v1.Pod{}, nil, fn)
 	if err != nil {
 		return err
 	}
@@ -235,8 +235,8 @@ func isPodRunningAndReady(pod *v1.Pod) bool {
 }
 
 // WaitUntilPodReady establishes a watch on the specified pod and blocks until the pod is running, ready and has its ".status.podIP" field populated.
-func WaitUntilPodReady(kubeClient corev1.CoreV1Interface, pod *v1.Pod) error {
-	return WaitUntilPodCondition(kubeClient, pod, func(event watchapi.Event) (bool, error) {
+func WaitUntilPodReady(ctx context.Context, kubeClient corev1.CoreV1Interface, pod *v1.Pod) error {
+	return WaitUntilPodCondition(ctx, kubeClient, pod, func(event watchapi.Event) (bool, error) {
 		switch event.Type {
 		case watchapi.Error:
 			return false, fmt.Errorf("got event of type error: %+v", event.Object)

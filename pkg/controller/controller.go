@@ -29,6 +29,7 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
@@ -79,6 +80,7 @@ type Config struct {
 	ServiceAccount string
 	PVProvisioner  string
 	KubeCli        kubernetes.Interface
+	KubeConfig     *rest.Config
 	KubeExtCli     extsclient.Interface
 	OperatorCli    natsclient.Interface
 }
@@ -316,5 +318,8 @@ func (c *Controller) makeClusterConfig() cluster.Config {
 		SecretLister:          c.secretLister,
 		ServiceLister:         c.serviceLister,
 		NatsServiceRoleLister: c.natsServiceRoleLister,
+		KubeClient:            c.KubeCli,
+		KubeConfig:            c.KubeConfig,
+		NatsClient:            c.OperatorCli,
 	}
 }

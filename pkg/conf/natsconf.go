@@ -7,17 +7,18 @@ import (
 )
 
 type ServerConfig struct {
-	Host           string               `json:"host,omitempty"`
-	Port           int                  `json:"port,omitempty"`
-	HTTPPort       int                  `json:"http_port,omitempty"`
-	Cluster        *ClusterConfig       `json:"cluster,omitempty"`
-	TLS            *TLSConfig           `json:"tls,omitempty"`
-	Debug          bool                 `json:"debug,omitempty"`
-	Trace          bool                 `json:"trace,omitempty"`
-	WriteDeadline  string               `json:"write_deadline,omitempty"`
-	MaxConnections int                  `json:"max_connections,omitempty"`
-	MaxPayload     int                  `json:"max_payload,omitempty"`
-	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
+	Host             string               `json:"host,omitempty"`
+	Port             int                  `json:"port,omitempty"`
+	HTTPPort         int                  `json:"http_port,omitempty"`
+	Cluster          *ClusterConfig       `json:"cluster,omitempty"`
+	TLS              *TLSConfig           `json:"tls,omitempty"`
+	Debug            bool                 `json:"debug,omitempty"`
+	Trace            bool                 `json:"trace,omitempty"`
+	WriteDeadline    string               `json:"write_deadline,omitempty"`
+	MaxConnections   int                  `json:"max_connections,omitempty"`
+	MaxPayload       int                  `json:"max_payload,omitempty"`
+	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
+	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
 }
 
 type ClusterConfig struct {

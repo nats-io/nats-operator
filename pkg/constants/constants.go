@@ -84,4 +84,9 @@ const (
 	DefaultMetricsImage            = "synadia/prometheus-nats-exporter"
 	DefaultMetricsImageTag         = "0.1.0"
 	DefaultMetricsImagePullPolicy  = "IfNotPresent"
+
+	// NatsBinaryPath is the path to the NATS binary inside the main container.
+	NatsBinaryPath = "/gnatsd"
+	// NatsContainerName is the name of the main container.
+	NatsContainerName = "nats"
 )

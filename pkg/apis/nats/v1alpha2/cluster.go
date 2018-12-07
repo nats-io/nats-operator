@@ -102,6 +102,10 @@ type ClusterSpec struct {
 
 	// Auth is the configuration to set permissions for users.
 	Auth *AuthConfig `json:"auth,omitempty"`
+
+	// LameDuckDurationSeconds is the number of seconds during which the server spreads the closing of clients when signaled to go into "lame duck mode".
+	// +optional
+	LameDuckDurationSeconds *int64 `json:"lameDuckDurationSeconds,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.

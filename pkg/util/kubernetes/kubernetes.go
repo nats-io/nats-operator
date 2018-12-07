@@ -63,6 +63,7 @@ func GetNATSVersion(pod *v1.Pod) string {
 
 func SetNATSVersion(pod *v1.Pod, version string) {
 	pod.Annotations[versionAnnotationKey] = version
+	pod.Labels[LabelClusterVersionKey] = version
 }
 
 func GetPodNames(pods []*v1.Pod) []string {
@@ -349,6 +350,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 			Port: int(constants.ClusterPort),
 		},
 	}
+	// Observe .spec.lameDuckDurationSeconds if specified.
+	if cluster.LameDuckDurationSeconds != nil {
+		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
+	}
 	addTLSConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -595,7 +600,7 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 
 	// Rely on the shared configuration map for configuring the cluster.
 	cmd := []string{
-		"/gnatsd",
+		constants.NatsBinaryPath,
 		"-c",
 		constants.ConfigFilePath,
 		"-P",

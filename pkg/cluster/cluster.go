@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -27,13 +28,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/util/slice"
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
 	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/debug"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	stringutil "github.com/nats-io/nats-operator/pkg/util/strings"
@@ -43,13 +48,31 @@ var (
 	podTerminationGracePeriod = int64(5)
 )
 
+const (
+	// defaultNatsLameDuckDuration is the default duration for the "lame duck" mode.
+	// https://github.com/nats-io/gnatsd/blob/master/server/const.go#L136-L138
+	defaultNatsLameDuckDuration = 2 * time.Minute
+	// podDeletionTimeout is the maximum amount of time we wait for a pod to be actually deleted from the Kubernetes API after we delete it.
+	podDeletionTimeout = 3 * time.Minute
+	// podExecTimeout is the maximum amount of time we wait for an "exec" call to a container in a pod to produce a result.
+	podExecTimeout = 10 * time.Second
+	// podReadinessTimeout is the maximum amount of time we wait for a pod to be ready after we create/upgrade it.
+	podReadinessTimeout = 5 * time.Minute
+)
+
 type Config struct {
-	KubeCli               corev1client.CoreV1Interface
+	// Deprecated: Use KubeClient and its CoreV1() function instead.
+	KubeCli corev1client.CoreV1Interface
+	// Deprecated: Use NatsClient and its NatsV1alpha2() function instead.
 	OperatorCli           natsalphav2client.NatsV1alpha2Interface
 	PodLister             corev1listers.PodLister
 	SecretLister          corev1listers.SecretLister
 	ServiceLister         corev1listers.ServiceLister
 	NatsServiceRoleLister natslisters.NatsServiceRoleLister
+
+	KubeClient kubernetes.Interface
+	KubeConfig *rest.Config
+	NatsClient natsclient.Interface
 }
 
 type Cluster struct {
@@ -307,7 +330,9 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 
 	// Wait for the pod to be running and ready.
 	c.logger.Infof("waiting for pod %q to become ready", pod.Name)
-	if err := kubernetesutil.WaitUntilPodReady(c.config.KubeCli, pod); err != nil {
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+	if err := kubernetesutil.WaitUntilPodReady(ctx, c.config.KubeCli, pod); err != nil {
 		return nil, err
 	}
 	c.logger.Infof("pod %q became ready", pod.Name)
@@ -317,8 +342,54 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 	return pod, err
 }
 
-// removePod removes the specified pod from the current NATS cluster.
-func (c *Cluster) removePod(pod *v1.Pod) error {
+// tryGracefulPodDeletion attempts to gracefully remove the specified pod from the NATS cluster.
+// It does this by trying to make the "gnatsd" process enter the "lame duck" mode before actually attempting to delete the pod.
+// This is done in a best-effort basis, since the NATS version running in the pod may not support this mode.
+// For that reason, we just log any errors without actually failing and proceed to the actual deletion of the pod.
+func (c *Cluster) tryGracefulPodDeletion(pod *v1.Pod) error {
+	if err := c.enterLameDuckModeAndWaitTermination(pod); err != nil {
+		c.logger.Warn(err)
+	}
+	return c.deletePod(pod)
+}
+
+// deletePod removes the specified pod from the current NATS cluster.
+// This function DOES NOT attempt to gracefully shutdown the "gnatsd" process.
+// Hence, it should only be used after having tried a gracefully shutdown.
+func (c *Cluster) deletePod(pod *v1.Pod) error {
+	// Establish a watch on the pod that will notify us when the pod is deleted.
+	// It may happen that deletion takes effect too soon after we make the call to "Delete()" (e.g. in cases when the pod has entered the "lame duck" mode and is already in the "Succeeded" phase).
+	// In these scenarios, we may easily lose the "DELETED" event since we haven't had the opportunity to establish the watch yet.
+	// Hence, we must establish the watch beforehand in a separate goroutine.
+	// We must also wait for the informer to acknowledge the pod (i.e. through an "ADDED" event) before proceeding to the actual deletion.
+	ackCh := make(chan struct{})
+	errCh := make(chan error)
+	go func() {
+		ctx, fn := context.WithTimeout(context.Background(), podDeletionTimeout)
+		defer fn()
+		err := kubernetesutil.WaitUntilPodCondition(ctx, c.config.KubeCli, pod, func(event watch.Event) (bool, error) {
+			switch event.Type {
+			case watch.Added:
+				// Signal that the informer has acknowledged the pod and keep watching.
+				close(ackCh)
+				return false, nil
+			case watch.Error:
+				// Abort watching and propagate an error.
+				return false, fmt.Errorf("got event of type %q for pod %q", event.Type, kubernetesutil.ResourceKey(pod))
+			default:
+				// Only stop watching if the event type is "DELETED".
+				return event.Type == watch.Deleted, nil
+			}
+		})
+		if err != nil {
+			errCh <- err
+		} else {
+			close(errCh)
+		}
+	}()
+	// Wait for the informer to acknowledge the pod before proceeding to the actual deletion.
+	<-ackCh
+
 	// Delete the specified pod.
 	err := c.config.KubeCli.Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(podTerminationGracePeriod))
 	if err != nil {
@@ -331,11 +402,9 @@ func (c *Cluster) removePod(pod *v1.Pod) error {
 		// Exit in order to avoid waiting for a pod that doesn't exist anymore.
 		return nil
 	}
+
 	// Wait until the specified pod has been deleted.
-	err = kubernetesutil.WaitUntilPodCondition(c.config.KubeCli, pod, func(event watch.Event) (bool, error) {
-		return event.Type == watch.Deleted, nil
-	})
-	if err != nil {
+	if err := <-errCh; err != nil {
 		return err
 	}
 	if c.isDebugLoggerEnabled() {
@@ -429,4 +498,59 @@ func (c *Cluster) isDebugLoggerEnabled() bool {
 		return true
 	}
 	return false
+}
+
+// enterLameDuckModeAndWaitTermination execs into the "nats" container of the specified pod and attempts to send the "ldm" signal to the "gnatsd" process.
+// In case this succeeds, the funcion blocks until the "nats" container reaches the "Terminated" state (indicating that the "lame duck" mode has been entered and NATS is ready to shutdown) or until a timeout is reached.
+// Otherwise, it returns an error which should be handled by the caller.
+func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
+	// Try to place NATS in "lame duck" mode by sending the "gnatsd" process the "ldm" signal.
+	// We wait for at most "podExecTimeout" for the "exec" command to return a result.
+	ctx, fn := context.WithTimeout(context.Background(), podExecTimeout)
+	defer fn()
+	args := []string{
+		constants.NatsBinaryPath,
+		"-sl",
+		fmt.Sprintf("ldm=%s", constants.PidFilePath),
+	}
+	exitCode, err := kubernetesutil.ExecInContainer(ctx, c.config.KubeClient, c.config.KubeConfig, pod.Namespace, pod.Name, constants.NatsContainerName, args...)
+	if exitCode == 0 || err == context.DeadlineExceeded {
+		// At this point, we were either explicitly successful at placing the NATS instance in "lame duck" mode, or the "exec" command has timed out and we don't know its result.
+		// In the latter case, it may still be possible that the NATS instance has been placed in "lame duck" mode.
+		// Hence, we should wait for the pod to reach the "Terminated" state in both scenarios.
+		return c.waitNatsContainerTermination(pod)
+	}
+	return fmt.Errorf("failed to place nats in \"lame duck\" mode: %v", err)
+}
+
+// waitNatsContainerTermination blocks until the "nats" container of the specified pod reaches the "Terminated" state, or until twice the value of ".spec.lameDuckDuration".
+func (c *Cluster) waitNatsContainerTermination(pod *v1.Pod) error {
+	// If no value for the duration of the "lame duck" mode has been specified, we use the default.
+	var ldDuration int64
+	if c.cluster.Spec.LameDuckDurationSeconds == nil {
+		ldDuration = int64(defaultNatsLameDuckDuration.Seconds())
+	} else {
+		ldDuration = *c.cluster.Spec.LameDuckDurationSeconds
+	}
+	// Wait for at most twice the specified (or default) duration for the "lame duck" mode, so that we don't fail too early but also don't wait for too long.
+	ctx, fn := context.WithTimeout(context.Background(), time.Duration(2*ldDuration)*time.Second)
+	defer fn()
+	return kubernetesutil.WaitUntilPodCondition(ctx, c.config.KubeClient.CoreV1(), pod, func(event watch.Event) (bool, error) {
+		pod := event.Object.(*v1.Pod)
+		switch event.Type {
+		case watch.Deleted:
+			fallthrough
+		case watch.Error:
+			return false, fmt.Errorf("got event of unexpected type %q for pod %q while waiting termination", event.Type, kubernetesutil.ResourceKey(pod))
+		default:
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if containerStatus.Name == constants.NatsContainerName {
+					if containerStatus.State.Terminated != nil {
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		}
+	})
 }

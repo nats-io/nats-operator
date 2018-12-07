@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -24,7 +25,6 @@ import (
 	"github.com/nats-io/go-nats"
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/conf"
-	"github.com/nats-io/nats-operator/pkg/util/context"
 	"github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
@@ -60,7 +60,9 @@ func TestConfigReloadOnResize(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, initialSize, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, initialSize, version); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,12 +73,16 @@ func TestConfigReloadOnResize(t *testing.T) {
 	}
 
 	// Make sure that the full mesh is formed with the current size.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, finalSize, version); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the "Reloaded: cluster routes" log message to appear in the logs for the very first pod.
-	if err = f.WaitUntilPodLogLineMatches(context.WithTimeout(waitTimeout), natsCluster, 1, "Reloaded: cluster routes"); err != nil {
+	ctx3, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilPodLogLineMatches(ctx3, natsCluster, 1, "Reloaded: cluster routes"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -171,7 +177,9 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 	}()
 
 	// Wait for the single pod to be created.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, version); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +203,9 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 	}
 
 	// Wait for the "Reloaded: authorization users" log message to appear in the logs for the single pod.
-	if err = f.WaitUntilPodLogLineMatches(context.WithTimeout(waitTimeout), natsCluster, 1, "Reloaded: authorization users"); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "Reloaded: authorization users"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,7 +302,9 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 	}()
 
 	// Wait for the single pod to be created.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, version); err != nil {
 		t.Fatal(err)
 	}
 
@@ -322,7 +334,9 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 	}
 
 	// Wait for the "Reloaded: authorization users" log message to appear in the logs for the very first pod.
-	if err = f.WaitUntilPodLogLineMatches(context.WithTimeout(waitTimeout), natsCluster, 1, "Reloaded: authorization users"); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "Reloaded: authorization users"); err != nil {
 		t.Fatal(err)
 	}
 

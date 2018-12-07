@@ -15,10 +15,10 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/util/context"
 )
 
 // TestCreateClusterWithTLSConfig creates a NatsCluster resource with TLS enabled and waits for the full mesh to be formed.
@@ -54,12 +54,16 @@ func TestCreateClusterWithTLSConfig(t *testing.T) {
 	}()
 
 	// Wait until the full mesh is formed.
-	if err = f.WaitUntilFullMeshWithVersion(context.WithTimeout(waitTimeout), natsCluster, size, version); err != nil {
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, version); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the "TLS required for client connections" log message to appear in the logs for the very first pod.
-	if err = f.WaitUntilPodLogLineMatches(context.WithTimeout(waitTimeout), natsCluster, 1, "TLS required for client connections"); err != nil {
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "TLS required for client connections"); err != nil {
 		t.Fatal(err)
 	}
 }
