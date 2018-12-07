@@ -140,6 +140,10 @@ func main() {
 		logrus.Fatalf("error creating lock: %v", err)
 	}
 
+	// Signal that we're ready.
+	// We do it right before leader election so that we can use a "rolling update" strategy to update "nats-operator" while keeping unavailability to the bare minimum.
+	probe.SetReady()
+
 	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
 		Lock:          rl,
 		LeaseDuration: 15 * time.Second,
