@@ -513,7 +513,7 @@ func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
 		"-sl",
 		fmt.Sprintf("ldm=%s", constants.PidFilePath),
 	}
-	exitCode, _, _, err := kubernetesutil.ExecInContainer(ctx, c.config.KubeClient, c.config.KubeConfig, pod.Namespace, pod.Name, constants.NatsContainerName, args...)
+	exitCode, err := kubernetesutil.ExecInContainer(ctx, c.config.KubeClient, c.config.KubeConfig, pod.Namespace, pod.Name, constants.NatsContainerName, args...)
 	if exitCode == 0 || err == context.DeadlineExceeded {
 		// At this point, we were either explicitly successful at placing the NATS instance in "lame duck" mode, or the "exec" command has timed out and we don't know its result.
 		// In the latter case, it may still be possible that the NATS instance has been placed in "lame duck" mode.

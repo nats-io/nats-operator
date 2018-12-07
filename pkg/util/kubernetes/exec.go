@@ -15,8 +15,8 @@
 package kubernetes
 
 import (
-	"bytes"
 	"context"
+	"io/ioutil"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -27,7 +27,7 @@ import (
 
 // ExecInContainer runs a command in the specified container, blocking until the command finishes execution or the specified context times out.
 // It returns the command's exit code (if available), its output (stdout and stderr) and the associated error (if any).
-func ExecInContainer(ctx context.Context, kubeClient kubernetes.Interface, kubeCfg *rest.Config, podNamespace, podName, containerName string, args ...string) (int, string, string, error) {
+func ExecInContainer(ctx context.Context, kubeClient kubernetes.Interface, kubeCfg *rest.Config, podNamespace, podName, containerName string, args ...string) (int, error) {
 	var (
 		err      error
 		exitCode int
@@ -47,16 +47,15 @@ func ExecInContainer(ctx context.Context, kubeClient kubernetes.Interface, kubeC
 	// The "exec" request require a connection upgrade, so we must use a custom executor.
 	executor, err := remotecommand.NewSPDYExecutor(kubeCfg, "POST", request.URL())
 	if err != nil {
-		return -1, "", "", err
+		return -1, err
 	}
 
-	// Capture stdout and stderr to dedicated buffers.
-	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
+	// For the time being we can drop stdout/stderr.
+	// If later on we need to capture them, we'll have to replace "ioutil.Discard" with a proper buffer.
 	streamOptions := remotecommand.StreamOptions{
 		Stdin:  nil,
-		Stdout: stdout,
-		Stderr: stderr,
+		Stdout: ioutil.Discard,
+		Stderr: ioutil.Discard,
 		Tty:    false,
 	}
 
@@ -77,8 +76,8 @@ func ExecInContainer(ctx context.Context, kubeClient kubernetes.Interface, kubeC
 	// Wait for the call to "Stream()" to finish or until the specified timeout.
 	select {
 	case <-doneCh:
-		return exitCode, stdout.String(), stderr.String(), err
+		return exitCode, err
 	case <-ctx.Done():
-		return -1, "", "", ctx.Err()
+		return -1, ctx.Err()
 	}
 }
