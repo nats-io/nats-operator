@@ -133,17 +133,26 @@ func (c *Cluster) Reconcile() error {
 		}
 	}
 
-	// Poll pods in order to understand which are running and which are pending.
-	_, pending, err := c.pollPods()
+	// Poll pods in order to understand which are pending and which must be deleted.
+	_, waiting, deletable, err := c.pollPods()
 	if err != nil {
 		reconcileFailed.WithLabelValues("failed to poll pods").Inc()
 		return fmt.Errorf("failed to poll pods: %v", err)
 	}
 
-	// If there are pods in pending state, exit cleanly and wait for the next reconcile iteration (which will happen as soon as these pods become running/succeeded/failed).
+	// Delete all pods in terminal phases.
+	for _, pod := range deletable {
+		c.logger.Warnf("deleting pod %q in terminal phase %q", kubernetesutil.ResourceKey(pod), pod.Status.Phase)
+		if err := c.deletePod(pod); err != nil {
+			c.logger.Errorf("failed to delete pod %q: %v", kubernetesutil.ResourceKey(pod), err)
+			return err
+		}
+	}
+
+	// If there are pods in "waiting" state, exit cleanly and wait for the next reconcile iteration (which will happen as soon as these pods become running/succeeded/failed).
 	// This should not happen often in practice, as createPod waits for pods to be running before returning, but it is still a good safety measure.
-	if len(pending) > 0 {
-		c.logger.Infof("skipping reconciliation as there are %d pending pods (%v)", len(pending), kubernetesutil.GetPodNames(pending))
+	if len(waiting) > 0 {
+		c.logger.Infof("skipping reconciliation as there are %d waiting pods (%v)", len(waiting), kubernetesutil.GetPodNames(waiting))
 		return nil
 	}
 
@@ -295,13 +304,12 @@ func (c *Cluster) updateConfigSecret() error {
 // createPod creates a pod using the first available name.
 // Pod names are of the form "<natscluster-name>-<idx>", where "<idx>" is a base-16 integer.
 func (c *Cluster) createPod() (*v1.Pod, error) {
-	// Grab the list of currently running and pending pods.
-	// It is acceptable to call pollPods everytime we create a new pod as it uses the pod lister (instead of hitting the Kubernetes API directly).
-	running, pending, err := c.pollPods()
+	// Grab the list of currently running pods.
+	// It is acceptable to call pollPods every time we create a new pod as it uses the pod lister (instead of hitting the Kubernetes API directly).
+	pods, _, _, err := c.pollPods()
 	if err != nil {
 		return nil, err
 	}
-	pods := append(running, pending...)
 
 	// Grab a slice containing all existing pod names.
 	podNames := make([]string, len(pods))
@@ -414,14 +422,14 @@ func (c *Cluster) deletePod(pod *v1.Pod) error {
 }
 
 // pollPods lists pods belonging to the current NATS cluster, and returns the list of running and pending pods.
-func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
+func (c *Cluster) pollPods() (running []*v1.Pod, waiting []*v1.Pod, deletable []*v1.Pod, err error) {
 	// List existing pods belonging to the current NATS cluster.
 	pods, err := c.config.PodLister.Pods(c.cluster.Namespace).List(kubernetesutil.LabelSelectorForCluster(c.cluster.Name))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list running pods: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to list running pods: %v", err)
 	}
 
-	// Iterate over pods in order to obtain a list of running and pending ones.
+	// Iterate over pods in order to obtain a list of running, "waiting" and deletable ones.
 	for _, pod := range pods {
 		// Ignore pods without owner references.
 		if len(pod.OwnerReferences) < 1 {
@@ -433,28 +441,34 @@ func (c *Cluster) pollPods() (running, pending []*v1.Pod, err error) {
 			c.logger.Warningf("ignoring pod %q with unexpected owner %q", pod.Name, pod.OwnerReferences[0].UID)
 			continue
 		}
-		// Compute the list of running and pending pods.
-		// TODO: Take into account failed pods, so they can be handled as well, or use an adequate restart policy when creating pods.
+		// Add the current pod to the appropriate slice based on the current phase.
 		switch pod.Status.Phase {
 		case v1.PodRunning:
 			running = append(running, pod)
 		case v1.PodPending:
-			pending = append(pending, pod)
-		default:
-			c.logger.Warningf("ignoring pod %q with unexpected phase %q", pod.Name, pod.Status.Phase)
+			fallthrough
+		case v1.PodUnknown:
+			waiting = append(waiting, pod)
+		case v1.PodSucceeded:
+			fallthrough
+		case v1.PodFailed:
+			deletable = append(deletable, pod)
 		}
 	}
 
-	// Sort running and pending pods by their name in order to keep existing scale up/down behavior intact.
+	// Sort pods by their name in each slice order to keep existing scale up/down behavior intact.
 	sort.Slice(running, func(i, j int) bool {
 		return running[i].Name < running[j].Name
 	})
-	sort.Slice(pending, func(i, j int) bool {
-		return pending[i].Name < pending[j].Name
+	sort.Slice(waiting, func(i, j int) bool {
+		return waiting[i].Name < waiting[j].Name
+	})
+	sort.Slice(deletable, func(i, j int) bool {
+		return deletable[i].Name < deletable[j].Name
 	})
 
-	// Return the computed lists of running and pending pods.
-	return running, pending, nil
+	// Return the computed slices.
+	return running, waiting, deletable, nil
 }
 
 // updateCluster patches the current NatsCluster resource in order for it to reflect the current state.
