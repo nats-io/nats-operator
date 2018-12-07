@@ -49,7 +49,9 @@ func init() {
 
 func TestMain(m *testing.M) {
 	f = framework.New(kubeconfig, namespace)
-	f.WaitForNatsOperator()
+	if err := f.WaitForNatsOperator(); err != nil {
+		panic(err)
+	}
 
 	if wait {
 		// Wait for the nats-operator-e2e pod to be running and start streaming logs until it terminates.
@@ -62,6 +64,8 @@ func TestMain(m *testing.M) {
 		// Exit with the same exit code as nats-operator-e2e.
 		os.Exit(c)
 	} else {
+		// Try to perform feature detection on the cluster.
+		f.FeatureDetect()
 		// Run the test suite.
 		os.Exit(m.Run())
 	}
