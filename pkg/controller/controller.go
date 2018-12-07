@@ -39,7 +39,6 @@ import (
 	"github.com/nats-io/nats-operator/pkg/cluster"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	"github.com/nats-io/nats-operator/pkg/util/probe"
 )
 
 const (
@@ -233,9 +232,6 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 
 	c.logger.Info("started workers")
-
-	// Signal that we're ready and wait for the context to be canceled.
-	probe.SetReady()
 
 	// Block until the context is canceled.
 	<-ctx.Done()
