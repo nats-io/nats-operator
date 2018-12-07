@@ -30,7 +30,7 @@ func (c *Cluster) checkPods() error {
 func (c *Cluster) reconcileSize() error {
 	// Grab an up-to-date list of pods that are currently running.
 	// Pending pods may be ignored safely as we have previously made sure no pods are in pending state.
-	pods, _, err := c.pollPods()
+	pods, _, _, err := c.pollPods()
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (c *Cluster) reconcileSize() error {
 func (c *Cluster) reconcileVersion() error {
 	// Grab an up-to-date list of pods that are currently running.
 	// Pending pods may be ignored safely as we have previously made sure no pods are in pending state.
-	pods, _, err := c.pollPods()
+	pods, _, _, err := c.pollPods()
 	if err != nil {
 		return err
 	}
