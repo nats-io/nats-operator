@@ -593,7 +593,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -649,6 +649,10 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
 
+	// Grab the A record that will correspond to the current pod so we can use it as the client and cluster advertise host.
+	// This helps with client failover, and with avoiding route connection errors in TLS-enabled clusters.
+	advertiseHost := fmt.Sprintf("%s.%s.%s.svc", name, ManagementServiceName(clusterName), namespace)
+
 	// Rely on the shared configuration map for configuring the cluster.
 	cmd := []string{
 		constants.NatsBinaryPath,
@@ -656,6 +660,10 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		constants.ConfigFilePath,
 		"-P",
 		constants.PidFilePath,
+		"--cluster_advertise",
+		advertiseHost,
+		"--client_advertise",
+		advertiseHost,
 	}
 	if cs.NoAdvertise {
 		cmd = append(cmd, "--no_advertise")
