@@ -330,7 +330,7 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 	}
 
 	// Create the pod.
-	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Namespace, name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 	if err != nil {
 		return nil, err
