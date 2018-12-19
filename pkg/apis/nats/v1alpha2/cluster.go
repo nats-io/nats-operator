@@ -127,6 +127,9 @@ type PodPolicy struct {
 	// Do not overwrite them.
 	Labels map[string]string `json:"labels,omitempty"`
 
+	// Annotations specifies the annotations to attach to pods the operator creates.
+	Annotations map[string]string `json:"annotations,omitempty"`
+
 	// NodeSelector specifies a map of key-value pairs. For the pod to be eligible
 	// to run on a node, the node must have each of the indicated key-value pairs as
 	// labels.

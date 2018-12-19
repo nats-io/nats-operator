@@ -171,7 +171,8 @@ func applyPodPolicy(clusterName string, pod *v1.Pod, policy *v1alpha2.PodPolicy)
 		pod.Spec.Tolerations = policy.Tolerations
 	}
 
-	mergeLabels(pod.Labels, policy.Labels)
+	mergeMaps(pod.Labels, policy.Labels)
+	mergeMaps(pod.Annotations, policy.Annotations)
 
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "nats" {

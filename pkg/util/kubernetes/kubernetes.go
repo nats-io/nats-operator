@@ -554,6 +554,8 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		LabelClusterNameKey:    clusterName,
 		LabelClusterVersionKey: cs.Version,
 	}
+	annotations := map[string]string{}
+
 	containers := make([]v1.Container, 0)
 	volumes := make([]v1.Volume, 0)
 	volumeMounts := make([]v1.VolumeMount, 0)
@@ -613,7 +615,7 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Labels:      labels,
-			Annotations: map[string]string{},
+			Annotations: annotations,
 		},
 		Spec: v1.PodSpec{
 			Hostname:      name,
@@ -770,8 +772,8 @@ func CreatePatch(o, n, datastruct interface{}) ([]byte, error) {
 	return strategicpatch.CreateTwoWayMergePatch(oldData, newData, datastruct)
 }
 
-// mergeLables merges l2 into l1. Conflicting label will be skipped.
-func mergeLabels(l1, l2 map[string]string) {
+// mergeMaps merges l2 into l1. Conflicting keys will be skipped.
+func mergeMaps(l1, l2 map[string]string) {
 	for k, v := range l2 {
 		if _, ok := l1[k]; ok {
 			continue
