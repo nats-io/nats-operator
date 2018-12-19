@@ -128,6 +128,12 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			TargetPort: intstr.FromInt(constants.MonitoringPort),
 			Protocol:   v1.ProtocolTCP,
 		},
+		{
+			Name:       "metrics",
+			Port:       constants.MetricsPort,
+			TargetPort: intstr.FromInt(constants.MetricsPort),
+			Protocol:   v1.ProtocolTCP,
+		},
 	}
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
