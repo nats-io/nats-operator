@@ -108,7 +108,7 @@ $ minikube start \
     --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
     --extra-config=apiserver.service-account-issuer=api \
     --extra-config=apiserver.service-account-api-audiences=api \
-    --kubernetes-version=v1.12.3
+    --kubernetes-version=v1.12.4
 ```
 
 Then, to run the test suite against the resulting Minikube cluster, you may simply run:
