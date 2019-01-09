@@ -23,7 +23,7 @@ func (f *Framework) Require(t *testing.T, features ...ClusterFeature) {
 	for _, feature := range features {
 		if !f.ClusterFeatures[feature] {
 			t.Logf("skipping test as feature %q is not enabled in the cluster", feature)
+			t.SkipNow()
 		}
 	}
-	t.SkipNow()
 }
