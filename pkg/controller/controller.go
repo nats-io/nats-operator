@@ -199,7 +199,7 @@ func (c *Controller) processQueueItem(key string) error {
 		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			// TODO Remove the garbage collection step and rely solely on the Kubernetes garbage collector.
 			c.logger.Warnf("natscluster %q was deleted", name)
-			garbagecollection.New(c.KubeCli.CoreV1(), namespace).CollectCluster(name, garbagecollection.NullUID)
+			garbagecollection.New(c.KubeCli.CoreV1()).CollectCluster(namespace, name, garbagecollection.NullUID)
 			return nil
 		}
 		return err

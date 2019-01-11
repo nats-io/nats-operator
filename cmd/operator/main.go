@@ -188,10 +188,19 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	// Initialize the controller for NatsCluster resources.
 	c := controller.NewNatsClusterController(cfg)
 
+	// Start the garbage collector.
+	var (
+		gcNamespace string
+	)
+	if clusterScoped {
+		gcNamespace = v1.NamespaceAll
+	} else {
+		gcNamespace = namespace
+	}
+	go periodicFullGC(cfg.KubeCli.CoreV1(), gcNamespace, gcInterval)
+
+	// Start the chaos engine if the current instance is not cluster-scoped.
 	if !clusterScoped {
-		// Start the garbage collector.
-		go periodicFullGC(cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, gcInterval)
-		// Start the chaos engine.
 		startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, chaosLevel)
 	}
 
@@ -212,16 +221,13 @@ func newControllerConfig(kubeConfig *rest.Config, kubeClient kubernetes.Interfac
 	}
 }
 
-func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
-	gc := garbagecollection.New(kubecli, ns)
+func periodicFullGC(kubecli corev1client.CoreV1Interface, namespace string, d time.Duration) {
+	gc := garbagecollection.New(kubecli)
 	timer := time.NewTicker(d)
 	defer timer.Stop()
 	for {
 		<-timer.C
-		err := gc.FullyCollect()
-		if err != nil {
-			logrus.Warningf("failed to cleanup resources: %v", err)
-		}
+		gc.FullyCollect(namespace)
 	}
 }
 

@@ -49,3 +49,10 @@ rules:
   - endpoints
   - events
   verbs: ["*"]
+# Allow listing namespaces
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - list
