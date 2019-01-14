@@ -1,38 +1,10 @@
----
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  name: natsclusters.nats.io
-spec:
-  group: nats.io
-  names:
-    kind: NatsCluster
-    listKind: NatsClusterList
-    plural: natsclusters
-    singular: natscluster
-    shortNames:
-    - nats
-  scope: Namespaced
-  version: v1alpha2
----
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  name: natsserviceroles.nats.io
-spec:
-  group: nats.io
-  names:
-    kind: NatsServiceRole
-    listKind: NatsServiceRoleList
-    plural: natsserviceroles
-    singular: natsservicerole
-  scope: Namespaced
-  version: v1alpha2
----
 apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: nats-operator
+  # Change to the name of the namespace where to install NATS Operator.
+  # Alternatively, change to "nats-io" to perform a cluster-scoped deployment in supported versions.
+  namespace: default
 spec:
   replicas: 1
   selector:
@@ -46,8 +18,12 @@ spec:
       serviceAccountName: nats-operator
       containers:
       - name: nats-operator
-        image: connecteverything/nats-operator:0.3.0-v1alpha2
-        imagePullPolicy: Always
+        image: nats-operator:cluster-scoped
+        imagePullPolicy: Never
+        args:
+        - nats-operator
+        # Uncomment to perform a cluster-scoped deployment in supported versions.
+        #- --experimental-cluster-scoped=true
         ports:
         - name: readyz
           containerPort: 8080

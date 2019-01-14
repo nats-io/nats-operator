@@ -51,9 +51,9 @@ run: build.$$(TARGET)
 run:
 	@if [[ "${TARGET}" == "operator" ]]; then \
 		if [[ "${MODE}" == "delete" ]]; then \
-			kubectl delete -n $(NAMESPACE) -f $(PWD)/deploy/default-rbac.yaml --ignore-not-found; \
+			kubectl delete -n $(NAMESPACE) -f $(PWD)/deploy/00-prereqs.yaml --ignore-not-found; \
 		else \
-			kubectl apply -n $(NAMESPACE) -f $(PWD)/deploy/default-rbac.yaml; \
+			kubectl apply -n $(NAMESPACE) -f $(PWD)/deploy/00-prereqs.yaml; \
 			$(PWD)/hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
 		fi \
 	fi

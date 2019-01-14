@@ -14,122 +14,115 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating thei
   - [Configuration reloading](#configuration-reload) is only supported in Kubernetes v1.12+.
   - [Authentication using service accounts](#auth-service-accounts) is only supported in Kubernetes v1.12+ having the `TokenRequest` API enabled.
 
-## Getting Started
+## Introduction
 
-The current version of the operator creates a `NatsCluster`
-[Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/)
-(CRD) under the `nats.io` API group, to which you can make requests to
-create NATS clusters.
+NATS Operator provides a `NatsCluster` [Custom Resources Definition](https://kubernetes.io/docs/tasks/access-kubernetes-api/extend-api-custom-resource-definitions/) (CRD) that models a NATS cluster.
+This CRD allows for specifying the desired size and version for a NATS cluster, as well as several other advanced options:
 
-To add the `NatsCluster` and NATS Operator to your cluster you can run:
-
-```sh
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/default-rbac.yaml
-
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/deployment.yaml
-```
-
-You will then be able to confirm that there is a new CRD registered
-in the cluster:
-
-```
-$ kubectl get crd
-
-NAME                                    AGE
-natsclusters.nats.io                    1s
-```
-
-An example of creating a 3 node cluster is below.  The NATS operator will be
-responsible of assembling the cluster and replacing pods in case of failures.
-
-```
-echo '
-apiVersion: "nats.io/v1alpha2"
-kind: "NatsCluster"
+```yaml
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
 metadata:
-  name: "example-nats-cluster"
+  name: example-nats-cluster
 spec:
   size: 3
   version: "1.3.0"
-' | kubectl apply -f -
+EOF
 ```
+
+NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the any necessary operations on the associated NATS clusters in order to align their current status with the desired one.
+
+## Installing
+
+NATS Operator supports two different operation modes:
+
+* **Namespace-scoped (classic):** NATS Operator manages `NatsCluster` resources on the Kubernetes namespace where it is deployed.
+* **Cluster-scoped (experimental):** NATS Operator manages `NatsCluster` resources across all namespaces in the Kubernetes cluster.
+
+The operation mode must be chosen when installing NATS Operator and cannot be changed later.
+
+### Namespace-scoped installation
+
+To perform a namespace-scoped installation of NATS Operator in the Kubernetes cluster pointed at by the current context, you may run:
+
+```console
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/00-prereqs.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/10-deployment.yaml
+``` 
+
+This will, by default, install NATS Operator in the `default` namespace and observe `NatsCluster` resources created in the `default` namespace, alone.
+In order to install in a different namespace, you must first create said namespace and edit the manifests above in order to specify its name wherever necessary.
+
+**WARNING:** To perform multiple namespace-scoped installations of NATS Operator, you must manually edit the `nats-operator-binding` cluster role binding in `deploy/00-prereqs.yaml` file in order to add all the required service accounts.
+Failing to do so may cause all NATS Operator instances to malfunction.
+
+**WARNING:** When performing a namespace-scoped installation of NATS Operator, you must make sure that all other namespace-scoped installations that may exist in the Kubernetes cluster share the same version.
+Installing different versions of NATS Operator in the same Kubernetes cluster may cause unexpected behavior as the schema of the CRDs which NATS Operator registers may change between versions.
+
+Alternatively, you may use [Helm](https://www.helm.sh/) to perform a namespace-scoped installation of NATS Operator.
+To do so you may go to [helm/nats-operator](https://github.com/nats-io/nats-operator/tree/master/helm/nats-operator) and use the Helm charts found in that repo.
+
+
+### Cluster-scoped installation (experimental)
+
+Cluster-scoped installations of NATS Operator must live in the `nats-io` namespace.
+This namespace must be created beforehand:
+
+```console
+$ kubectl create ns nats-io
+```
+
+Then, you must manually edit the manifests in `deployment/` in order to reference the `nats-io` namespace and to specify the `--experimental-cluster-scoped` flag in the NATS Operator deployment.
+Once you have done this, you may install NATS Operator by running:
+
+```console
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/00-prereqs.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/10-deployment.yaml
+``` 
+
+**WARNING:** When performing a cluster-scoped installation of NATS Operator, you must make sure that there are no other deployments of NATS Operator in the Kubernetes cluster.
+If you have a previous installation of NATS Operator, you must uninstall it before performing a cluster-scoped installation of NATS Operator.  
+
+## Creating a NATS cluster
+
+Once NATS Operator has been installed, you will be able to confirm that two new CRDs have been registered in the cluster:
+
+```console
+$ kubectl get crd
+NAME                       CREATED AT
+natsclusters.nats.io       2019-01-11T17:16:36Z
+natsserviceroles.nats.io   2019-01-11T17:16:40Z
+```
+
+To create a NATS cluster, you must create a `NatsCluster` resource representing the desired status of the cluster.
+For example, to create a 3-node NATS cluster you may run:
+
+```console
+$ cat <<EOF | kubectl create -f -
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
+metadata:
+  name: example-nats-cluster
+spec:
+  size: 3
+  version: "1.3.0"
+EOF
+```
+
+NATS Operator will react to the creation of such a resource by creating three NATS pods.
+These pods will keep being monitored (and replaced in case of failure) by NATS Operator for as long as this `NatsCluster` resource exists.
+
+## Listing NATS clusters
 
 To list all the NATS clusters:
 
 ```sh
-$ kubectl get natsclusters.nats.io
-
-NAME                   AGE
-example-nats-cluster   1s
+$ kubectl get nats --all-namespaces
+NAMESPACE   NAME                   AGE
+default     example-nats-cluster   2m
 ```
 
-### Helm support
-
-There is an alternative way to install NATS Operator for [Helm](https://www.helm.sh/) users. You can go to [helm/nats-operator](https://github.com/nats-io/nats-operator/tree/master/helm/nats-operator) and use the Helm charts found in the repo.
-
-### Installing NATS Operator on a Custom Namespace with RBAC enabled
-
-In order to install the NATS Operator in a custom namespace, if RBAC
-is enabled it is then necessary to create a `ServiceAccount` and
-`ClusterRoleBinding` referring to the custom namespace in order for
-the operator to be able run properly.
-
-The example below will deploy the `nats-operator` under the `nats-io` namespace,
-using the `nats-operator` ServiceAccount:
-
-```sh
-$ kubectl create namespace nats-io
-
-$ echo '
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: nats-operator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: nats-operator-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: nats-operator
-subjects:
-- kind: ServiceAccount
-  name: nats-operator
-  namespace: nats-io
-' | kubectl -n nats-io apply -f -
-
-$ kubectl -n nats-io apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/role.yaml
-
-$ kubectl -n nats-io apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/deployment.yaml
-
-$ kubectl -n nats-io logs deployment/nats-operator
-time="2018-10-25T03:04:58Z" level=info msg="nats-operator Version: 0.2.3-v1alpha2+git"
-```
-
-Note that the NATS operator only monitors the `NatsCluster` resources
-which are created in the namespace where it was deployed, so if you
-want to create a cluster you have to specify the same one as the
-operator:
-
-```
-$ kubectl -n nats-io apply -f example/example-nats-cluster.yaml
-natscluster "example-nats-1" created
-
-$ kubectl -n nats-io get natsclusters
-NAME             AGE
-example-nats-1   6m
-
-$ kubectl -n nats-io get pods -l nats_cluster=example-nats-1
-NAME               READY     STATUS    RESTARTS   AGE
-example-nats-1-1   1/1       Running   0          7m
-example-nats-1-2   1/1       Running   0          7m
-example-nats-1-3   1/1       Running   0          6m
-```
-
-### TLS support
+## TLS support
 
 By using a pair of opaque secrets (one for the clients and then another for the routes),
 it is possible to set TLS for the communication between the clients and also for the
@@ -195,7 +188,6 @@ ServiceAccounts integration can then be enabled by setting the
 `enableServiceAccounts` flag to true in the `NatsCluster` configuration.
 
 ```yaml
----
 apiVersion: nats.io/v1alpha2
 kind: NatsCluster
 metadata:
@@ -217,7 +209,6 @@ Permissions for a `ServiceAccount` can be set by creating a
 two accounts, one is an admin user that has more permissions.
 
 ```yaml
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -269,7 +260,6 @@ nats-user-example-nats-bound-token         Opaque        1         43m
 An example of mounting the secret in a `Pod` can be found below:
 
 ```yaml
----
 apiVersion: v1
 kind: Pod
 metadata:
