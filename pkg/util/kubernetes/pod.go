@@ -242,7 +242,7 @@ func WaitUntilPodReady(ctx context.Context, kubeClient corev1.CoreV1Interface, p
 		case watchapi.Error:
 			return false, fmt.Errorf("got event of type error: %+v", event.Object)
 		case watchapi.Deleted:
-			return false, fmt.Errorf("pod %q has been deleted", pod.Name)
+			return false, fmt.Errorf("pod %q has been deleted", ResourceKey(pod))
 		default:
 			pod = event.Object.(*v1.Pod)
 			return isPodRunningAndReady(pod), nil

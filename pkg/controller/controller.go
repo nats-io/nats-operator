@@ -198,7 +198,7 @@ func (c *Controller) processQueueItem(key string) error {
 		// The NatsCluster resource may no longer exist, in which case we call the garbage collector.
 		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			// TODO Remove the garbage collection step and rely solely on the Kubernetes garbage collector.
-			c.logger.Warnf("natscluster %q was deleted", name)
+			c.logger.Warnf("natscluster %q was deleted", key)
 			garbagecollection.New(c.KubeCli.CoreV1()).CollectCluster(namespace, name, garbagecollection.NullUID)
 			return nil
 		}
@@ -275,10 +275,10 @@ func (c *Controller) handleObject(obj interface{}) {
 			runtime.HandleError(fmt.Errorf("failed to decode object tombstone: invalid type"))
 			return
 		}
-		c.logger.Debugf("recovered deleted object %q from tombstone", object.GetName())
+		c.logger.Debugf("recovered deleted object %q from tombstone", kubernetesutil.ResourceKey(object))
 	}
 
-	c.logger.Debugf("processing object %q", object.GetName())
+	c.logger.Debugf("processing object %q", kubernetesutil.ResourceKey(object))
 
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a NatsCluster resource, we should not do anything more with it.
@@ -288,7 +288,7 @@ func (c *Controller) handleObject(obj interface{}) {
 		// Attempt to get the owning NatsCluster resource.
 		natsCluster, err := c.natsClustersLister.NatsClusters(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
-			c.logger.Debugf("ignoring orphaned object %q of natscluster %q", object.GetSelfLink(), ownerRef.Name)
+			c.logger.Debugf("ignoring orphaned object %q of natscluster \"%s/%s\"", object.GetSelfLink(), object.GetNamespace(), ownerRef.Name)
 			return
 		}
 		// Enqueue the NatsCluster resource for later processing.

@@ -138,7 +138,7 @@ func (gc *GC) collectPods(namespace string, option metav1.ListOptions, runningSe
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
-			gc.logger.Infof("deleted pod (%v)", p.GetName())
+			gc.logger.Infof("deleted pod \"%s/%s\"", p.Namespace, p.Name)
 		}
 	}
 	return nil
@@ -160,7 +160,7 @@ func (gc *GC) collectConfigMaps(namespace string, option metav1.ListOptions, run
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
-			gc.logger.Infof("deleted configmap (%v)", cm.GetName())
+			gc.logger.Infof("deleted configmap \"%s/%s\"", cm.Namespace, cm.Name)
 		}
 	}
 
@@ -183,7 +183,7 @@ func (gc *GC) collectServices(namespace string, option metav1.ListOptions, runni
 			if err != nil && !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 				return err
 			}
-			gc.logger.Infof("deleted service (%v)", srv.GetName())
+			gc.logger.Infof("deleted service \"%s/%s\"", srv.Namespace, srv.Name)
 		}
 	}
 
