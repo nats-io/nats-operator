@@ -23,18 +23,22 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 
 	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	"github.com/nats-io/nats-operator/pkg/constants"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
 const (
-	// natsOperatorPodName is the name of the nats-operator pod.
-	natsOperatorPodName = "nats-operator"
+	// natsOperatorDeploymentName is the name of the nats-operator deployment.
+	natsOperatorDeploymentName = "nats-operator"
 	// natsOperatorE2ePodName is the name of the nats-operator-e2e pod.
 	natsOperatorE2ePodName = "nats-operator-e2e"
 	// podReadinessTimeout is the maximum amount of time we wait for the nats-operator / nats-operator-e2e pods to be running and ready.
@@ -55,6 +59,8 @@ const (
 type Framework struct {
 	// ClusterFeatures is a map indicating whether specific cluster features have been detected in the target cluster.
 	ClusterFeatures map[ClusterFeature]bool
+	// ClusterScoped indicates whether nats-operator has been installed in "cluster-scoped" mode.
+	ClusterScoped bool
 	// KubeClient is an interface to the Kubernetes base APIs.
 	KubeClient kubernetes.Interface
 	// Namespace is the namespace in which we are running.
@@ -64,27 +70,32 @@ type Framework struct {
 }
 
 // New returns a new instance of the testing framework.
-func New(kubeconfig, namespace string) *Framework {
+func New(clusterScoped bool, kubeconfig, namespace string) *Framework {
 	// Assume that all features are disabled until we do feature detection.
 	cf := map[ClusterFeature]bool{
 		ShareProcessNamespace: false,
 		TokenRequest:          false,
+	}
+	// Override the namespace if nats-operator is deployed in the cluster-scoped mode.
+	if clusterScoped {
+		namespace = constants.KubernetesNamespaceNatsIO
 	}
 	config := kubernetesutil.MustNewKubeConfig(kubeconfig)
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(config)
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(config)
 	return &Framework{
 		ClusterFeatures: cf,
+		ClusterScoped:   clusterScoped,
 		KubeClient:      kubeClient,
 		Namespace:       namespace,
 		NatsClient:      natsClient,
 	}
 }
 
-// Cleanup deletes the nats-operator and nats-operator-e2e pods, ignoring errors.
+// Cleanup deletes the nats-operator deployment and the nats-operator-e2e pod, ignoring errors.
 func (f *Framework) Cleanup() {
-	for _, pod := range []string{natsOperatorPodName, natsOperatorE2ePodName} {
-		f.KubeClient.CoreV1().Pods(f.Namespace).Delete(pod, &metav1.DeleteOptions{})
+	if err := f.KubeClient.CoreV1().Pods(f.Namespace).Delete(natsOperatorE2ePodName, &metav1.DeleteOptions{}); err != nil {
+		log.Warnf("failed to delete the %q pod: %v", natsOperatorE2ePodName, err)
 	}
 }
 
@@ -118,20 +129,24 @@ func (f *Framework) FeatureDetect() {
 	}
 }
 
-// WaitForNatsOperator waits for the nats-operator pod to be running and ready.
+// WaitForNatsOperator waits for the nats-operator deployment to have at least one available replica.
 func (f *Framework) WaitForNatsOperator() error {
-	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
 	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
 	defer fn()
-	return kubernetesutil.WaitUntilPodReady(ctx, f.KubeClient.CoreV1(), &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: f.Namespace,
-			Name:      natsOperatorPodName,
-		},
+	return kubernetesutil.WaitUntilDeploymentCondition(ctx, f.KubeClient, f.Namespace, natsOperatorDeploymentName, func(event watch.Event) (bool, error) {
+		switch event.Type {
+		case watch.Error:
+			return false, fmt.Errorf("got event of type error: %+v", event.Object)
+		case watch.Deleted:
+			return false, fmt.Errorf("deployment \"%s/%s\" has been deleted", f.Namespace, natsOperatorDeploymentName)
+		default:
+			deployment := event.Object.(*appsv1.Deployment)
+			return deployment.Status.AvailableReplicas >= 1, nil
+		}
 	})
 }
 
-// WaitForNatsOperatorE2ePodTermination waits for the nats-operator pod to be running and ready.
+// WaitForNatsOperatorE2ePodTermination waits for the nats-operator-e2e pod to be running and ready.
 // It then starts streaming logs and returns the pod's exit code, or an error if any error was found during the process.
 func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
@@ -140,7 +155,7 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	err := kubernetesutil.WaitUntilPodReady(ctx, f.KubeClient.CoreV1(), &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: f.Namespace,
-			Name:      natsOperatorPodName,
+			Name:      natsOperatorE2ePodName,
 		},
 	})
 	if err != nil {

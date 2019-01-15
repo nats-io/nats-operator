@@ -34,6 +34,8 @@ var (
 	// f is the testing framework used for running the test suite.
 	f *framework.Framework
 
+	// clusterScoped indicates whether nats-operator has been installed in "cluster-scoped" mode.
+	clusterScoped bool
 	// kubeconfig is the path to the kubeconfig file to use when running the test suite outside a Kubernetes cluster (i.e. in "wait" mode).
 	kubeconfig string
 	// namespace is the name of the Kubernetes namespace to use for running the test suite.
@@ -43,6 +45,7 @@ var (
 )
 
 func init() {
+	flag.BoolVar(&clusterScoped, "experimental-cluster-scoped", false, "whether nats-operator has been installed in cluster-scoped mode")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "path to the kubeconfig file to use (e.g. $HOME/.kube/config)")
 	flag.StringVar(&namespace, "namespace", "default", "name of the kubernetes namespace to use")
 	flag.BoolVar(&wait, "wait", false, "instead of running the e2e test suite, connect to the kubernetes cluster and wait for the e2e job to complete")
@@ -50,7 +53,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
-	f = framework.New(kubeconfig, namespace)
+	f = framework.New(clusterScoped, kubeconfig, namespace)
 	if err := f.WaitForNatsOperator(); err != nil {
 		panic(err)
 	}

@@ -49,7 +49,7 @@ func TestConfigReloadOnResize(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with a single member and having configuration reloading enabled.
-	natsCluster, err = f.CreateCluster("test-nats-", initialSize, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", initialSize, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
 			// Enable configuration reloading.
 			EnableConfigReload: true,
@@ -153,7 +153,7 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create a secret containing authentication data.
-	if cas, err = f.CreateSecret("data", d); err != nil {
+	if cas, err = f.CreateSecret(f.Namespace, "data", d); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the secret after we're done testing.
@@ -164,7 +164,7 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 	}()
 
 	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
-	natsCluster, err = f.CreateCluster("test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
 			// Use the secret created above for client authentication.
 			ClientsAuthSecret: cas.Name,
@@ -254,7 +254,7 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 	)
 
 	// Create a NatsServiceRole resource having permissions to subscribe to "foo.bar" only.
-	nsr1, err = f.CreateNatsServiceRole("test-nsr1-", func(nsr *natsv1alpha2.NatsServiceRole) {
+	nsr1, err = f.CreateNatsServiceRole(f.Namespace, "test-nsr1-", func(nsr *natsv1alpha2.NatsServiceRole) {
 		nsr.Spec.Permissions.Publish = []string{
 			">",
 		}
@@ -271,7 +271,7 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 		}
 	}()
 	// Create a NatsServiceRole resource having full publish and subscribe permissions.
-	nsr2, err = f.CreateNatsServiceRole("test-nsr2-", func(nsr *natsv1alpha2.NatsServiceRole) {
+	nsr2, err = f.CreateNatsServiceRole(f.Namespace, "test-nsr2-", func(nsr *natsv1alpha2.NatsServiceRole) {
 		nsr.Spec.Permissions.Publish = []string{
 			">",
 		}
@@ -289,7 +289,7 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 	}()
 
 	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using service accounts for authentication.
-	natsCluster, err = f.CreateCluster("test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
 			// Use service accounts (i.e. observe NatsServiceRole resources) for authentication.
 			EnableServiceAccounts: true,

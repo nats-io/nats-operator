@@ -38,7 +38,7 @@ func TestUpgradeCluster(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with three members.
-	if natsCluster, err = f.CreateCluster("test-nats-", size, initialVersion); err != nil {
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, initialVersion); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the NatsCluster resource after we're done testing.

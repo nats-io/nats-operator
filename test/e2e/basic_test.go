@@ -36,7 +36,7 @@ func TestCreateCluster(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with three members.
-	if natsCluster, err = f.CreateCluster("test-nats-", size, version); err != nil {
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the NatsCluster resource after we're done testing.
@@ -70,7 +70,7 @@ func TestPauseControl(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with three members.
-	if natsCluster, err = f.CreateCluster("test-nats-", initialSize, version); err != nil {
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", initialSize, version); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the NatsCluster resource after we're done testing.

@@ -36,7 +36,7 @@ func TestCreateClusterWithTLSConfig(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with three members, and with TLS enabled
-	natsCluster, err = f.CreateCluster("", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		// The NatsCluster resource must be called "nats" in order for the pre-provisioned certificates to work.
 		natsCluster.Name = "nats"
 		// Enable TLS using pre-provisioned certificates.

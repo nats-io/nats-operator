@@ -40,7 +40,7 @@ func TestConfigContainsFullMesh(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with three members.
-	if natsCluster, err = f.CreateCluster("test-nats-", size, version); err != nil {
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the NatsCluster resource after we're done testing.
@@ -80,7 +80,7 @@ func TestExistingSecretIsReplaced(t *testing.T) {
 	)
 
 	// Create a secret with the same name we will use to create the NatsCluster resource.
-	if secret, err = f.CreateSecret(constants.ConfigFileName, []byte("{port:4222}")); err != nil {
+	if secret, err = f.CreateSecret(f.Namespace, constants.ConfigFileName, []byte("{port:4222}")); err != nil {
 		t.Fatal(err)
 	}
 	// Make sure we cleanup the Secret resource after we're done testing.
@@ -91,7 +91,7 @@ func TestExistingSecretIsReplaced(t *testing.T) {
 	}()
 
 	// Create a NatsCluster resource, making sure that its name matches the name of the secret we've created above.
-	natsCluster, err = f.CreateCluster("", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Name = secret.Name
 	})
 	if err != nil {

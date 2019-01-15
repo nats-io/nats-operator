@@ -6,7 +6,7 @@ go:
 go_import_path: github.com/nats-io/nats-operator
 
 env:
-- KUBERNETES_CONFIG_FILE=$HOME/.kube/config CHANGE_MINIKUBE_NONE_USER=true E2E_NAMESPACE=nats-io
+- KUBERNETES_CONFIG_FILE=$HOME/.kube/config CHANGE_MINIKUBE_NONE_USER=true CLUSTER_SCOPED_E2E_NAMESPACE=nats-io NAMESPACE_SCOPED_E2E_NAMESPACE=nats-operator-e2e
 
 install:
 - go get -u github.com/golang/dep/cmd/dep
@@ -25,6 +25,8 @@ before_script:
 
 script:
 - kubectl cluster-info
-- kubectl create namespace ${E2E_NAMESPACE}
-- cd $GOPATH/src/github.com/nats-io/nats-operator/ && NAMESPACE=${E2E_NAMESPACE} make e2e
+- cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e EXPERIMENTAL_CLUSTER_SCOPED=0 NAMESPACE=${NAMESPACE_SCOPED_E2E_NAMESPACE}
+- kubectl delete namespace ${NAMESPACE_SCOPED_E2E_NAMESPACE}
+- cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e EXPERIMENTAL_CLUSTER_SCOPED=1 NAMESPACE=${CLUSTER_SCOPED_E2E_NAMESPACE}
+- kubectl delete namespace ${CLUSTER_SCOPED_E2E_NAMESPACE}
 - cd $GOPATH/src/github.com/nats-io/nats-operator/test/reloader/ && go test ./... -v

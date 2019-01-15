@@ -32,32 +32,23 @@ dep:
 
 # e2e runs the end-to-end test suite.
 .PHONY: e2e
+e2e: EXPERIMENTAL_CLUSTER_SCOPED ?= false
 e2e: KUBECONFIG ?= $(HOME)/.kube/config
 e2e: NAMESPACE ?= default
 e2e:
-	@./test/prepare-secrets.sh $(NAMESPACE)
-	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
-	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
-	@go test -tags e2e -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
+	EXPERIMENTAL_CLUSTER_SCOPED=$(EXPERIMENTAL_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
+	EXPERIMENTAL_CLUSTER_SCOPED=$(EXPERIMENTAL_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
+	@go test -tags e2e -v ./test/e2e/main_test.go -experimental-cluster-scoped=$(EXPERIMENTAL_CLUSTER_SCOPED) -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
 
 # run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run
-.SECONDEXPANSION:
+run: EXPERIMENTAL_CLUSTER_SCOPED ?= false
 run: MODE ?= dev
 run: NAMESPACE ?= default
 run: PROFILE ?= local
 run: TARGET ?= operator
-run: build.$$(TARGET)
 run:
-	@if [[ "${TARGET}" == "operator" ]]; then \
-		if [[ "${MODE}" == "delete" ]]; then \
-			kubectl delete -n $(NAMESPACE) -f $(PWD)/deploy/00-prereqs.yaml --ignore-not-found; \
-		else \
-			kubectl apply -n $(NAMESPACE) -f $(PWD)/deploy/00-prereqs.yaml; \
-			$(PWD)/hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
-		fi \
-	fi
-	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -n $(NAMESPACE) -p $(PROFILE)
+	@EXPERIMENTAL_CLUSTER_SCOPED=$(EXPERIMENTAL_CLUSTER_SCOPED) MODE=$(MODE) NAMESPACE=$(NAMESPACE) PROFILE=$(PROFILE) TARGET=$(TARGET) $(PWD)/hack/skaffold.sh
 
 # gen executes the code generation step.
 .PHONY: gen

@@ -51,7 +51,7 @@ func TestLameDuckModeWhenScalingDown(t *testing.T) {
 	)
 
 	// Create a NatsCluster resource with the initial size.
-	natsCluster, err = f.CreateCluster("test-nats-", initialSize, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", initialSize, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Spec.ServerImage = serverImage
 	})
 	if err != nil {

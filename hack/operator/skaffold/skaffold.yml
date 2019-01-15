@@ -1,4 +1,4 @@
-apiVersion: skaffold/v1alpha5
+apiVersion: skaffold/v1beta2
 kind: Config
 build:
   artifacts:
@@ -7,13 +7,15 @@ build:
   - image: gcr.io/project-id/nats-operator
     docker:
       # Use a Dockerfile specific for development only.
-      dockerfile: hack/skaffold/operator/Dockerfile
+      dockerfile: __TMP_DIR__/Dockerfile
 deploy:
   kubectl:
     manifests:
-    # We deploy a single "nats-operator" pod to make debugging easier.
+    # Make sure the prerequisites are in place.
+    - __TMP_DIR__/prereqs.yml
+    # Create a "nats-operator" deployment with a single replica to make debugging easier.
     # NOTE: Any changes made to the podspec in "deploy/deployment.yaml" will have to be replayed on this file.
-    - hack/skaffold/operator/pod.yml
+    - __TMP_DIR__/deployment.yml
 profiles:
 - name: gke
   build:

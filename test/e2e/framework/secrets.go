@@ -32,23 +32,23 @@ import (
 )
 
 // CreateSecret creates a Secret resource containing the specified key and value.
-func (f *Framework) CreateSecret(key string, val []byte) (*v1.Secret, error) {
+func (f *Framework) CreateSecret(namespace string, key string, val []byte) (*v1.Secret, error) {
 	// Create a Secret object using the specified values.
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-nats-",
-			Namespace:    f.Namespace,
+			Namespace:    namespace,
 		},
 		Data: map[string][]byte{
 			key: val,
 		},
 	}
-	return f.KubeClient.CoreV1().Secrets(f.Namespace).Create(obj)
+	return f.KubeClient.CoreV1().Secrets(obj.Namespace).Create(obj)
 }
 
 // DeleteSecret deletes the specified Secret resource.
 func (f *Framework) DeleteSecret(secret *v1.Secret) error {
-	return f.KubeClient.CoreV1().Secrets(f.Namespace).Delete(secret.Name, &metav1.DeleteOptions{})
+	return f.KubeClient.CoreV1().Secrets(secret.Namespace).Delete(secret.Name, &metav1.DeleteOptions{})
 }
 
 // PatchSecret performs a patch on the specified Secret resource to align its ".data" field with the provided value.
