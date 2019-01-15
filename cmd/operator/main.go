@@ -21,7 +21,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
 	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -50,6 +54,15 @@ import (
 	"github.com/nats-io/nats-operator/version"
 )
 
+const (
+	// clusterScopedFlagName is the name of the flag used to enable the cluster-scoped mode.
+	clusterScopedFlagName = "experimental-cluster-scoped"
+	// clusterScopedFlagRegex is the regular expression used to check for the presence of the "--experimental-cluster-scoped" flag in an arbitrary pod.
+	clusterScopedFlagRegex = "^-{1,2}" + clusterScopedFlagName + "(=.*)?$"
+	// natsOperatorName is the string used to detect whether a given pod is a nats-operator pod.
+	natsOperatorName = "nats-operator"
+)
+
 var (
 	namespace  string
 	name       string
@@ -65,7 +78,7 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&clusterScoped, "experimental-cluster-scoped", false, "[EXPERIMENTAL] whether nats-operator should manage resources across all namespaces")
+	flag.BoolVar(&clusterScoped, clusterScopedFlagName, false, "[EXPERIMENTAL] whether nats-operator should manage resources across all namespaces")
 	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
 	flag.StringVar(&local.KubeConfigPath, "debug-kube-config-path", "", "the path to the local 'kubectl' config file (only for local debugging)")
 	flag.StringVar(&local.PodName, "debug-pod-name", "nats-operator-debug", "the name of the pod which to report to EventRecorder (only for local debugging).")
@@ -123,10 +136,6 @@ func main() {
 	logrus.Infof("Go Version: %s", runtime.Version())
 	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	if clusterScoped {
-		logrus.Warnf("nats-operator is operating at the cluster scope (experimental)")
-	}
-
 	id, err := os.Hostname()
 	if err != nil {
 		logrus.Fatalf("failed to get hostname: %v", err)
@@ -136,6 +145,15 @@ func main() {
 	// The configuration object is required to create clients for our API later on.
 	kubeCfg := kubernetesutil.MustNewKubeConfig(local.KubeConfigPath)
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(kubeCfg)
+
+	// Attempt to mutually exclude namespace-scoped and cluster-scoped deployments of nats-operator in the same Kubernetes cluster.
+	if clusterScoped {
+		exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient)
+		logrus.Warnf("nats-operator is operating at the cluster scope (experimental)")
+	} else {
+		exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient)
+		logrus.Infof("nats-operator is operating at the namespace scope in the %q namespace", namespace)
+	}
 
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
 	go http.ListenAndServe(listenAddr, nil)
@@ -273,4 +291,87 @@ func createRecorder(kubecli corev1client.CoreV1Interface, name, namespace string
 	eventBroadcaster.StartLogging(logrus.Infof)
 	eventBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: corev1client.New(kubecli.RESTClient()).Events(namespace)})
 	return eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: name})
+}
+
+// exitOnPreexistingNamespaceScopedNatsOperatorPods attempts to detect pre-existing namespace-scoped nats-operator pods, exiting nats-operator if any are found.
+func exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
+	// List all pods in the cluster.
+	pods, err := kubeClient.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
+	if err != nil {
+		logrus.Fatalf("failed to list pods at the cluster level: %v", err)
+	}
+	// Iterate over each listed pod and try to detect namespace-scoped nats-operator containers.
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			if isNatsOperatorContainer(container) && !experimentalClusterScopedFlagIsSet(container.Args) {
+				logrus.Fatalf("detected pre-existing namespace-scoped nats-operator pod %q in namespace %q", pod.Name, pod.Namespace)
+			}
+		}
+	}
+}
+
+// exitOnPreexistingClusterScopedNatsOperatorPods attempts to detect pre-existing cluster-scoped nats-operator pods, exiting nats-operator if any are found.
+func exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
+	// List all pods in the "nats-io" namespace.
+	pods, err := kubeClient.CoreV1().Pods(constants.KubernetesNamespaceNatsIO).List(metav1.ListOptions{})
+	if err != nil {
+		logrus.Fatalf("failed to list pods in the %q namespace: %v", constants.KubernetesNamespaceNatsIO, err)
+	}
+	// Iterate over each listed pod and try to detect cluster-scoped nats-operator containers.
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			if isNatsOperatorContainer(container) && experimentalClusterScopedFlagIsSet(container.Args) {
+				logrus.Fatalf("detected pre-existing cluster-scoped nats-operator pod %q", pod.Name)
+			}
+		}
+	}
+}
+
+// isNatsOperatorContainer attempts to detect whether the specified container is likely a nats-operator container.
+// A container is detected as a nats-operator container if any of the following conditions is met:
+// * The container's name contains "nats-operator";
+// * The container's image name contains "nats-operator; OR
+// * The container's argument list is non-empty and the very first argument contains "nats-operator".
+func isNatsOperatorContainer(container v1.Container) bool {
+	switch {
+	case strings.Contains(container.Name, natsOperatorName):
+		return true
+	case strings.Contains(container.Image, natsOperatorName):
+		return true
+	case len(container.Args) > 0 && strings.Contains(container.Args[0], natsOperatorName):
+		return true
+	default:
+		return false
+	}
+}
+
+// experimentalClusterScopedFlagIsSet attempts to determine whether the "--experimental-cluster-scoped" flag is set on the specified list of arguments.
+func experimentalClusterScopedFlagIsSet(args []string) bool {
+	// Compile a regular expression that captures all possible configurations of the "experimental-cluster-scoped" flag.
+	regex := regexp.MustCompile(clusterScopedFlagRegex)
+	// Iterate over the list of arguments.
+	for _, arg := range args {
+		// If the current argument doesn't match the regular expression, there's nothing else to check.
+		if !regex.MatchString(arg) {
+			continue
+		}
+		// The current argument matches the regular expression.
+		// Hence we split the argument by "=" and check for the value of the flag based on the number of parts.
+		parts := strings.SplitN(arg, "=", 2)
+		switch len(parts) {
+		case 1:
+			// There's only a single part (i.e. the value of the argument is just "--experimental-cluster-scoped").
+			// Hence, the flag is set.
+			return true
+		case 2:
+			// There are two parts (i.e. the value of the argument is "--experimental-cluster-scoped=<something>").
+			// Hence, the flag is set if and only if "<something>" evaluates to true.
+			v, err := strconv.ParseBool(parts[1])
+			if err != nil {
+				return false
+			}
+			return v
+		}
+	}
+	return false
 }

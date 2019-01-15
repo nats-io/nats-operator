@@ -3,7 +3,7 @@ SHELL := /bin/bash
 # build.e2e builds the nats-operator-e2e test binary.
 .PHONY: build.e2e
 build.e2e:
-	@GOOS=linux GOARCH=amd64 go test -c -o build/nats-operator-e2e ./test/e2e/*.go
+	@GOOS=linux GOARCH=amd64 go test -tags e2e -c -o build/nats-operator-e2e ./test/e2e/*.go
 
 # build.operator builds the nats-operator binary.
 .PHONY: build.operator
@@ -38,7 +38,7 @@ e2e:
 	@./test/prepare-secrets.sh $(NAMESPACE)
 	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
 	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
-	@go test -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
+	@go test -tags e2e -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
 
 # run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run
