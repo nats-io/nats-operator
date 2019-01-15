@@ -19,6 +19,4 @@ var (
 	KubeConfigPath string
 	// PodName stores the name of the pod which to report to EventRecorder.
 	PodName string
-	// ServiceAccountNAme stores the name of the service account to use.
-	ServiceAccountName string
 )

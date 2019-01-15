@@ -49,10 +49,15 @@ run: PROFILE ?= local
 run: TARGET ?= operator
 run: build.$$(TARGET)
 run:
-	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -n $(NAMESPACE) -p $(PROFILE)
 	@if [[ "${TARGET}" == "operator" ]]; then \
-		./hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
+		if [[ "${MODE}" == "delete" ]]; then \
+			kubectl delete -n $(NAMESPACE) -f $(PWD)/deploy/default-rbac.yaml --ignore-not-found; \
+		else \
+			kubectl apply -n $(NAMESPACE) -f $(PWD)/deploy/default-rbac.yaml; \
+			$(PWD)/hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
+		fi \
 	fi
+	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -n $(NAMESPACE) -p $(PROFILE)
 
 # gen executes the code generation step.
 .PHONY: gen

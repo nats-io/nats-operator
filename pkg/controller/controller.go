@@ -75,13 +75,15 @@ type Controller struct {
 }
 
 type Config struct {
-	Namespace      string
-	ServiceAccount string
-	PVProvisioner  string
-	KubeCli        kubernetes.Interface
-	KubeConfig     *rest.Config
-	KubeExtCli     extsclient.Interface
-	OperatorCli    natsclient.Interface
+	// ClusterScoped indicates whether the controller should watch resources across all namespaces.
+	ClusterScoped bool
+	// NatsOperatorNamespace is the namespace under which the current instance of nats-operator is running.
+	NatsOperatorNamespace string
+	PVProvisioner         string
+	KubeCli               kubernetes.Interface
+	KubeConfig            *rest.Config
+	KubeExtCli            extsclient.Interface
+	OperatorCli           natsclient.Interface
 }
 
 func (c *Config) Validate() error {
@@ -94,10 +96,22 @@ type informer interface {
 }
 
 func NewNatsClusterController(cfg Config) *Controller {
+	// Check if nats-operator is operating at cluster or namespace scope.
+	// Based on this, we either watch all Kubernetes namespaces or just the one where nats-operator is deployed.
+	var (
+		watchedNamespace string
+	)
+	if cfg.ClusterScoped {
+		// Watch all Kubernetes namespaces.
+		watchedNamespace = v1.NamespaceAll
+	} else {
+		// Watch only the Kubernetes namespace where nats-operator is deployed.
+		watchedNamespace = cfg.NatsOperatorNamespace
+	}
 	// Create shared informer factories for the types we are interested in.
-	// WithNamespace is used to filter resources belonging to the namespace where nats-operator is deployed.
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cfg.KubeCli, kubeFullResyncPeriod, kubeinformers.WithNamespace(cfg.Namespace))
-	natsInformerFactory := natsinformers.NewSharedInformerFactoryWithOptions(cfg.OperatorCli, natsFullResyncPeriod, natsinformers.WithNamespace(cfg.Namespace))
+	// WithNamespace is used to filter resources belonging to "watchedNamespace".
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cfg.KubeCli, kubeFullResyncPeriod, kubeinformers.WithNamespace(watchedNamespace))
+	natsInformerFactory := natsinformers.NewSharedInformerFactoryWithOptions(cfg.OperatorCli, natsFullResyncPeriod, natsinformers.WithNamespace(watchedNamespace))
 	// Obtain references to shared informers for the required types.
 	podInformer := kubeInformerFactory.Core().V1().Pods()
 	secretInformer := kubeInformerFactory.Core().V1().Secrets()

@@ -11,9 +11,6 @@ build:
 deploy:
   kubectl:
     manifests:
-    # We must make sure that the required service account, cluster role and cluster role binding are in place.
-    # Hence, we deploy "deploy/default-rbac.yaml" as well.
-    - deploy/default-rbac.yaml
     # We deploy a single "nats-operator" pod to make debugging easier.
     # NOTE: Any changes made to the podspec in "deploy/deployment.yaml" will have to be replayed on this file.
     - hack/skaffold/operator/pod.yml

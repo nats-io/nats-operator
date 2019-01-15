@@ -29,7 +29,6 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/api/core/v1"
 	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -41,13 +40,13 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/chaos"
 	natsclientset "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/controller"
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/nats-io/nats-operator/version"
 )
 
@@ -60,12 +59,15 @@ var (
 	chaosLevel int
 
 	printVersion bool
+
+	// clusterScoped indicates whether the current instance of nats-operator is operating cluster-wide.
+	clusterScoped bool
 )
 
 func init() {
+	flag.BoolVar(&clusterScoped, "experimental-cluster-scoped", false, "[EXPERIMENTAL] whether nats-operator should manage resources across all namespaces")
 	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
 	flag.StringVar(&local.KubeConfigPath, "debug-kube-config-path", "", "the path to the local 'kubectl' config file (only for local debugging)")
-	flag.StringVar(&local.ServiceAccountName, "debug-service-account-name", "default", "the name of the service account which to use (only for local debugging)")
 	flag.StringVar(&local.PodName, "debug-pod-name", "nats-operator-debug", "the name of the pod which to report to EventRecorder (only for local debugging).")
 
 	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8080", "The address on which the HTTP server will listen to")
@@ -81,9 +83,15 @@ func main() {
 		FullTimestamp: true,
 	}
 	logrus.SetFormatter(formatter)
+
 	namespace = os.Getenv("MY_POD_NAMESPACE")
 	if len(namespace) == 0 {
 		logrus.Fatalf("must set env MY_POD_NAMESPACE")
+	}
+	// Force cluster-scoped instances of nats-operator to run on the "nats-io" namespace.
+	// This is the simplest way to guarantee that leader election occurs as expected because all cluster-scoped instances will do resource locking on this same namespace.
+	if clusterScoped && namespace != constants.KubernetesNamespaceNatsIO {
+		logrus.Fatalf("cluster-scoped instances of nats-operator must run on the %q namespace", constants.KubernetesNamespaceNatsIO)
 	}
 
 	if len(local.KubeConfigPath) == 0 {
@@ -114,6 +122,10 @@ func main() {
 	logrus.Infof("Git SHA: %s", version.GitSHA)
 	logrus.Infof("Go Version: %s", runtime.Version())
 	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	if clusterScoped {
+		logrus.Warnf("nats-operator is operating at the cluster scope (experimental)")
+	}
 
 	id, err := os.Hostname()
 	if err != nil {
@@ -176,11 +188,12 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	// Initialize the controller for NatsCluster resources.
 	c := controller.NewNatsClusterController(cfg)
 
-	// Start the garbage collector.
-	go periodicFullGC(cfg.KubeCli.CoreV1(), cfg.Namespace, gcInterval)
-
-	// Start the chaos engine.
-	startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.Namespace, chaosLevel)
+	if !clusterScoped {
+		// Start the garbage collector.
+		go periodicFullGC(cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, gcInterval)
+		// Start the chaos engine.
+		startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, chaosLevel)
+	}
 
 	// Run the controller for NatsCluster resources.
 	if err := c.Run(ctx); err != nil {
@@ -189,46 +202,14 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 }
 
 func newControllerConfig(kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
-	var (
-		err            error
-		serviceAccount string
-	)
-
-	if len(local.KubeConfigPath) == 0 {
-		serviceAccount, err = getMyPodServiceAccount(kubeClient.CoreV1())
-		if err != nil {
-			logrus.Fatalf("fail to get my pod's service account: %v", err)
-		}
-	} else {
-		serviceAccount = local.ServiceAccountName
-		if len(serviceAccount) == 0 {
-			logrus.Fatalf("invalid service account name specified")
-		}
+	return controller.Config{
+		ClusterScoped:         clusterScoped,
+		NatsOperatorNamespace: namespace,
+		KubeCli:               kubeClient,
+		KubeExtCli:            extsClient,
+		OperatorCli:           natsClient,
+		KubeConfig:            kubeConfig,
 	}
-	cfg := controller.Config{
-		Namespace:      namespace,
-		ServiceAccount: serviceAccount,
-		KubeCli:        kubeClient,
-		KubeExtCli:     extsClient,
-		OperatorCli:    natsClient,
-		KubeConfig:     kubeConfig,
-	}
-
-	return cfg
-}
-
-func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
-	var sa string
-	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
-		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
-		if err != nil {
-			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
-			return false, nil
-		}
-		sa = pod.Spec.ServiceAccountName
-		return true, nil
-	})
-	return sa, err
 }
 
 func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
