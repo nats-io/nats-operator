@@ -37,6 +37,7 @@ import (
 	natsinformers "github.com/nats-io/nats-operator/pkg/client/informers/externalversions"
 	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/cluster"
+	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
@@ -75,8 +76,8 @@ type Controller struct {
 }
 
 type Config struct {
-	// ClusterScoped indicates whether the controller should watch resources across all namespaces.
-	ClusterScoped bool
+	// FeatureMap is the map containing features and their status for the current instance of nats-operator.
+	FeatureMap features.FeatureMap
 	// NatsOperatorNamespace is the namespace under which the current instance of nats-operator is running.
 	NatsOperatorNamespace string
 	PVProvisioner         string
@@ -101,7 +102,7 @@ func NewNatsClusterController(cfg Config) *Controller {
 	var (
 		watchedNamespace string
 	)
-	if cfg.ClusterScoped {
+	if cfg.FeatureMap.IsEnabled(features.ClusterScoped) {
 		// Watch all Kubernetes namespaces.
 		watchedNamespace = v1.NamespaceAll
 	} else {

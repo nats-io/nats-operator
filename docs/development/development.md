@@ -93,7 +93,7 @@ To stop execution and cleanup the deployment, hit `Ctrl+C`.
 To run a cluster-scoped instance of `nats-operator` against the local Kubernetes cluster targeted by the current context, you must run:
 
 ```console
-$ make run EXPERIMENTAL_CLUSTER_SCOPED=1 PROFILE=local
+$ make run FEATURE_GATE_CLUSTER_SCOPED=true PROFILE=local
 ```
 
 To stop execution and cleanup the deployment, hit `Ctrl+C`.
@@ -117,7 +117,7 @@ To stop execution and cleanup the deployment, hit `Ctrl+C`.
 To run a cluster-scoped instance of `nats-operator` against the Google Kubernetes Engine cluster targeted by the current context, you must run:
 
 ```console
-$ make run EXPERIMENTAL_CLUSTER_SCOPED=1 PROFILE=gke
+$ make run FEATURE_GATE_CLUSTER_SCOPED=true PROFILE=gke
 ```
 
 To stop execution and cleanup the deployment, hit `Ctrl+C`.
@@ -176,7 +176,7 @@ $ make e2e NAMESPACE=<namespace>
 To perform a cluster-scoped installation of `nats-operator` and run the end-to-end test suite against it, you may run:
 
 ```console
-$ make e2e EXPERIMENTAL_CLUSTER_SCOPED=1
+$ make e2e FEATURE_GATE_CLUSTER_SCOPED=1
 ```
 
 The required `nats-io` namespace will be automatically created if it doesn't already exist. 

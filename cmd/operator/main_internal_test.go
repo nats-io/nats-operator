@@ -7,6 +7,7 @@ import (
 	"k8s.io/api/core/v1"
 )
 
+// TestTestIsNatsOperatorContainer tests the "IsNatsOperatorContainer" function.
 func TestIsNatsOperatorContainer(t *testing.T) {
 	tests := []struct {
 		description    string
@@ -71,14 +72,15 @@ func TestIsNatsOperatorContainer(t *testing.T) {
 	}
 }
 
-func TestExperimentalClusterScopedFlagIsSet(t *testing.T) {
+// TestClusterScopedFeatureGateIsEnabled tests the "ClusterScopedFeatureGateIsEnabled" function.
+func TestClusterScopedFeatureGateIsEnabled(t *testing.T) {
 	tests := []struct {
 		description    string
 		args           []string
 		expectedResult bool
 	}{
 		{
-			description: "--experimental-cluster-scoped is not present",
+			description: "--feature-gates is not present",
 			args: []string{
 				"nats-operator",
 				"--foo",
@@ -87,57 +89,53 @@ func TestExperimentalClusterScopedFlagIsSet(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			description: "--experimental-cluster-scoped is present and has no value",
+			description: "--feature-gates is present and has no value",
 			args: []string{
 				"nats-operator",
-				"--experimental-cluster-scoped",
 				"--foo",
-				"--bar",
-			},
-			expectedResult: true,
-		},
-		{
-			description: "--experimental-cluster-scoped is present and equal to \"true\"",
-			args: []string{
-				"nats-operator",
-				"--experimental-cluster-scoped=true",
-				"--foo",
-				"--bar",
-			},
-			expectedResult: true,
-		},
-		{
-			description: "--experimental-cluster-scoped is present and equal to \"1\"",
-			args: []string{
-				"nats-operator",
-				"--experimental-cluster-scoped=1",
-				"--foo",
-				"--bar",
-			},
-			expectedResult: true,
-		},
-		{
-			description: "--experimental-cluster-scoped is present and equal to \"false\"",
-			args: []string{
-				"nats-operator",
-				"--experimental-cluster-scoped=false",
-				"--foo",
-				"--bar",
+				"--feature-gates",
 			},
 			expectedResult: false,
 		},
 		{
-			description: "--experimental-cluster-scoped is present and equal to \"0\"",
+			description: "--feature-gates is present and ClusterScoped is enabled",
 			args: []string{
 				"nats-operator",
-				"--experimental-cluster-scoped=0",
 				"--foo",
-				"--bar",
+				"--feature-gates=ClusterScoped=true",
+			},
+			expectedResult: true,
+		},
+		{
+			description: "--feature-gates is present and ClusterScoped is disabled",
+			args: []string{
+				"nats-operator",
+				"--foo",
+				"--feature-gates=ClusterScoped=false",
+			},
+			expectedResult: false,
+		},
+		{
+			description: "--feature-gates is present and ClusterScoped is enabled (separate positional arguments)",
+			args: []string{
+				"nats-operator",
+				"--foo",
+				"--feature-gates",
+				"ClusterScoped=true",
+			},
+			expectedResult: true,
+		},
+		{
+			description: "--feature-gates is present and ClusterScoped is disabled (separate positional arguments)",
+			args: []string{
+				"nats-operator",
+				"--feature-gates",
+				"Cluster-Scoped=false",
 			},
 			expectedResult: false,
 		},
 	}
 	for _, test := range tests {
-		assert.Equal(t, test.expectedResult, experimentalClusterScopedFlagIsSet(test.args), "test case: %s", test.description)
+		assert.Equal(t, test.expectedResult, ClusterScopedFeatureGateIsEnabled(test.args), "test case: %s", test.description)
 	}
 }

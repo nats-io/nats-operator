@@ -72,7 +72,26 @@ This namespace must be created beforehand:
 $ kubectl create ns nats-io
 ```
 
-Then, you must manually edit the manifests in `deployment/` in order to reference the `nats-io` namespace and to specify the `--experimental-cluster-scoped` flag in the NATS Operator deployment.
+Then, you must manually edit the manifests in `deployment/` in order to reference the `nats-io` namespace and to enable the `ClusterScoped` feature gate in the NATS Operator deployment.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats-operator
+  namespace: nats-io
+spec:
+  (...)
+    spec:
+      containers:
+      - name: nats-operator
+        (...)
+        args:
+        - nats-operator
+        - --feature-gates=ClusterScoped=true
+        (...)
+```
+
 Once you have done this, you may install NATS Operator by running:
 
 ```console

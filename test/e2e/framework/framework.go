@@ -33,6 +33,7 @@ import (
 
 	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/features"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
@@ -59,8 +60,8 @@ const (
 type Framework struct {
 	// ClusterFeatures is a map indicating whether specific cluster features have been detected in the target cluster.
 	ClusterFeatures map[ClusterFeature]bool
-	// ClusterScoped indicates whether nats-operator has been installed in "cluster-scoped" mode.
-	ClusterScoped bool
+	// FeatureMap is the map containing features and their status for the current instance of the end-to-end test suite.
+	FeatureMap features.FeatureMap
 	// KubeClient is an interface to the Kubernetes base APIs.
 	KubeClient kubernetes.Interface
 	// Namespace is the namespace in which we are running.
@@ -70,14 +71,14 @@ type Framework struct {
 }
 
 // New returns a new instance of the testing framework.
-func New(clusterScoped bool, kubeconfig, namespace string) *Framework {
+func New(featureMap features.FeatureMap, kubeconfig, namespace string) *Framework {
 	// Assume that all features are disabled until we do feature detection.
 	cf := map[ClusterFeature]bool{
 		ShareProcessNamespace: false,
 		TokenRequest:          false,
 	}
 	// Override the namespace if nats-operator is deployed in the cluster-scoped mode.
-	if clusterScoped {
+	if featureMap.IsEnabled(features.ClusterScoped) {
 		namespace = constants.KubernetesNamespaceNatsIO
 	}
 	config := kubernetesutil.MustNewKubeConfig(kubeconfig)
@@ -85,7 +86,7 @@ func New(clusterScoped bool, kubeconfig, namespace string) *Framework {
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(config)
 	return &Framework{
 		ClusterFeatures: cf,
-		ClusterScoped:   clusterScoped,
+		FeatureMap:      featureMap,
 		KubeClient:      kubeClient,
 		Namespace:       namespace,
 		NatsClient:      natsClient,

@@ -7,8 +7,8 @@ sedi () {
     (sed --version >/dev/null 2>&1 && sed -i "$@") || sed -i "" "$@"
 }
 
-# EXPERIMENTAL_CLUSTER_SCOPED indicated whether to perform a namespace-scoped or a cluster-scoped deployment.
-EXPERIMENTAL_CLUSTER_SCOPED=${EXPERIMENTAL_CLUSTER_SCOPED:-false}
+# FEATURE_GATE_CLUSTER_SCOPED holds the value of the "ClusterScoped" feature gate.
+FEATURE_GATE_CLUSTER_SCOPED=${FEATURE_GATE_CLUSTER_SCOPED:-false}
 # MODE is the mode in which to run skaffold.
 MODE=${MODE:-dev}
 # NAMESPACE is the namespace where to deploy "nats-operator".
@@ -33,8 +33,8 @@ cp -r "${ROOT_DIR}/hack/${TARGET}/skaffold/"* "${TMP_DIR}/"
 # Replace the "__TMP_DIR__" placeholder in "skaffold.yml".
 sedi -e "s|__TMP_DIR__|${TMP_DIR}|" "${TMP_DIR}/skaffold.yml"
 
-# Validate the value of EXPERIMENTAL_CLUSTER_SCOPED and override NAMESPACE as required.
-case "${EXPERIMENTAL_CLUSTER_SCOPED}" in
+# Validate the value of FEATURE_GATE_CLUSTER_SCOPED and override NAMESPACE as required.
+case "${FEATURE_GATE_CLUSTER_SCOPED}" in
     "1"|"true")
         # Override the value of NAMESPACE.
         NAMESPACE="nats-io"
@@ -43,15 +43,15 @@ case "${EXPERIMENTAL_CLUSTER_SCOPED}" in
         # There's nothing to do here.
         ;;
      *)
-        echo "unsupported value for EXPERIMENTAL_CLUSTER_SCOPED: \"${EXPERIMENTAL_CLUSTER_SCOPED}\"" && exit 1
+        echo "unsupported value for FEATURE_GATE_CLUSTER_SCOPED: \"${FEATURE_GATE_CLUSTER_SCOPED}\"" && exit 1
         ;;
 esac
 
 # Replace the adequate manifests based on the target.
 case "${TARGET}" in
     "e2e"|"operator")
-        # Replace the "__EXPERIMENTAL_CLUSTER_SCOPED__" placeholder in the manifests.
-        sedi -e "s|__EXPERIMENTAL_CLUSTER_SCOPED__|${EXPERIMENTAL_CLUSTER_SCOPED}|" "${TMP_DIR}/"*
+        # Replace the "__FEATURE_GATE_CLUSTER_SCOPED__" placeholder in the manifests.
+        sedi -e "s|__FEATURE_GATE_CLUSTER_SCOPED__|${FEATURE_GATE_CLUSTER_SCOPED}|" "${TMP_DIR}/"*
         # Replace the "__NAMESPACE__" placeholder in the manifests
         sedi -e "s|__NAMESPACE__|${NAMESPACE}|" "${TMP_DIR}/"*
         ;;

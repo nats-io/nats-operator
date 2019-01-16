@@ -23,7 +23,6 @@ import (
 	"os/signal"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -48,6 +47,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/controller"
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
@@ -55,10 +55,8 @@ import (
 )
 
 const (
-	// clusterScopedFlagName is the name of the flag used to enable the cluster-scoped mode.
-	clusterScopedFlagName = "experimental-cluster-scoped"
-	// clusterScopedFlagRegex is the regular expression used to check for the presence of the "--experimental-cluster-scoped" flag in an arbitrary pod.
-	clusterScopedFlagRegex = "^-{1,2}" + clusterScopedFlagName + "(=.*)?$"
+	// featureGatesFlagName is the name of the flag used to define feature gates.
+	featureGatesFlagName = "feature-gates"
 	// natsOperatorName is the string used to detect whether a given pod is a nats-operator pod.
 	natsOperatorName = "nats-operator"
 )
@@ -73,12 +71,12 @@ var (
 
 	printVersion bool
 
-	// clusterScoped indicates whether the current instance of nats-operator is operating cluster-wide.
-	clusterScoped bool
+	// featureGates is a comma-separated list of "key=value" pairs used to toggle certain features.
+	featureGates string
 )
 
 func init() {
-	flag.BoolVar(&clusterScoped, clusterScopedFlagName, false, "[EXPERIMENTAL] whether nats-operator should manage resources across all namespaces")
+	flag.StringVar(&featureGates, featureGatesFlagName, "", "comma-separated list of \"key=value\" pairs used to toggle advanced features")
 	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
 	flag.StringVar(&local.KubeConfigPath, "debug-kube-config-path", "", "the path to the local 'kubectl' config file (only for local debugging)")
 	flag.StringVar(&local.PodName, "debug-pod-name", "nats-operator-debug", "the name of the pod which to report to EventRecorder (only for local debugging).")
@@ -97,13 +95,19 @@ func main() {
 	}
 	logrus.SetFormatter(formatter)
 
+	// Build the feature map based on the value of "--feature-gates".
+	featureMap, err := features.ParseFeatureMap(featureGates)
+	if err != nil {
+		logrus.Fatalf("failed to build feature map: %v", err)
+	}
+
 	namespace = os.Getenv("MY_POD_NAMESPACE")
 	if len(namespace) == 0 {
 		logrus.Fatalf("must set env MY_POD_NAMESPACE")
 	}
 	// Force cluster-scoped instances of nats-operator to run on the "nats-io" namespace.
 	// This is the simplest way to guarantee that leader election occurs as expected because all cluster-scoped instances will do resource locking on this same namespace.
-	if clusterScoped && namespace != constants.KubernetesNamespaceNatsIO {
+	if featureMap.IsEnabled(features.ClusterScoped) && namespace != constants.KubernetesNamespaceNatsIO {
 		logrus.Fatalf("cluster-scoped instances of nats-operator must run on the %q namespace", constants.KubernetesNamespaceNatsIO)
 	}
 
@@ -147,7 +151,7 @@ func main() {
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(kubeCfg)
 
 	// Attempt to mutually exclude namespace-scoped and cluster-scoped deployments of nats-operator in the same Kubernetes cluster.
-	if clusterScoped {
+	if featureMap.IsEnabled(features.ClusterScoped) {
 		exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient)
 		logrus.Warnf("nats-operator is operating at the cluster scope (experimental)")
 	} else {
@@ -181,7 +185,7 @@ func main() {
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				run(ctx, kubeCfg, kubeClient)
+				run(ctx, featureMap, kubeCfg, kubeClient)
 			},
 			OnStoppedLeading: func() {
 				logrus.Fatalf("leader election lost")
@@ -192,14 +196,14 @@ func main() {
 	panic("unreachable")
 }
 
-func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
+func run(ctx context.Context, featureMap features.FeatureMap, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
 	// Create a client for the apiextensions.k8s.io/v1beta1 so that we can register our CRDs.
 	extsClient := kubernetesutil.MustNewKubeExtClient(kubeCfg)
 	// Create a client for our API so that we can create shared index informers for our API types.
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
 
 	// Create a new controller configuration object.
-	cfg := newControllerConfig(kubeCfg, kubeClient, extsClient, natsClient)
+	cfg := newControllerConfig(featureMap, kubeCfg, kubeClient, extsClient, natsClient)
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
 	}
@@ -210,7 +214,7 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	var (
 		gcNamespace string
 	)
-	if clusterScoped {
+	if featureMap.IsEnabled(features.ClusterScoped) {
 		gcNamespace = v1.NamespaceAll
 	} else {
 		gcNamespace = namespace
@@ -218,7 +222,7 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	go periodicFullGC(cfg.KubeCli.CoreV1(), gcNamespace, gcInterval)
 
 	// Start the chaos engine if the current instance is not cluster-scoped.
-	if !clusterScoped {
+	if !featureMap.IsEnabled(features.ClusterScoped) {
 		startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, chaosLevel)
 	}
 
@@ -228,9 +232,9 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	}
 }
 
-func newControllerConfig(kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
+func newControllerConfig(featureMap features.FeatureMap, kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
 	return controller.Config{
-		ClusterScoped:         clusterScoped,
+		FeatureMap:            featureMap,
 		NatsOperatorNamespace: namespace,
 		KubeCli:               kubeClient,
 		KubeExtCli:            extsClient,
@@ -303,7 +307,7 @@ func exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient kubernetes.Inte
 	// Iterate over each listed pod and try to detect namespace-scoped nats-operator containers.
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
-			if isNatsOperatorContainer(container) && !experimentalClusterScopedFlagIsSet(container.Args) {
+			if isNatsOperatorContainer(container) && !ClusterScopedFeatureGateIsEnabled(container.Args) {
 				logrus.Fatalf("detected pre-existing namespace-scoped nats-operator pod %q in namespace %q", pod.Name, pod.Namespace)
 			}
 		}
@@ -320,7 +324,7 @@ func exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient kubernetes.Interf
 	// Iterate over each listed pod and try to detect cluster-scoped nats-operator containers.
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
-			if isNatsOperatorContainer(container) && experimentalClusterScopedFlagIsSet(container.Args) {
+			if isNatsOperatorContainer(container) && ClusterScopedFeatureGateIsEnabled(container.Args) {
 				logrus.Fatalf("detected pre-existing cluster-scoped nats-operator pod %q", pod.Name)
 			}
 		}
@@ -345,33 +349,23 @@ func isNatsOperatorContainer(container v1.Container) bool {
 	}
 }
 
-// experimentalClusterScopedFlagIsSet attempts to determine whether the "--experimental-cluster-scoped" flag is set on the specified list of arguments.
-func experimentalClusterScopedFlagIsSet(args []string) bool {
-	// Compile a regular expression that captures all possible configurations of the "experimental-cluster-scoped" flag.
-	regex := regexp.MustCompile(clusterScopedFlagRegex)
-	// Iterate over the list of arguments.
-	for _, arg := range args {
-		// If the current argument doesn't match the regular expression, there's nothing else to check.
-		if !regex.MatchString(arg) {
-			continue
-		}
-		// The current argument matches the regular expression.
-		// Hence we split the argument by "=" and check for the value of the flag based on the number of parts.
-		parts := strings.SplitN(arg, "=", 2)
-		switch len(parts) {
-		case 1:
-			// There's only a single part (i.e. the value of the argument is just "--experimental-cluster-scoped").
-			// Hence, the flag is set.
-			return true
-		case 2:
-			// There are two parts (i.e. the value of the argument is "--experimental-cluster-scoped=<something>").
-			// Hence, the flag is set if and only if "<something>" evaluates to true.
-			v, err := strconv.ParseBool(parts[1])
-			if err != nil {
-				return false
-			}
-			return v
-		}
+// ClusterScopedFeatureGateIsEnabled attempts to determine whether the "ClusterScoped" feature is enabled by the specified list of arguments.
+func ClusterScopedFeatureGateIsEnabled(args []string) bool {
+	// Build the full command based on the provided list of arguments.
+	cmd := strings.Join(args, " ")
+	// Compile a regular expression that captures the value of the "--feature-gates" flag (if present).
+	regex := regexp.MustCompile("-{1,2}" + featureGatesFlagName + "[=\\s]([^\\s]*)")
+	// Check whether the "--feature-gates" flag is present in the list of arguments and attempt to capture its value.
+	match := regex.FindStringSubmatch(cmd)
+	if len(match) != 2 {
+		// The full command doesn't match the regular expression (meaning no "--feature-gates" flag is present).
+		return false
 	}
-	return false
+	// Parse the captured value of "--feature-gates" as a feature map.
+	featureMap, err := features.ParseFeatureMap(match[1])
+	if err != nil {
+		// We've failed to parse the captured value of "--feature-gates", so we should assume "ClusterScoped" is not enabled.
+		return false
+	}
+	return featureMap.IsEnabled(features.ClusterScoped)
 }

@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nats-operator
@@ -23,7 +23,7 @@ spec:
         args:
         - nats-operator
         # Uncomment to perform a cluster-scoped deployment in supported versions.
-        #- --experimental-cluster-scoped=true
+        #- --feature-gates=ClusterScoped=true
         ports:
         - name: readyz
           containerPort: 8080

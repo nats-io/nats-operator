@@ -21,11 +21,12 @@ import (
 	"testing"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/features"
 )
 
 // TestCreateClusterInDedicatedNamespace creates a NatsCluster resource in a dedicated namespace and waits for the full mesh to be formed.
 func TestCreateClusterInDedicatedNamespace(t *testing.T) {
-	if !f.ClusterScoped {
+	if !f.FeatureMap.IsEnabled(features.ClusterScoped) {
 		t.Skip("skipping as the current deployment of nats-operator is not cluster-scoped")
 	}
 

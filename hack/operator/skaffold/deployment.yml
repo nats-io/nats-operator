@@ -24,7 +24,7 @@ spec:
         imagePullPolicy: IfNotPresent
         args:
         - /nats-operator
-        - --experimental-cluster-scoped=__EXPERIMENTAL_CLUSTER_SCOPED__
+        - -feature-gates=ClusterScoped=__FEATURE_GATE_CLUSTER_SCOPED__
         ports:
         - name: readyz
           containerPort: 8080

@@ -22,6 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
+	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
 
@@ -34,8 +37,8 @@ var (
 	// f is the testing framework used for running the test suite.
 	f *framework.Framework
 
-	// clusterScoped indicates whether nats-operator has been installed in "cluster-scoped" mode.
-	clusterScoped bool
+	// featureGates is a comma-separated list of "key=value" pairs used to toggle certain features.
+	featureGates string
 	// kubeconfig is the path to the kubeconfig file to use when running the test suite outside a Kubernetes cluster (i.e. in "wait" mode).
 	kubeconfig string
 	// namespace is the name of the Kubernetes namespace to use for running the test suite.
@@ -45,7 +48,7 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&clusterScoped, "experimental-cluster-scoped", false, "whether nats-operator has been installed in cluster-scoped mode")
+	flag.StringVar(&featureGates, "feature-gates", "", "comma-separated list of \"key=value\" pairs used to toggle advanced features")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "path to the kubeconfig file to use (e.g. $HOME/.kube/config)")
 	flag.StringVar(&namespace, "namespace", "default", "name of the kubernetes namespace to use")
 	flag.BoolVar(&wait, "wait", false, "instead of running the e2e test suite, connect to the kubernetes cluster and wait for the e2e job to complete")
@@ -53,9 +56,15 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
-	f = framework.New(clusterScoped, kubeconfig, namespace)
+	// Build the feature map based on the value of "--feature-gates".
+	featureMap, err := features.ParseFeatureMap(featureGates)
+	if err != nil {
+		logrus.Fatalf("failed to build feature map: %v", err)
+	}
+	// Build an instance of the test framework.
+	f = framework.New(featureMap, kubeconfig, namespace)
 	if err := f.WaitForNatsOperator(); err != nil {
-		panic(err)
+		logrus.Fatalf("failed to wait for nats-operator: %v", err)
 	}
 
 	if wait {
