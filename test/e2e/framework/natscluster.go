@@ -56,7 +56,7 @@ type NatsClusterCustomizer func(natsCluster *natsv1alpha2.NatsCluster)
 
 // CreateCluster creates a NatsCluster resource which name starts with the specified prefix, and using the specified size and version.
 // Before actually creating the NatsCluster resource, it allows for the resource to be customized via the application of NatsClusterCustomizer functions.
-func (f *Framework) CreateCluster(prefix string, size int, version string, fn ...NatsClusterCustomizer) (*natsv1alpha2.NatsCluster, error) {
+func (f *Framework) CreateCluster(namespace, prefix string, size int, version string, fn ...NatsClusterCustomizer) (*natsv1alpha2.NatsCluster, error) {
 	// Create a NatsCluster object using the specified values.
 	obj := &natsv1alpha2.NatsCluster{
 		TypeMeta: metav1.TypeMeta{
@@ -65,7 +65,7 @@ func (f *Framework) CreateCluster(prefix string, size int, version string, fn ..
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: prefix,
-			Namespace:    f.Namespace,
+			Namespace:    namespace,
 		},
 		Spec: natsv1alpha2.ClusterSpec{
 			Paused:  false,

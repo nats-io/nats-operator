@@ -28,13 +28,13 @@ type NatsServiceRoleCustomizer func(natsServiceRole *natsv1alpha2.NatsServiceRol
 
 // CreateNatsServiceRole creates a NatsServiceRole resource which name starts with the specified prefix.
 // Before actually creating the CreateNatsServiceRole resource, it allows for the resource to be customized via the application of NatsServiceRoleCustomizer functions.
-func (f *Framework) CreateNatsServiceRole(prefix string, fn ...NatsServiceRoleCustomizer) (*natsv1alpha2.NatsServiceRole, error) {
+func (f *Framework) CreateNatsServiceRole(namespace, prefix string, fn ...NatsServiceRoleCustomizer) (*natsv1alpha2.NatsServiceRole, error) {
 	// Create a ServiceAccount object to back the NatsServiceRole.
 	// This is required for authentication to work as expected.
 	a := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: prefix,
-			Namespace:    f.Namespace,
+			Namespace:    namespace,
 		},
 	}
 	a, err := f.KubeClient.CoreV1().ServiceAccounts(a.Namespace).Create(a)
@@ -68,9 +68,9 @@ func (f *Framework) CreateNatsServiceRole(prefix string, fn ...NatsServiceRoleCu
 func (f *Framework) DeleteNatsServiceRole(nsr *natsv1alpha2.NatsServiceRole) error {
 	// Delete the service account that backs the NatsServiceRole.
 	// Avoid erroring if we fail to delete the service account, as it is not the primary intent of this function.
-	_ = f.KubeClient.CoreV1().ServiceAccounts(f.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
+	_ = f.KubeClient.CoreV1().ServiceAccounts(nsr.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
 	// Delete the NatsServiceRole with the specified name.
-	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(f.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
+	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
 }
 
 // PatchNatsServiceRole performs a patch on the specified NatsServiceRole resource to align its ".spec" field with the provided value.

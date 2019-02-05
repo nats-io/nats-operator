@@ -74,27 +74,55 @@ The build toolchain leverages on `skaffold` to build a container image of `nats-
 After performing the deployment, `skaffold` will stream the logs of the `nats-operator` pod, and will keep on monitoring the `build/nats-operator` binary for changes.
 When such changes occur (e.g. as a result of running `make build`), `skaffold` will re-deploy `nats-operator` to the Kubernetes cluster, and the process will repeat itself.
 
-The exact command you must execute to run `nats-operator` depends on whether you are using a local (Minikube or Docker for Desktop) or a Google Kubernetes Engine cluster.
+The exact command you must execute to run `nats-operator` depends on whether you are using a local (Minikube or Docker for Desktop) or a Google Kubernetes Engine cluster, and on whether you want to perform a namespace-scoped or cluster-scoped deployment.
 
 ### Local
 
-To run `nats-operator` against the local Kubernetes cluster targeted by the current context, you must run:
+#### Namespace-scoped
+
+To run a namespace-scoped instance of `nats-operator` against the local Kubernetes cluster targeted by the current context, you must run:
 
 ```console
-$ make run PROFILE=local
+$ make run NAMESPACE=<namespace> PROFILE=local
 ```
 
 To stop execution and cleanup the deployment, hit `Ctrl+C`.
+
+#### Cluster-scoped
+
+To run a cluster-scoped instance of `nats-operator` against the local Kubernetes cluster targeted by the current context, you must run:
+
+```console
+$ make run FEATURE_GATE_CLUSTER_SCOPED=true PROFILE=local
+```
+
+To stop execution and cleanup the deployment, hit `Ctrl+C`.
+
+**NOTE:** Cluster-scoped deployments of `nats-operator` _always_ run on the `nats-io` namespace.
 
 ### Google Kubernetes Engine
 
-To run `nats-operator` against the Google Kubernetes Engine cluster targeted by the current context, you must run:
+#### Namespace-scoped
+
+To run a namespace-scoped instance of `nats-operator` against the Google Kubernetes Engine cluster targeted by the current context, you must run:
 
 ```console
-$ make run PROFILE=gke
+$ make run NAMESPACE=<namespace> PROFILE=gke
 ```
 
 To stop execution and cleanup the deployment, hit `Ctrl+C`.
+
+#### Cluster-scoped
+
+To run a cluster-scoped instance of `nats-operator` against the Google Kubernetes Engine cluster targeted by the current context, you must run:
+
+```console
+$ make run FEATURE_GATE_CLUSTER_SCOPED=true PROFILE=gke
+```
+
+To stop execution and cleanup the deployment, hit `Ctrl+C`.
+
+**NOTE:** Cluster-scoped deployments of `nats-operator` _always_ run on the `nats-io` namespace.
 
 ## Testing
 
@@ -135,14 +163,20 @@ This allows for running the test suite from _within_ the Kubernetes cluster (hen
 
 By default, the end-to-end test suite tests an installation of `nats-operator` in the `default` namespace.
 It is however possible to test installation in a different namespace.
-In order to do so, you must first create the desired namespace (in the example below, `nats-io`):
+To run the test suite against a different namespace, you may simply run:
 
 ```console
-$ kubectl create namespace nats-io
+$ make e2e NAMESPACE=<namespace>
 ```
 
-Then, to run the test suite against the resulting namespace, you may simply run:
+`<namespace>` will be automatically created if it doesn't already exist.
+
+### Testing the cluster-scoped mode
+
+To perform a cluster-scoped installation of `nats-operator` and run the end-to-end test suite against it, you may run:
 
 ```console
-$ NAMESPACE=nats-io make e2e
+$ make e2e FEATURE_GATE_CLUSTER_SCOPED=1
 ```
+
+The required `nats-io` namespace will be automatically created if it doesn't already exist. 

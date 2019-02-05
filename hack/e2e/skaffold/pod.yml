@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nats-operator-e2e
+  namespace: __NAMESPACE__
 spec:
   containers:
   - name: nats-operator-e2e
@@ -11,6 +12,7 @@ spec:
     - -namespace
     - "$(NAMESPACE)"
     - -test.v
+    - -feature-gates=ClusterScoped=__FEATURE_GATE_CLUSTER_SCOPED__
     env:
     - name: NAMESPACE
       valueFrom:

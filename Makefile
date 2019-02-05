@@ -3,7 +3,7 @@ SHELL := /bin/bash
 # build.e2e builds the nats-operator-e2e test binary.
 .PHONY: build.e2e
 build.e2e:
-	@GOOS=linux GOARCH=amd64 go test -c -o build/nats-operator-e2e ./test/e2e/*.go
+	@GOOS=linux GOARCH=amd64 go test -tags e2e -c -o build/nats-operator-e2e ./test/e2e/*.go
 
 # build.operator builds the nats-operator binary.
 .PHONY: build.operator
@@ -32,27 +32,23 @@ dep:
 
 # e2e runs the end-to-end test suite.
 .PHONY: e2e
+e2e: FEATURE_GATE_CLUSTER_SCOPED ?= false
 e2e: KUBECONFIG ?= $(HOME)/.kube/config
 e2e: NAMESPACE ?= default
 e2e:
-	@./test/prepare-secrets.sh $(NAMESPACE)
-	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
-	MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
-	@go test -v ./test/e2e/main_test.go -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
+	FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
+	FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
+	@go test -tags e2e -v ./test/e2e/main_test.go -feature-gates=ClusterScoped=$(FEATURE_GATE_CLUSTER_SCOPED) -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
 
 # run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run
-.SECONDEXPANSION:
+run: FEATURE_GATE_CLUSTER_SCOPED ?= false
 run: MODE ?= dev
 run: NAMESPACE ?= default
 run: PROFILE ?= local
 run: TARGET ?= operator
-run: build.$$(TARGET)
 run:
-	@skaffold $(MODE) -f $(PWD)/hack/skaffold/$(TARGET)/skaffold.yml -n $(NAMESPACE) -p $(PROFILE)
-	@if [[ "${TARGET}" == "operator" ]]; then \
-		./hack/skaffold/patch-cluster-role-binding.sh $(NAMESPACE); \
-	fi
+	@FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=$(MODE) NAMESPACE=$(NAMESPACE) PROFILE=$(PROFILE) TARGET=$(TARGET) $(PWD)/hack/skaffold.sh
 
 # gen executes the code generation step.
 .PHONY: gen

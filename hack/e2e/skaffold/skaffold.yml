@@ -1,4 +1,4 @@
-apiVersion: skaffold/v1alpha5
+apiVersion: skaffold/v1beta2
 kind: Config
 build:
   artifacts:
@@ -7,12 +7,12 @@ build:
   - image: gcr.io/project-id/nats-operator-e2e
     docker:
       # Use a Dockerfile specific for end-to-end testing only.
-      dockerfile: hack/skaffold/e2e/Dockerfile
+      dockerfile: __TMP_DIR__/Dockerfile
 deploy:
   kubectl:
     manifests:
     # Deploy the end-to-end test suite pod.
-    - hack/skaffold/e2e/pod.yml
+    - __TMP_DIR__/pod.yml
 profiles:
 - name: gke
   build:

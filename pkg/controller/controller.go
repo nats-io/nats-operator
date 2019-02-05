@@ -37,6 +37,7 @@ import (
 	natsinformers "github.com/nats-io/nats-operator/pkg/client/informers/externalversions"
 	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/cluster"
+	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
@@ -75,13 +76,15 @@ type Controller struct {
 }
 
 type Config struct {
-	Namespace      string
-	ServiceAccount string
-	PVProvisioner  string
-	KubeCli        kubernetes.Interface
-	KubeConfig     *rest.Config
-	KubeExtCli     extsclient.Interface
-	OperatorCli    natsclient.Interface
+	// FeatureMap is the map containing features and their status for the current instance of nats-operator.
+	FeatureMap features.FeatureMap
+	// NatsOperatorNamespace is the namespace under which the current instance of nats-operator is running.
+	NatsOperatorNamespace string
+	PVProvisioner         string
+	KubeCli               kubernetes.Interface
+	KubeConfig            *rest.Config
+	KubeExtCli            extsclient.Interface
+	OperatorCli           natsclient.Interface
 }
 
 func (c *Config) Validate() error {
@@ -94,10 +97,22 @@ type informer interface {
 }
 
 func NewNatsClusterController(cfg Config) *Controller {
+	// Check if nats-operator is operating at cluster or namespace scope.
+	// Based on this, we either watch all Kubernetes namespaces or just the one where nats-operator is deployed.
+	var (
+		watchedNamespace string
+	)
+	if cfg.FeatureMap.IsEnabled(features.ClusterScoped) {
+		// Watch all Kubernetes namespaces.
+		watchedNamespace = v1.NamespaceAll
+	} else {
+		// Watch only the Kubernetes namespace where nats-operator is deployed.
+		watchedNamespace = cfg.NatsOperatorNamespace
+	}
 	// Create shared informer factories for the types we are interested in.
-	// WithNamespace is used to filter resources belonging to the namespace where nats-operator is deployed.
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cfg.KubeCli, kubeFullResyncPeriod, kubeinformers.WithNamespace(cfg.Namespace))
-	natsInformerFactory := natsinformers.NewSharedInformerFactoryWithOptions(cfg.OperatorCli, natsFullResyncPeriod, natsinformers.WithNamespace(cfg.Namespace))
+	// WithNamespace is used to filter resources belonging to "watchedNamespace".
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cfg.KubeCli, kubeFullResyncPeriod, kubeinformers.WithNamespace(watchedNamespace))
+	natsInformerFactory := natsinformers.NewSharedInformerFactoryWithOptions(cfg.OperatorCli, natsFullResyncPeriod, natsinformers.WithNamespace(watchedNamespace))
 	// Obtain references to shared informers for the required types.
 	podInformer := kubeInformerFactory.Core().V1().Pods()
 	secretInformer := kubeInformerFactory.Core().V1().Secrets()
@@ -184,8 +199,8 @@ func (c *Controller) processQueueItem(key string) error {
 		// The NatsCluster resource may no longer exist, in which case we call the garbage collector.
 		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			// TODO Remove the garbage collection step and rely solely on the Kubernetes garbage collector.
-			c.logger.Warnf("natscluster %q was deleted", name)
-			garbagecollection.New(c.KubeCli.CoreV1(), namespace).CollectCluster(name, garbagecollection.NullUID)
+			c.logger.Warnf("natscluster %q was deleted", key)
+			garbagecollection.New(c.KubeCli.CoreV1()).CollectCluster(namespace, name, garbagecollection.NullUID)
 			return nil
 		}
 		return err
@@ -261,10 +276,10 @@ func (c *Controller) handleObject(obj interface{}) {
 			runtime.HandleError(fmt.Errorf("failed to decode object tombstone: invalid type"))
 			return
 		}
-		c.logger.Debugf("recovered deleted object %q from tombstone", object.GetName())
+		c.logger.Debugf("recovered deleted object %q from tombstone", kubernetesutil.ResourceKey(object))
 	}
 
-	c.logger.Debugf("processing object %q", object.GetName())
+	c.logger.Debugf("processing object %q", kubernetesutil.ResourceKey(object))
 
 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
 		// If this object is not owned by a NatsCluster resource, we should not do anything more with it.
@@ -274,7 +289,7 @@ func (c *Controller) handleObject(obj interface{}) {
 		// Attempt to get the owning NatsCluster resource.
 		natsCluster, err := c.natsClustersLister.NatsClusters(object.GetNamespace()).Get(ownerRef.Name)
 		if err != nil {
-			c.logger.Debugf("ignoring orphaned object %q of natscluster %q", object.GetSelfLink(), ownerRef.Name)
+			c.logger.Debugf("ignoring orphaned object %q of natscluster \"%s/%s\"", object.GetSelfLink(), object.GetNamespace(), ownerRef.Name)
 			return
 		}
 		// Enqueue the NatsCluster resource for later processing.

@@ -21,7 +21,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,14 +43,22 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/chaos"
 	natsclientset "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/controller"
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
+	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
-	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/nats-io/nats-operator/version"
+)
+
+const (
+	// featureGatesFlagName is the name of the flag used to define feature gates.
+	featureGatesFlagName = "feature-gates"
+	// natsOperatorName is the string used to detect whether a given pod is a nats-operator pod.
+	natsOperatorName = "nats-operator"
 )
 
 var (
@@ -60,12 +70,15 @@ var (
 	chaosLevel int
 
 	printVersion bool
+
+	// featureGates is a comma-separated list of "key=value" pairs used to toggle certain features.
+	featureGates string
 )
 
 func init() {
+	flag.StringVar(&featureGates, featureGatesFlagName, "", "comma-separated list of \"key=value\" pairs used to toggle advanced features")
 	flag.StringVar(&debug.DebugFilePath, "debug-logfile-path", "", "only for a self hosted cluster, the path where the debug logfile will be written, recommended to be under: /var/tmp/nats-operator/debug/ to avoid any issue with lack of write permissions")
 	flag.StringVar(&local.KubeConfigPath, "debug-kube-config-path", "", "the path to the local 'kubectl' config file (only for local debugging)")
-	flag.StringVar(&local.ServiceAccountName, "debug-service-account-name", "default", "the name of the service account which to use (only for local debugging)")
 	flag.StringVar(&local.PodName, "debug-pod-name", "nats-operator-debug", "the name of the pod which to report to EventRecorder (only for local debugging).")
 
 	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8080", "The address on which the HTTP server will listen to")
@@ -81,9 +94,21 @@ func main() {
 		FullTimestamp: true,
 	}
 	logrus.SetFormatter(formatter)
+
+	// Build the feature map based on the value of "--feature-gates".
+	featureMap, err := features.ParseFeatureMap(featureGates)
+	if err != nil {
+		logrus.Fatalf("failed to build feature map: %v", err)
+	}
+
 	namespace = os.Getenv("MY_POD_NAMESPACE")
 	if len(namespace) == 0 {
 		logrus.Fatalf("must set env MY_POD_NAMESPACE")
+	}
+	// Force cluster-scoped instances of nats-operator to run on the "nats-io" namespace.
+	// This is the simplest way to guarantee that leader election occurs as expected because all cluster-scoped instances will do resource locking on this same namespace.
+	if featureMap.IsEnabled(features.ClusterScoped) && namespace != constants.KubernetesNamespaceNatsIO {
+		logrus.Fatalf("cluster-scoped instances of nats-operator must run on the %q namespace", constants.KubernetesNamespaceNatsIO)
 	}
 
 	if len(local.KubeConfigPath) == 0 {
@@ -125,6 +150,15 @@ func main() {
 	kubeCfg := kubernetesutil.MustNewKubeConfig(local.KubeConfigPath)
 	kubeClient := kubernetesutil.MustNewKubeClientFromConfig(kubeCfg)
 
+	// Attempt to mutually exclude namespace-scoped and cluster-scoped deployments of nats-operator in the same Kubernetes cluster.
+	if featureMap.IsEnabled(features.ClusterScoped) {
+		exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient)
+		logrus.Warnf("nats-operator is operating at the cluster scope (experimental)")
+	} else {
+		exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient)
+		logrus.Infof("nats-operator is operating at the namespace scope in the %q namespace", namespace)
+	}
+
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
 	go http.ListenAndServe(listenAddr, nil)
 
@@ -151,7 +185,7 @@ func main() {
 		RetryPeriod:   2 * time.Second,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				run(ctx, kubeCfg, kubeClient)
+				run(ctx, featureMap, kubeCfg, kubeClient)
 			},
 			OnStoppedLeading: func() {
 				logrus.Fatalf("leader election lost")
@@ -162,14 +196,14 @@ func main() {
 	panic("unreachable")
 }
 
-func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
+func run(ctx context.Context, featureMap features.FeatureMap, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
 	// Create a client for the apiextensions.k8s.io/v1beta1 so that we can register our CRDs.
 	extsClient := kubernetesutil.MustNewKubeExtClient(kubeCfg)
 	// Create a client for our API so that we can create shared index informers for our API types.
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
 
 	// Create a new controller configuration object.
-	cfg := newControllerConfig(kubeCfg, kubeClient, extsClient, natsClient)
+	cfg := newControllerConfig(featureMap, kubeCfg, kubeClient, extsClient, natsClient)
 	if err := cfg.Validate(); err != nil {
 		logrus.Fatalf("invalid operator config: %v", err)
 	}
@@ -177,10 +211,20 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	c := controller.NewNatsClusterController(cfg)
 
 	// Start the garbage collector.
-	go periodicFullGC(cfg.KubeCli.CoreV1(), cfg.Namespace, gcInterval)
+	var (
+		gcNamespace string
+	)
+	if featureMap.IsEnabled(features.ClusterScoped) {
+		gcNamespace = v1.NamespaceAll
+	} else {
+		gcNamespace = namespace
+	}
+	go periodicFullGC(cfg.KubeCli.CoreV1(), gcNamespace, gcInterval)
 
-	// Start the chaos engine.
-	startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.Namespace, chaosLevel)
+	// Start the chaos engine if the current instance is not cluster-scoped.
+	if !featureMap.IsEnabled(features.ClusterScoped) {
+		startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, chaosLevel)
+	}
 
 	// Run the controller for NatsCluster resources.
 	if err := c.Run(ctx); err != nil {
@@ -188,59 +232,24 @@ func run(ctx context.Context, kubeCfg *rest.Config, kubeClient kubernetes.Interf
 	}
 }
 
-func newControllerConfig(kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
-	var (
-		err            error
-		serviceAccount string
-	)
-
-	if len(local.KubeConfigPath) == 0 {
-		serviceAccount, err = getMyPodServiceAccount(kubeClient.CoreV1())
-		if err != nil {
-			logrus.Fatalf("fail to get my pod's service account: %v", err)
-		}
-	} else {
-		serviceAccount = local.ServiceAccountName
-		if len(serviceAccount) == 0 {
-			logrus.Fatalf("invalid service account name specified")
-		}
+func newControllerConfig(featureMap features.FeatureMap, kubeConfig *rest.Config, kubeClient kubernetes.Interface, extsClient extsclientset.Interface, natsClient natsclientset.Interface) controller.Config {
+	return controller.Config{
+		FeatureMap:            featureMap,
+		NatsOperatorNamespace: namespace,
+		KubeCli:               kubeClient,
+		KubeExtCli:            extsClient,
+		OperatorCli:           natsClient,
+		KubeConfig:            kubeConfig,
 	}
-	cfg := controller.Config{
-		Namespace:      namespace,
-		ServiceAccount: serviceAccount,
-		KubeCli:        kubeClient,
-		KubeExtCli:     extsClient,
-		OperatorCli:    natsClient,
-		KubeConfig:     kubeConfig,
-	}
-
-	return cfg
 }
 
-func getMyPodServiceAccount(kubecli corev1client.CoreV1Interface) (string, error) {
-	var sa string
-	err := retryutil.Retry(5*time.Second, 100, func() (bool, error) {
-		pod, err := kubecli.Pods(namespace).Get(name, metav1.GetOptions{})
-		if err != nil {
-			logrus.Errorf("fail to get operator pod (%s): %v", name, err)
-			return false, nil
-		}
-		sa = pod.Spec.ServiceAccountName
-		return true, nil
-	})
-	return sa, err
-}
-
-func periodicFullGC(kubecli corev1client.CoreV1Interface, ns string, d time.Duration) {
-	gc := garbagecollection.New(kubecli, ns)
+func periodicFullGC(kubecli corev1client.CoreV1Interface, namespace string, d time.Duration) {
+	gc := garbagecollection.New(kubecli)
 	timer := time.NewTicker(d)
 	defer timer.Stop()
 	for {
 		<-timer.C
-		err := gc.FullyCollect()
-		if err != nil {
-			logrus.Warningf("failed to cleanup resources: %v", err)
-		}
+		gc.FullyCollect(namespace)
 	}
 }
 
@@ -286,4 +295,77 @@ func createRecorder(kubecli corev1client.CoreV1Interface, name, namespace string
 	eventBroadcaster.StartLogging(logrus.Infof)
 	eventBroadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: corev1client.New(kubecli.RESTClient()).Events(namespace)})
 	return eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: name})
+}
+
+// exitOnPreexistingNamespaceScopedNatsOperatorPods attempts to detect pre-existing namespace-scoped nats-operator pods, exiting nats-operator if any are found.
+func exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
+	// List all pods in the cluster.
+	pods, err := kubeClient.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
+	if err != nil {
+		logrus.Fatalf("failed to list pods at the cluster level: %v", err)
+	}
+	// Iterate over each listed pod and try to detect namespace-scoped nats-operator containers.
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			if isNatsOperatorContainer(container) && !ClusterScopedFeatureGateIsEnabled(container.Args) {
+				logrus.Fatalf("detected pre-existing namespace-scoped nats-operator pod %q in namespace %q", pod.Name, pod.Namespace)
+			}
+		}
+	}
+}
+
+// exitOnPreexistingClusterScopedNatsOperatorPods attempts to detect pre-existing cluster-scoped nats-operator pods, exiting nats-operator if any are found.
+func exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
+	// List all pods in the "nats-io" namespace.
+	pods, err := kubeClient.CoreV1().Pods(constants.KubernetesNamespaceNatsIO).List(metav1.ListOptions{})
+	if err != nil {
+		logrus.Fatalf("failed to list pods in the %q namespace: %v", constants.KubernetesNamespaceNatsIO, err)
+	}
+	// Iterate over each listed pod and try to detect cluster-scoped nats-operator containers.
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			if isNatsOperatorContainer(container) && ClusterScopedFeatureGateIsEnabled(container.Args) {
+				logrus.Fatalf("detected pre-existing cluster-scoped nats-operator pod %q", pod.Name)
+			}
+		}
+	}
+}
+
+// isNatsOperatorContainer attempts to detect whether the specified container is likely a nats-operator container.
+// A container is detected as a nats-operator container if any of the following conditions is met:
+// * The container's name contains "nats-operator";
+// * The container's image name contains "nats-operator; OR
+// * The container's argument list is non-empty and the very first argument contains "nats-operator".
+func isNatsOperatorContainer(container v1.Container) bool {
+	switch {
+	case strings.Contains(container.Name, natsOperatorName):
+		return true
+	case strings.Contains(container.Image, natsOperatorName):
+		return true
+	case len(container.Args) > 0 && strings.Contains(container.Args[0], natsOperatorName):
+		return true
+	default:
+		return false
+	}
+}
+
+// ClusterScopedFeatureGateIsEnabled attempts to determine whether the "ClusterScoped" feature is enabled by the specified list of arguments.
+func ClusterScopedFeatureGateIsEnabled(args []string) bool {
+	// Build the full command based on the provided list of arguments.
+	cmd := strings.Join(args, " ")
+	// Compile a regular expression that captures the value of the "--feature-gates" flag (if present).
+	regex := regexp.MustCompile("-{1,2}" + featureGatesFlagName + "[=\\s]([^\\s]*)")
+	// Check whether the "--feature-gates" flag is present in the list of arguments and attempt to capture its value.
+	match := regex.FindStringSubmatch(cmd)
+	if len(match) != 2 {
+		// The full command doesn't match the regular expression (meaning no "--feature-gates" flag is present).
+		return false
+	}
+	// Parse the captured value of "--feature-gates" as a feature map.
+	featureMap, err := features.ParseFeatureMap(match[1])
+	if err != nil {
+		// We've failed to parse the captured value of "--feature-gates", so we should assume "ClusterScoped" is not enabled.
+		return false
+	}
+	return featureMap.IsEnabled(features.ClusterScoped)
 }

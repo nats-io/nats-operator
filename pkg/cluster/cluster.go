@@ -92,8 +92,8 @@ type Cluster struct {
 // New returns a new instance of the reconciler for NatsCluster resources.
 func New(config Config, cl *v1alpha2.NatsCluster) *Cluster {
 	return &Cluster{
-		logger:          logrus.WithField("pkg", "cluster").WithField("cluster-name", cl.Name),
-		debugLogger:     debug.New(cl.Name),
+		logger:          logrus.WithField("pkg", "cluster").WithField("namespace", cl.Namespace).WithField("cluster-name", cl.Name),
+		debugLogger:     debug.New(cl.Namespace, cl.Name),
 		config:          config,
 		cluster:         cl,
 		originalCluster: cl.DeepCopy(),
@@ -337,13 +337,13 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 	}
 
 	// Wait for the pod to be running and ready.
-	c.logger.Infof("waiting for pod %q to become ready", pod.Name)
+	c.logger.Infof("waiting for pod %q to become ready", kubernetesutil.ResourceKey(pod))
 	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
 	defer fn()
 	if err := kubernetesutil.WaitUntilPodReady(ctx, c.config.KubeCli, pod); err != nil {
 		return nil, err
 	}
-	c.logger.Infof("pod %q became ready", pod.Name)
+	c.logger.Infof("pod %q became ready", kubernetesutil.ResourceKey(pod))
 
 	// Append the newly created pod to the slice of existing pods.
 	pods = append(pods, pod)
@@ -416,7 +416,7 @@ func (c *Cluster) deletePod(pod *v1.Pod) error {
 		return err
 	}
 	if c.isDebugLoggerEnabled() {
-		c.debugLogger.LogPodDeletion(pod.Name)
+		c.debugLogger.LogPodDeletion(pod)
 	}
 	return nil
 }

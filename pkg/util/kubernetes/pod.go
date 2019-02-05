@@ -19,11 +19,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	watchapi "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/watch"
@@ -242,10 +244,36 @@ func WaitUntilPodReady(ctx context.Context, kubeClient corev1.CoreV1Interface, p
 		case watchapi.Error:
 			return false, fmt.Errorf("got event of type error: %+v", event.Object)
 		case watchapi.Deleted:
-			return false, fmt.Errorf("pod %q has been deleted", pod.Name)
+			return false, fmt.Errorf("pod %q has been deleted", ResourceKey(pod))
 		default:
 			pod = event.Object.(*v1.Pod)
 			return isPodRunningAndReady(pod), nil
 		}
 	})
+}
+
+// WaitUntilDeploymentCondition establishes a watch on the specified deployment and blocks until the specified condition function is satisfied.
+func WaitUntilDeploymentCondition(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string, fn watch.ConditionFunc) error {
+	// Create a selector that targets the specified deployment.
+	fs := ByCoordinates(namespace, name)
+	// Grab a ListerWatcher with which we can watch the deployment.
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.AppsV1().Deployments(namespace).List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.AppsV1().Deployments(namespace).Watch(options)
+		},
+	}
+	// Watch for updates to the specified deployment until fn is satisfied.
+	last, err := watch.UntilWithSync(ctx, lw, &appsv1.Deployment{}, nil, fn)
+	if err != nil {
+		return err
+	}
+	if last == nil {
+		return fmt.Errorf("no events received for deployment \"%s/%s\"", namespace, name)
+	}
+	return nil
 }

@@ -37,7 +37,7 @@ type DebugLogger struct {
 	fileLogger *logrus.Logger
 }
 
-func New(clusterName string) *DebugLogger {
+func New(namespace, clusterName string) *DebugLogger {
 	if len(DebugFilePath) == 0 {
 		return nil
 	}
@@ -57,7 +57,7 @@ func New(clusterName string) *DebugLogger {
 
 	l := logrus.New()
 	l.Out = logFile
-	l.Infof("Starting debug logs for self-hosted NATS cluster: %v", clusterName)
+	l.Infof("Starting debug logs for self-hosted NATS cluster \"%s/%s\"", namespace, clusterName)
 	return &DebugLogger{
 		logger:     logrus.WithField("pkg", "debug"),
 		fileLogger: l,
@@ -67,13 +67,13 @@ func New(clusterName string) *DebugLogger {
 func (dl *DebugLogger) LogPodCreation(pod *v1.Pod) {
 	podSpec, err := kubernetesutil.PodSpecToPrettyJSON(pod)
 	if err != nil {
-		dl.fileLogger.Infof("failed to get readable spec for pod(%v): %v ", pod.Name, err)
+		dl.fileLogger.Infof("failed to get readable spec for pod %s: %v ", kubernetesutil.ResourceKey(pod), err)
 	}
-	dl.fileLogger.Infof("created pod (%s) with spec: %s\n", pod.Name, podSpec)
+	dl.fileLogger.Infof("created pod %s with spec: %s\n", kubernetesutil.ResourceKey(pod), podSpec)
 }
 
-func (dl *DebugLogger) LogPodDeletion(podName string) {
-	dl.fileLogger.Infof("deleted pod (%s)", podName)
+func (dl *DebugLogger) LogPodDeletion(pod *v1.Pod) {
+	dl.fileLogger.Infof("deleted pod %q", kubernetesutil.ResourceKey(pod))
 }
 
 func (dl *DebugLogger) LogClusterSpecUpdate(oldSpec, newSpec string) {

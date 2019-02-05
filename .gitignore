@@ -12,5 +12,8 @@ vendor
 build/
 
 # CSRs and TLS material
-test/certs/*.csr
-test/certs/*.pem
+hack/e2e/certs/*.csr
+hack/e2e/certs/*.pem
+
+# Temporary directory used to template skaffold manifests
+tmp/
