@@ -29,9 +29,15 @@ import (
 )
 
 const (
-	// clientAuthSecretResourceVersionAnnotationKey is the key of the annotation that holds the last-observed resource version of the secret containing authentication data for the NATS cluster.
+	// clientAuthSecretResourceVersionAnnotationKey is the key of
+	// the annotation that holds the last-observed resource
+	// version of the secret containing authentication data for
+	// the NATS cluster.
 	clientAuthSecretResourceVersionAnnotationKey = "nats.io/cas"
-	// natsServiceRolesHashAnnotationKey is the key of the annotation that holds the hash of the comma-separated list of NatsServiceRole UIDs associated with the NATS cluster.
+
+	// natsServiceRolesHashAnnotationKey is the key of the
+	// annotation that holds the hash of the comma-separated list
+	// of NatsServiceRole UIDs associated with the NATS cluster.
 	natsServiceRolesHashAnnotationKey = "nats.io/nsr"
 )
 
@@ -56,7 +62,8 @@ type NatsCluster struct {
 	Status            ClusterStatus `json:"status"`
 }
 
-// GetGroupVersionKind returns a GroupVersionKind based on the current GroupVersion and the specified Kind.
+// GetGroupVersionKind returns a GroupVersionKind based on the current
+// GroupVersion and the specified Kind.
 func (c *NatsCluster) GetGroupVersionKind() schema.GroupVersionKind {
 	return SchemeGroupVersion.WithKind(CRDResourceKind)
 }
@@ -103,9 +110,14 @@ type ClusterSpec struct {
 	// Auth is the configuration to set permissions for users.
 	Auth *AuthConfig `json:"auth,omitempty"`
 
-	// LameDuckDurationSeconds is the number of seconds during which the server spreads the closing of clients when signaled to go into "lame duck mode".
+	// LameDuckDurationSeconds is the number of seconds during
+	// which the server spreads the closing of clients when
+	// signaled to go into "lame duck mode".
 	// +optional
 	LameDuckDurationSeconds *int64 `json:"lameDuckDurationSeconds,omitempty"`
+
+	// NoAdvertise disables advertising of endpoints for clients.
+	NoAdvertise bool `json:"noAdvertise,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -174,6 +186,10 @@ type PodPolicy struct {
 
 	// MetricsImagePullPolicy is the pull policy for the prometheus metrics exporter image.
 	MetricsImagePullPolicy string `json:"metricsImagePullPolicy,omitempty"`
+
+	// ClientsHostPort will bind a host port for the NATS container clients port,
+	// also meaning that only a single NATS server can be running on that machine.
+	ClientsHostPort int `json:"clientsHostPort,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for

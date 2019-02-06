@@ -40,32 +40,47 @@ import (
 const (
 	// natsOperatorDeploymentName is the name of the nats-operator deployment.
 	natsOperatorDeploymentName = "nats-operator"
+
+	// natsOperatorPodName is the name of the nats-operator pod.
+	natsOperatorPodName = "nats-operator"
+
 	// natsOperatorE2ePodName is the name of the nats-operator-e2e pod.
 	natsOperatorE2ePodName = "nats-operator-e2e"
-	// podReadinessTimeout is the maximum amount of time we wait for the nats-operator / nats-operator-e2e pods to be running and ready.
+
+	// podReadinessTimeout is the maximum amount of time we wait
+	// for the nats-operator / nats-operator-e2e pods to be
+	// running and ready.
 	podReadinessTimeout = 5 * time.Minute
 )
 
-// ClusterFeature represents a feature that can be enabled or disabled on the target Kubernetes cluster.
+// ClusterFeature represents a feature that can be enabled or disabled
+// on the target Kubernetes cluster.
 type ClusterFeature string
 
 const (
 	// TokenRequest represents the "TokenRequest" feature.
 	TokenRequest = ClusterFeature("TokenRequest")
+
 	// ShareProcessNamespace represents the "ShareProcessNamespace" feature.
 	ShareProcessNamespace = ClusterFeature("ShareProcessNamespace")
 )
 
-// Framework encapsulates the configuration for the current run, and provides helper methods to be used during testing.
+// Framework encapsulates the configuration for the current run, and
+// provides helper methods to be used during testing.
 type Framework struct {
-	// ClusterFeatures is a map indicating whether specific cluster features have been detected in the target cluster.
+	// ClusterFeatures is a map indicating whether specific
+	// cluster features have been detected in the target cluster.
 	ClusterFeatures map[ClusterFeature]bool
+
 	// FeatureMap is the map containing features and their status for the current instance of the end-to-end test suite.
 	FeatureMap features.FeatureMap
+
 	// KubeClient is an interface to the Kubernetes base APIs.
 	KubeClient kubernetes.Interface
+
 	// Namespace is the namespace in which we are running.
 	Namespace string
+
 	// NatsClient is an interface to the nats.io/v1alpha2 API.
 	NatsClient natsclient.Interface
 }
@@ -118,13 +133,21 @@ func (f *Framework) FeatureDetect() {
 	if major == 0 || major == 1 && minor < 12 {
 		return
 	}
-	// Kubernetes 1.12 has support for PID namespace sharing enabled by default, so no more detection is necessary.
+
+	// Kubernetes 1.12 has support for PID namespace sharing
+	// enabled by default, so no more detection is necessary.
 	f.ClusterFeatures[ShareProcessNamespace] = true
-	// Detect whether the TokenRequest API is active by performing a GET request to the "/token" subresource of the "default" service account.
+
+	// Detect whether the TokenRequest API is active by performing
+	// a GET request to the "/token" subresource of the "default"
+	// service account.
 	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(); err != nil {
 		if errors.IsMethodNotSupported(err) {
 			// We've got a "405 METHOD NOT ALLOWED" response instead of a "404 NOT FOUND".
-			// This means that the "/token" subresource is indeed enabled, and it is enough to conclude that the feature is supported in the current cluster.
+			// This means that the "/token" subresource is
+			// indeed enabled, and it is enough to
+			// conclude that the feature is supported in
+			// the current cluster.
 			f.ClusterFeatures[TokenRequest] = true
 		}
 	}
@@ -132,6 +155,9 @@ func (f *Framework) FeatureDetect() {
 
 // WaitForNatsOperator waits for the nats-operator deployment to have at least one available replica.
 func (f *Framework) WaitForNatsOperator() error {
+	// Create a "fake" pod object containing the expected
+	// namespace and name, as WaitUntilPodReady expects a pod
+	// instance.
 	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
 	defer fn()
 	return kubernetesutil.WaitUntilDeploymentCondition(ctx, f.KubeClient, f.Namespace, natsOperatorDeploymentName, func(event watch.Event) (bool, error) {
@@ -147,10 +173,14 @@ func (f *Framework) WaitForNatsOperator() error {
 	})
 }
 
-// WaitForNatsOperatorE2ePodTermination waits for the nats-operator-e2e pod to be running and ready.
-// It then starts streaming logs and returns the pod's exit code, or an error if any error was found during the process.
+// WaitForNatsOperatorE2ePodTermination waits for the nats-operator
+// pod to be running and ready.
+// It then starts streaming logs and returns the pod's exit code, or
+// an error if any error was found during the process.
 func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
-	// Create a "fake" pod object containing the expected namespace and name, as WaitUntilPodReady expects a pod instance.
+	// Create a "fake" pod object containing the expected
+	// namespace and name, as WaitUntilPodReady expects a pod
+	// instance.
 	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
 	defer fn()
 	err := kubernetesutil.WaitUntilPodReady(ctx, f.KubeClient.CoreV1(), &v1.Pod{
@@ -163,7 +193,8 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 		return -1, err
 	}
 
-	// Start streaming logs for the nats-operator-e2e until we receive io.EOF.
+	// Start streaming logs for the nats-operator-e2e until we
+	// receive io.EOF.
 	req := f.KubeClient.CoreV1().Pods(f.Namespace).GetLogs(natsOperatorE2ePodName, &v1.PodLogOptions{
 		Follow: true,
 	})
@@ -185,7 +216,8 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 		fmt.Print(l)
 	}
 
-	// Grab the first (and single) container's exit code so we can use it as our own exit code.
+	// Grab the first (and single) container's exit code so we can
+	// use it as our own exit code.
 	pod, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get(natsOperatorE2ePodName, metav1.GetOptions{})
 	if err != nil {
 		return -1, err
