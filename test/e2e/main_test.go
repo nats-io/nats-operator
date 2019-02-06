@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	// waitTimeout is the (default) amount of time we want to wait for certain conditions to be met.
+	// waitTimeout is the (default) amount of time we want to wait
+	// for certain conditions to be met.
 	waitTimeout = 2 * time.Minute
 )
 
@@ -39,11 +40,19 @@ var (
 
 	// featureGates is a comma-separated list of "key=value" pairs used to toggle certain features.
 	featureGates string
-	// kubeconfig is the path to the kubeconfig file to use when running the test suite outside a Kubernetes cluster (i.e. in "wait" mode).
+
+	// kubeconfig is the path to the kubeconfig file to use when
+	// running the test suite outside a Kubernetes cluster
+	// (i.e. in "wait" mode).
 	kubeconfig string
-	// namespace is the name of the Kubernetes namespace to use for running the test suite.
+
+	// namespace is the name of the Kubernetes namespace to use
+	// for running the test suite.
 	namespace string
-	// wait indicates whether we start in wait mode (i.e. instead of running the e2e test suite, connect to the kubernetes cluster and wait for the e2e job to complete).
+
+	// wait indicates whether we start in wait mode (i.e. instead
+	// of running the e2e test suite, connect to the kubernetes
+	// cluster and wait for the e2e job to complete).
 	wait bool
 )
 
@@ -68,7 +77,8 @@ func TestMain(m *testing.M) {
 	}
 
 	if wait {
-		// Wait for the nats-operator-e2e pod to be running and start streaming logs until it terminates.
+		// Wait for the nats-operator-e2e pod to be running
+		// and start streaming logs until it terminates.
 		c, err := f.WaitForNatsOperatorE2ePodTermination()
 		if err != nil {
 			panic(err)

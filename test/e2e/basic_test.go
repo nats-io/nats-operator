@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"testing"
+	"time"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 )
@@ -115,5 +116,80 @@ func TestPauseControl(t *testing.T) {
 	defer fn()
 	if err = f.WaitUntilFullMeshWithVersion(ctx3, natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCreateClusterWithHostPort creates a NatsCluster resource using
+// a host port with no advertise for clients.
+func TestCreateClusterWithHostPort(t *testing.T) {
+	var (
+		size    = 1
+		version = "1.3.0"
+	)
+
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+			EnableClientsHostPort: true,
+		}
+		natsCluster.Spec.NoAdvertise = true
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// List pods belonging to the NATS cluster, and make
+	// sure that every route is listed in the
+	// configuration.
+	var attempts int
+	for range time.NewTicker(1 * time.Second).C {
+		if attempts >= 30 {
+			t.Fatalf("Timed out waiting for pods with host port")
+		}
+		attempts++
+
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			continue
+		}
+		if len(pods) == 0 {
+			continue
+		}
+
+		var foundNoAdvertise bool
+		pod := pods[0]
+		container := pod.Spec.Containers[0]
+		for _, v := range container.Command {
+			if v == "--no_advertise" {
+				foundNoAdvertise = true
+			}
+		}
+		if !foundNoAdvertise {
+			t.Error("Container not configured with no advertise")
+		}
+
+		var foundHostPort bool
+		for _, port := range container.Ports {
+			if port.ContainerPort == int32(4222) && port.HostPort == int32(4222) {
+				foundHostPort = true
+			}
+		}
+		if !foundHostPort {
+			t.Error("Container not configured with host port")
+		}
+
+		break
 	}
 }

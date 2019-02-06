@@ -51,11 +51,16 @@ type routez struct {
 	RouteCount int `json:"num_routes"`
 }
 
-// NatsClusterCustomizer represents a function that allows for customizing a NatsCluster resource before it is created.
+// NatsClusterCustomizer represents a function that allows for
+// customizing a NatsCluster resource before it is created.
 type NatsClusterCustomizer func(natsCluster *natsv1alpha2.NatsCluster)
 
-// CreateCluster creates a NatsCluster resource which name starts with the specified prefix, and using the specified size and version.
-// Before actually creating the NatsCluster resource, it allows for the resource to be customized via the application of NatsClusterCustomizer functions.
+// CreateCluster creates a NatsCluster resource which name starts with
+// the specified prefix, and using the specified size and version.
+// 
+// Before actually creating the NatsCluster resource, it allows for
+// the resource to be customized via the application of
+// NatsClusterCustomizer functions.
 func (f *Framework) CreateCluster(namespace, prefix string, size int, version string, fn ...NatsClusterCustomizer) (*natsv1alpha2.NatsCluster, error) {
 	// Create a NatsCluster object using the specified values.
 	obj := &natsv1alpha2.NatsCluster{
@@ -93,7 +98,8 @@ func (f *Framework) NatsClusterHasExpectedVersion(natsCluster *natsv1alpha2.Nats
 	if err != nil {
 		return false, err
 	}
-	// Make sure that every pod is running the expected version of the NATS server.
+	// Make sure that every pod is running the expected version of
+	// the NATS server.
 	for _, pod := range pods {
 		v, err := f.VersionForPod(pod)
 		if err != nil {
@@ -103,11 +109,13 @@ func (f *Framework) NatsClusterHasExpectedVersion(natsCluster *natsv1alpha2.Nats
 			return false, nil
 		}
 	}
-	// All the members of the cluster are reporting the expected version.
+	// All the members of the cluster are reporting the expected
+	// version.
 	return true, nil
 }
 
-// NatsClusterHasExpectedRouteCount returns whether every pod in the specified NatsCluster is reporting the expected number of routes.
+// NatsClusterHasExpectedRouteCount returns whether every pod in the
+// specified NatsCluster is reporting the expected number of routes.
 func (f *Framework) NatsClusterHasExpectedRouteCount(natsCluster *natsv1alpha2.NatsCluster, expectedSize int) (bool, error) {
 	// List pods belonging to the specified NatsCluster resource.
 	pods, err := f.PodsForNatsCluster(natsCluster)
@@ -124,11 +132,13 @@ func (f *Framework) NatsClusterHasExpectedRouteCount(natsCluster *natsv1alpha2.N
 			return false, nil
 		}
 	}
-	// All the members of the cluster are reporting the expected route count.
+	// All the members of the cluster are reporting the expected
+	// route count.
 	return true, nil
 }
 
-// PodsForNatsCluster returns a slice containing all pods that belong to the specified NatsCluster resource.
+// PodsForNatsCluster returns a slice containing all pods that belong
+// to the specified NatsCluster resource.
 func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Pod, error) {
 	pods, err := f.KubeClient.CoreV1().Pods(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
 	if err != nil {
@@ -137,7 +147,8 @@ func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([
 	return pods.Items, nil
 }
 
-// RouteCountForPod returns the number of routes reported by the specified pod.
+// RouteCountForPod returns the number of routes reported by the
+// specified pod.
 func (f *Framework) RouteCountForPod(pod v1.Pod) (int, error) {
 	// Check the "/routez" endpoint for the number of established routes.
 	r, err := http.Get(fmt.Sprintf("http://%s:%d/routez", pod.Status.PodIP, constants.MonitoringPort))
@@ -157,15 +168,18 @@ func (f *Framework) RouteCountForPod(pod v1.Pod) (int, error) {
 	return data.RouteCount, nil
 }
 
-// PatchCluster performs a patch on the specified NatsCluster resource to align its ".spec" field with the provided value.
-// It takes the desired state as an argument and patches the NatsCluster resource accordingly.
+// PatchCluster performs a patch on the specified NatsCluster resource
+// to align its ".spec" field with the provided value.
+// It takes the desired state as an argument and patches the
+// NatsCluster resource accordingly.
 func (f *Framework) PatchCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1alpha2.NatsCluster, error) {
 	// Grab the most up-to-date version of the provided NatsCluster resource.
 	currentCluster, err := f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Get(natsCluster.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	// Create a deep copy of currentCluster so we can create a patch.
+	// Create a deep copy of currentCluster so we can create a
+	// patch.
 	newCluster := currentCluster.DeepCopy()
 	// Make the spec of newCluster match the desired spec.
 	newCluster.Spec = natsCluster.Spec
@@ -197,7 +211,8 @@ func (f *Framework) VersionForPod(pod v1.Pod) (string, error) {
 	return data.Version, nil
 }
 
-// WaitUntilExpectedRoutesInConfig waits until the expected routes for the specified NatsCluster are present in its configuration secret.
+// WaitUntilExpectedRoutesInConfig waits until the expected routes for
+// the specified NatsCluster are present in its configuration secret.
 func (f *Framework) WaitUntilExpectedRoutesInConfig(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster) error {
 	return f.WaitUntilSecretCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
 		// Grab the secret from the event.
@@ -214,7 +229,9 @@ func (f *Framework) WaitUntilExpectedRoutesInConfig(ctx context.Context, natsClu
 			return false, nil
 		}
 
-		// List pods belonging to the NATS cluster, and make sure that every route is listed in the configuration.
+		// List pods belonging to the NATS cluster, and make
+		// sure that every route is listed in the
+		// configuration.
 		pods, err := f.PodsForNatsCluster(natsCluster)
 		if err != nil {
 			return false, nil
@@ -231,8 +248,10 @@ func (f *Framework) WaitUntilExpectedRoutesInConfig(ctx context.Context, natsClu
 	})
 }
 
-// WaitUntilFullMesh waits until all the pods belonging to the specified NatsCluster report the expected number of routes.
-// This function is a weaker variant of WaitUntilFullMeshWithVersion and should only be called in very specific use cases.
+// WaitUntilFullMesh waits until all the pods belonging to the
+// specified NatsCluster report the expected number of routes.
+// This function is a weaker variant of WaitUntilFullMeshWithVersion
+// and should only be called in very specific use cases.
 func (f *Framework) WaitUntilFullMesh(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, expectedSize int) error {
 	// Wait for the expected size and version to be reported on the NatsCluster resource.
 	err := f.WaitUntilNatsClusterCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
@@ -256,9 +275,12 @@ func (f *Framework) WaitUntilFullMesh(ctx context.Context, natsCluster *natsv1al
 	})
 }
 
-// WaitUntilFullMeshWithVersion waits until all the pods belonging to the specified NatsCluster report the expected number of routes and the expected version.
+// WaitUntilFullMeshWithVersion waits until all the pods belonging to
+// the specified NatsCluster report the expected number of routes and
+// the expected version.
 func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, expectedSize int, expectedVersion string) error {
-	// Wait for the expected size and version to be reported on the NatsCluster resource.
+	// Wait for the expected size and version to be reported on
+	// the NatsCluster resource.
 	err := f.WaitUntilNatsClusterCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
 		nc := event.Object.(*natsv1alpha2.NatsCluster)
 		return nc.Status.Size == expectedSize && nc.Status.CurrentVersion == expectedVersion, nil
@@ -266,9 +288,11 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 	if err != nil {
 		return err
 	}
-	// Wait for all the pods to report the expected routes and version.
+	// Wait for all the pods to report the expected routes and
+	// version.
 	return retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
-		// Check whether the full mesh has formed with the expected size.
+		// Check whether the full mesh has formed with the
+		// expected size.
 		m, err := f.NatsClusterHasExpectedRouteCount(natsCluster, expectedSize)
 		if err != nil {
 			return false, nil
@@ -276,7 +300,8 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		if !m {
 			return false, nil
 		}
-		// Check whether all pods in the cluster are reporting the expected version.
+		// Check whether all pods in the cluster are reporting
+		// the expected version.
 		v, err := f.NatsClusterHasExpectedVersion(natsCluster, expectedVersion)
 		if err != nil {
 			return false, nil
@@ -288,7 +313,8 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 	})
 }
 
-// WaitUntilNatsClusterCondition waits until the specified condition is verified in the specified NatsCluster.
+// WaitUntilNatsClusterCondition waits until the specified condition
+// is verified in the specified NatsCluster.
 func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, fn watch.ConditionFunc) error {
 	// Create a field selector that matches the specified NatsCluster resource.
 	fs := kubernetesutil.ByCoordinates(natsCluster.Namespace, natsCluster.Name)
@@ -303,7 +329,8 @@ func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsClust
 			return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Watch(options)
 		},
 	}
-	// Watch for updates to the NatsCluster resource until fn is satisfied, or until the timeout is reached.
+	// Watch for updates to the NatsCluster resource until fn is
+	// satisfied, or until the timeout is reached.
 	last, err := watch.UntilWithSync(ctx, lw, &natsv1alpha2.NatsCluster{}, nil, fn)
 	if err != nil {
 		return err
@@ -314,7 +341,9 @@ func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsClust
 	return nil
 }
 
-// WaitUntilPodLogLineMatches waits until a line in the logs for the pod with the specified index and belonging to the specified NatsCluster resource matches the provided regular expression.
+// WaitUntilPodLogLineMatches waits until a line in the logs for the
+// pod with the specified index and belonging to the specified
+// NatsCluster resource matches the provided regular expression.
 func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, podIndex int, regex string) error {
 	req := f.KubeClient.CoreV1().Pods(natsCluster.Namespace).GetLogs(fmt.Sprintf("%s-%d", natsCluster.Name, podIndex), &v1.PodLogOptions{
 		Container: "nats",
@@ -331,7 +360,9 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 		case <-ctx.Done():
 			return fmt.Errorf("failed to find a matching log line within the specified timeout")
 		default:
-			// Read a single line from the logs and check whether it matches the specified regular expression.
+			// Read a single line from the logs and check
+			// whether it matches the specified regular
+			// expression.
 			str, err := rd.ReadString('\n')
 			if err != nil && err != io.EOF {
 				return err
@@ -343,7 +374,8 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 			if err != nil {
 				return err
 			}
-			// If the current log line matches the regular expression, return.
+			// If the current log line matches the regular
+			// expression, return.
 			if m {
 				return nil
 			}

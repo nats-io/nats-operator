@@ -578,7 +578,11 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage)
+	var enableClientsHostPort bool
+	if cs.Pod != nil {
+		enableClientsHostPort = cs.Pod.EnableClientsHostPort
+	}
+	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort)
 	container = containerWithLivenessProbe(container, natsLivenessProbe())
 
 	// In case TLS was enabled as part of the NATS cluster
@@ -614,6 +618,10 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		"-P",
 		constants.PidFilePath,
 	}
+	if cs.NoAdvertise {
+		cmd = append(cmd, "--no_advertise")
+	}
+
 	container.Command = cmd
 	containers = append(containers, container)
 

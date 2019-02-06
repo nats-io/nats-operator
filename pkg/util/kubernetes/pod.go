@@ -36,8 +36,8 @@ import (
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(clusterName, version string, serverImage string) v1.Container {
-	return v1.Container{
+func natsPodContainer(clusterName, version string, serverImage string, enableClientsHostPort bool) v1.Container {
+	container := v1.Container{
 		Env: []v1.EnvVar{
 			{
 				Name:  "SVC",
@@ -50,24 +50,33 @@ func natsPodContainer(clusterName, version string, serverImage string) v1.Contai
 		},
 		Name:  constants.NatsContainerName,
 		Image: MakeNATSImage(version, serverImage),
-		Ports: []v1.ContainerPort{
-			{
-				Name:          "cluster",
-				ContainerPort: int32(constants.ClusterPort),
-				Protocol:      v1.ProtocolTCP,
-			},
-			{
-				Name:          "client",
-				ContainerPort: int32(constants.ClientPort),
-				Protocol:      v1.ProtocolTCP,
-			},
-			{
-				Name:          "monitoring",
-				ContainerPort: int32(constants.MonitoringPort),
-				Protocol:      v1.ProtocolTCP,
-			},
+	}
+
+	ports := []v1.ContainerPort{
+		{
+			Name:          "cluster",
+			ContainerPort: int32(constants.ClusterPort),
+			Protocol:      v1.ProtocolTCP,
+		},
+		{
+			Name:          "monitoring",
+			ContainerPort: int32(constants.MonitoringPort),
+			Protocol:      v1.ProtocolTCP,
 		},
 	}
+
+	port := v1.ContainerPort{
+		Name:          "client",
+		ContainerPort: int32(constants.ClientPort),
+		Protocol:      v1.ProtocolTCP,
+	}
+	if enableClientsHostPort {
+		port.HostPort = int32(constants.ClientPort)
+	}
+	ports = append(ports, port)
+	container.Ports = ports
+
+	return container
 }
 
 // natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.

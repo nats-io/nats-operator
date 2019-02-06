@@ -26,8 +26,10 @@ import (
 	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
-// TestConfigContainsFullMesh creates a NatsCluster resource with size 3 and waits for the full mesh to be formed.
-// Then, it waits until the configuration secret has references to all pods belonging to the NatsCluster resource.
+// TestConfigContainsFullMesh creates a NatsCluster resource with size
+// 3 and waits for the full mesh to be formed.
+// Then, it waits until the configuration secret has references to all
+// pods belonging to the NatsCluster resource.
 func TestConfigContainsFullMesh(t *testing.T) {
 	var (
 		size    = 3
@@ -65,8 +67,11 @@ func TestConfigContainsFullMesh(t *testing.T) {
 	}
 }
 
-// TestExistingSecretIsReplaced creates a Secret containing a "nats.conf" entry with minimal configuration.
-// Then, it creates a NatsCluster resource with the same name and waits for the "nats.conf" entry to be replaced with the appropriate config.
+// TestExistingSecretIsReplaced creates a Secret containing a
+// "nats.conf" entry with minimal configuration.
+// Then, it creates a NatsCluster resource with the same name and
+// waits for the "nats.conf" entry to be replaced with the appropriate
+// config.
 func TestExistingSecretIsReplaced(t *testing.T) {
 	var (
 		size    = 3
@@ -90,7 +95,8 @@ func TestExistingSecretIsReplaced(t *testing.T) {
 		}
 	}()
 
-	// Create a NatsCluster resource, making sure that its name matches the name of the secret we've created above.
+	// Create a NatsCluster resource, making sure that its name
+	// matches the name of the secret we've created above.
 	natsCluster, err = f.CreateCluster(f.Namespace, "", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		natsCluster.Name = secret.Name
 	})
@@ -104,10 +110,15 @@ func TestExistingSecretIsReplaced(t *testing.T) {
 		}
 	}()
 
-	// We can't wait for the full mesh to be formed since the original configuration doesn't contain clustering configuration, and since configuration reloading is disabled.
-	// Hence, we just wait for all the required routes to show up on the "nats.conf" entry.
+	// We can't wait for the full mesh to be formed since the
+	// original configuration doesn't contain clustering
+	// configuration, and since configuration reloading is
+	// disabled.
+	// Hence, we just wait for all the required routes to show up
+	// on the "nats.conf" entry.
 
-	// Wait until the configuration file contains routes to all the pods (meaning it has been replaced).
+	// Wait until the configuration file contains routes to all
+	// the pods (meaning it has been replaced).
 	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
 	defer fn()
 	if err = f.WaitUntilExpectedRoutesInConfig(ctx1, natsCluster); err != nil {
