@@ -187,9 +187,9 @@ type PodPolicy struct {
 	// MetricsImagePullPolicy is the pull policy for the prometheus metrics exporter image.
 	MetricsImagePullPolicy string `json:"metricsImagePullPolicy,omitempty"`
 
-	// ClientsHostPort will bind a host port for the NATS container clients port,
+	// EnableClientsHostPort will bind a host port for the NATS container clients port,
 	// also meaning that only a single NATS server can be running on that machine.
-	ClientsHostPort int `json:"clientsHostPort,omitempty"`
+	EnableClientsHostPort bool `json:"enableClientsHostPort,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for
