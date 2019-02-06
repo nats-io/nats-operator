@@ -618,6 +618,10 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		"-P",
 		constants.PidFilePath,
 	}
+	if cs.NoAdvertise {
+		cmd = append(cmd, "--no_advertise")
+	}
+
 	container.Command = cmd
 	containers = append(containers, container)
 

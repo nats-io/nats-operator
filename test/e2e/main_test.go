@@ -77,7 +77,8 @@ func TestMain(m *testing.M) {
 	}
 
 	if wait {
-		// Wait for the nats-operator-e2e pod to be running and start streaming logs until it terminates.
+		// Wait for the nats-operator-e2e pod to be running
+		// and start streaming logs until it terminates.
 		c, err := f.WaitForNatsOperatorE2ePodTermination()
 		if err != nil {
 			panic(err)
