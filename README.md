@@ -27,7 +27,6 @@ metadata:
 spec:
   size: 3
   version: "1.3.0"
-EOF
 ```
 
 NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the any necessary operations on the associated NATS clusters in order to align their current status with the desired one.
