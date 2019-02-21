@@ -15,10 +15,12 @@
 package kubernetes
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -360,6 +362,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	if cluster.LameDuckDurationSeconds != nil {
 		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
 	}
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -369,6 +375,12 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+
+	// FIXME: Quoted "include" causes include to be ignored.
+	// Remove once using NATS v2.0 as the default container image.
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), 1)
 	}
 
 	labels := LabelsForCluster(clusterName)
@@ -424,6 +436,11 @@ func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 			Routes: routes,
 		},
 	}
+
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -433,6 +450,12 @@ func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+
+	// FIXME: Quoted "include" causes include to be ignored.
+	// Remove once using NATS v2.0 as the default container image.
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), 1)
 	}
 
 	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
@@ -649,7 +672,7 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 
 		bootconfig.Command = []string{
 			"nats-pod-bootconfig",
-			"-f", "/etc/nats-config/advertise/client_advertise.conf",
+			"-f", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigFilePath),
 		}
 	}
 	container.VolumeMounts = volumeMounts
@@ -716,7 +739,7 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 	}
 
 	if cs.Pod != nil && cs.Pod.EnableMetrics {
-		// Add pod annotations for promethues metrics
+		// Add pod annotations for prometheus metrics
 		pod.ObjectMeta.Annotations["prometheus.io/scrape"] = "true"
 		pod.ObjectMeta.Annotations["prometheus.io/port"] = strconv.Itoa(constants.MetricsPort)
 

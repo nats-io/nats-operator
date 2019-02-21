@@ -43,6 +43,10 @@ const (
 	// ConfigFilePath is the absolute path to the NATS config file.
 	ConfigFilePath = ConfigMapMountPath + "/" + ConfigFileName
 
+	// BootConfigFilePath is the path to the include file that
+	// contains the external IP address.
+	BootConfigFilePath = "advertise/client_advertise.conf"
+
 	// PidFileVolumeName is the name of the volume used for the NATS server pid file.
 	PidFileVolumeName = "pid"
 
