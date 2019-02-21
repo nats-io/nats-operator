@@ -604,6 +604,54 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
+
+	// Configure initializer container to resolve the external ip
+	// from the pod.
+	var (
+		advertiseExternalIP bool = cs.Pod != nil && cs.Pod.AdvertiseExternalIP
+		bootconfig          v1.Container
+	)
+	if advertiseExternalIP {
+		// TODO: Add default before releasing.
+		image := fmt.Sprintf("%s:%s", cs.Pod.BootConfigContainerImage, cs.Pod.BootConfigContainerImageTag)
+		bootconfig = v1.Container{
+			Name:  "bootconfig",
+			Image: image,
+		}
+		bootconfig.Env = []v1.EnvVar{
+			{
+				Name: "KUBERNETES_NODE_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+		}
+
+		// Add the empty directory mount for the pod, nats
+		// container and init container
+		mount := v1.VolumeMount{
+			Name:      "advertiseconfig",
+			MountPath: "/etc/nats-config/advertise",
+			SubPath:   "advertise",
+		}
+		bootconfig.VolumeMounts = []v1.VolumeMount{mount}
+		volumeMounts = append(volumeMounts, mount)
+
+		volume := v1.Volume{
+			Name: "advertiseconfig",
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}
+		volumes = append(volumes, volume)
+
+		bootconfig.Command = []string{
+			"nats-pod-bootconfig",
+			"-f", "/etc/nats-config/advertise/client_advertise.conf",
+		}
+	}
 	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
@@ -637,6 +685,9 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 			RestartPolicy: v1.RestartPolicyNever,
 			Volumes:       volumes,
 		},
+	}
+	if advertiseExternalIP {
+		pod.Spec.InitContainers = []v1.Container{bootconfig}
 	}
 	pod.Spec.Volumes = volumes
 
