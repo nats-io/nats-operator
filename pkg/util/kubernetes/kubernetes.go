@@ -702,13 +702,26 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: v1.PodSpec{
-			Hostname:      name,
-			Subdomain:     ManagementServiceName(clusterName),
-			RestartPolicy: v1.RestartPolicyNever,
-			Volumes:       volumes,
-		},
 	}
+
+	spec := &v1.PodSpec{}
+
+	// Initialize the pod spec with a template in case it is present.
+	if cs.PodTemplate != nil && &cs.PodTemplate.Spec != nil {
+		spec = cs.PodTemplate.Spec.DeepCopy()
+	}
+	pod.Spec = *spec
+
+	// Required overrides.
+	pod.Spec.Hostname = name
+	pod.Spec.Subdomain = ManagementServiceName(clusterName)
+	pod.Spec.Volumes = volumes
+
+	// Set default restart policy
+	if pod.Spec.RestartPolicy == "" {
+		pod.Spec.RestartPolicy = v1.RestartPolicyNever
+	}
+
 	if advertiseExternalIP {
 		pod.Spec.InitContainers = []v1.Container{bootconfig}
 	}

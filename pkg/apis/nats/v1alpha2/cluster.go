@@ -118,6 +118,9 @@ type ClusterSpec struct {
 
 	// NoAdvertise disables advertising of endpoints for clients.
 	NoAdvertise bool `json:"noAdvertise,omitempty"`
+
+	// PodTemplate is the optional template to use for the pods.
+	PodTemplate *v1.PodTemplateSpec `json:"template,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
