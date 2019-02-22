@@ -22,6 +22,10 @@ import (
 	"time"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/conf"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"k8s.io/api/core/v1"
+	watchapi "k8s.io/apimachinery/pkg/watch"
 )
 
 // TestCreateCluster creates a NatsCluster resource and waits for the full mesh to be formed.
@@ -191,5 +195,80 @@ func TestCreateClusterWithHostPort(t *testing.T) {
 		}
 
 		break
+	}
+}
+
+func TestCreateClustersWithExtraRoutes(t *testing.T) {
+	var (
+		size    = 3
+		version = "1.4.0"
+	)
+
+	var (
+		ncA *natsv1alpha2.NatsCluster
+		ncB *natsv1alpha2.NatsCluster
+		err error
+	)
+
+	ncA, err = f.CreateCluster(f.Namespace, "test-nats-", size, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mesh the cluster with the other cluster.
+	ncB, err = f.CreateCluster(f.Namespace, "test-nats-", 1, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {
+			natsCluster.Spec.ExtraRoutes = []*natsv1alpha2.ExtraRoute{
+				{Cluster: ncA.Name},
+				{Route: "nats://127.0.0.1:6222"},
+			}
+
+			// Use a host port to confirm the routes
+			natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+				EnableClientsHostPort: true,
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(ncA); err != nil {
+			t.Error(err)
+		}
+		if err = f.DeleteCluster(ncB); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	ctx, done := context.WithTimeout(context.Background(), 120*time.Second)
+	defer done()
+	err = f.WaitUntilSecretCondition(ctx, ncB, func(event watchapi.Event) (bool, error) {
+		// Grab the secret from the event.
+		secret := event.Object.(*v1.Secret)
+		// Make sure that the "nats.conf" key is present in the secret.
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+
+		// Grab the ServerConfig object that corresponds to "nats.conf".
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if config.Cluster == nil || config.Cluster.Routes == nil {
+			return false, nil
+		}
+		routes := config.Cluster.Routes
+		if len(routes) == 3 {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
