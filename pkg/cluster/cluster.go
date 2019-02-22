@@ -473,14 +473,7 @@ func (c *Cluster) pollPods() (running []*v1.Pod, waiting []*v1.Pod, deletable []
 
 // updateCluster patches the current NatsCluster resource in order for it to reflect the current state.
 func (c *Cluster) updateCluster() error {
-	// Apply idempotent update to the server configuration,
-	// which may cause a reload if config has changed.
-	err := c.updateConfigSecret()
-	if err != nil {
-		return err
-	}
-
-	if reflect.DeepEqual(c.originalCluster.Spec, c.cluster.Spec) {
+	if reflect.DeepEqual(c.originalCluster, c.cluster) {
 		return nil
 	}
 	patchBytes, err := kubernetesutil.CreatePatch(c.originalCluster, c.cluster, &v1alpha2.NatsCluster{})

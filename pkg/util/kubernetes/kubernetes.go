@@ -649,11 +649,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
 
-	// Grab the A record that will correspond to the current pod so we can use it as the client and cluster advertise host.
-	// This helps with client failover, and with avoiding route connection errors in TLS-enabled clusters.
+	// Grab the A record that will correspond to the current pod
+	// so we can use it as the cluster advertise host.
+	// This helps with avoiding route connection errors in TLS-enabled clusters.
 	advertiseHost := fmt.Sprintf("%s.%s.%s.svc", name, ManagementServiceName(clusterName), namespace)
 
 	// Rely on the shared configuration map for configuring the cluster.
+	retries := strconv.Itoa(constants.ConnectRetries)
 	cmd := []string{
 		constants.NatsBinaryPath,
 		"-c",
@@ -662,8 +664,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		constants.PidFilePath,
 		"--cluster_advertise",
 		advertiseHost,
-		"--client_advertise",
-		advertiseHost,
+		"--connect_retries",
+		retries,
 	}
 	if cs.NoAdvertise {
 		cmd = append(cmd, "--no_advertise")
