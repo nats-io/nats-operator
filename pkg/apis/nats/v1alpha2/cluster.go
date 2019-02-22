@@ -121,6 +121,7 @@ type ClusterSpec struct {
 
 	// PodTemplate is the optional template to use for the pods.
 	PodTemplate *v1.PodTemplateSpec `json:"template,omitempty"`
+
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
 }
