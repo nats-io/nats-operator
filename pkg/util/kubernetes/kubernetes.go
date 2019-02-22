@@ -356,6 +356,24 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 			Port: int(constants.ClusterPort),
 		},
 	}
+
+	if cluster.ExtraRoutes != nil {
+		routes := make([]string, 0)
+		for _, extraCluster := range cluster.ExtraRoutes {
+			switch {
+			case extraCluster.Route != "":
+				// If route is explicit just include as is.
+				routes = append(routes, extraCluster.Route)
+			case extraCluster.Cluster != "":
+				route := fmt.Sprintf("nats://%s:%d",
+					ManagementServiceName(extraCluster.Cluster),
+					constants.ClusterPort)
+				routes = append(routes, route)
+			}
+		}
+		sconfig.Cluster.Routes = routes
+	}
+
 	// Observe .spec.lameDuckDurationSeconds if specified.
 	if cluster.LameDuckDurationSeconds != nil {
 		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
@@ -396,7 +414,13 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 
 // UpdateConfigSecret applies the new configuration of the cluster,
 // such as modifying the routes available in the cluster.
-func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
+func UpdateConfigSecret(
+	kubecli corev1client.CoreV1Interface,
+	operatorcli natsalphav2client.NatsV1alpha2Interface,
+	clusterName, ns string,
+	cluster v1alpha2.ClusterSpec,
+	owner metav1.OwnerReference,
+) error {
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -414,6 +438,21 @@ func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
 			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
 		routes = append(routes, route)
+	}
+
+	if cluster.ExtraRoutes != nil {
+		for _, extraCluster := range cluster.ExtraRoutes {
+			switch {
+			case extraCluster.Route != "":
+				// If route is explicit just include as is.
+				routes = append(routes, extraCluster.Route)
+			case extraCluster.Cluster != "":
+				route := fmt.Sprintf("nats://%s:%d",
+					ManagementServiceName(extraCluster.Cluster),
+					constants.ClusterPort)
+				routes = append(routes, route)
+			}
+		}
 	}
 
 	sconfig := &natsconf.ServerConfig{
