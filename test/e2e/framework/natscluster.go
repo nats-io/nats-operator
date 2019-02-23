@@ -41,12 +41,14 @@ import (
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 )
 
-// varz encapsulates a response from the "/varz" endpoint of the NATS management API.
+// varz encapsulates a response from the "/varz" endpoint of the NATS
+// management API.
 type varz struct {
 	Version string `json:"version"`
 }
 
-// routez encapsulates a response from the "/routez" endpoint of the NATS management API.
+// routez encapsulates a response from the "/routez" endpoint of the
+// NATS management API.
 type routez struct {
 	RouteCount int `json:"num_routes"`
 }
@@ -57,7 +59,7 @@ type NatsClusterCustomizer func(natsCluster *natsv1alpha2.NatsCluster)
 
 // CreateCluster creates a NatsCluster resource which name starts with
 // the specified prefix, and using the specified size and version.
-// 
+//
 // Before actually creating the NatsCluster resource, it allows for
 // the resource to be customized via the application of
 // NatsClusterCustomizer functions.
@@ -91,7 +93,13 @@ func (f *Framework) DeleteCluster(natsCluster *natsv1alpha2.NatsCluster) error {
 	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Delete(natsCluster.Name, &metav1.DeleteOptions{})
 }
 
-// NatsClusterHasExpectedVersion returns whether every pod in the specified NatsCluster is running the specified version of NATS.
+// UpdateCluster deletes the specified NatsCluster resource.
+func (f *Framework) UpdateCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1alpha2.NatsCluster, error) {
+	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Update(natsCluster)
+}
+
+// NatsClusterHasExpectedVersion returns whether every pod in the
+// specified NatsCluster is running the specified version of NATS.
 func (f *Framework) NatsClusterHasExpectedVersion(natsCluster *natsv1alpha2.NatsCluster, expectedVersion string) (bool, error) {
 	// List pods belonging to the specified NatsCluster resource.
 	pods, err := f.PodsForNatsCluster(natsCluster)
@@ -151,7 +159,11 @@ func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([
 // specified pod.
 func (f *Framework) RouteCountForPod(pod v1.Pod) (int, error) {
 	// Check the "/routez" endpoint for the number of established routes.
-	r, err := http.Get(fmt.Sprintf("http://%s:%d/routez", pod.Status.PodIP, constants.MonitoringPort))
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	endpoint := fmt.Sprintf("http://%s:%d/routez", pod.Status.PodIP, constants.MonitoringPort)
+	r, err := client.Get(endpoint)
 	if err != nil {
 		return 0, err
 	}
@@ -194,7 +206,10 @@ func (f *Framework) PatchCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1
 // VersionForPod returns the version of NATS reported by the specified pod.
 func (f *Framework) VersionForPod(pod v1.Pod) (string, error) {
 	// Check the "/varz" endpoint for the number of established routes.
-	r, err := http.Get(fmt.Sprintf("http://%s:%d/varz", pod.Status.PodIP, constants.MonitoringPort))
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	r, err := client.Get(fmt.Sprintf("http://%s:%d/varz", pod.Status.PodIP, constants.MonitoringPort))
 	if err != nil {
 		return "", err
 	}
@@ -300,6 +315,7 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		if !m {
 			return false, nil
 		}
+
 		// Check whether all pods in the cluster are reporting
 		// the expected version.
 		v, err := f.NatsClusterHasExpectedVersion(natsCluster, expectedVersion)
