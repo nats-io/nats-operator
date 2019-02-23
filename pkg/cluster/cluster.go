@@ -473,6 +473,13 @@ func (c *Cluster) pollPods() (running []*v1.Pod, waiting []*v1.Pod, deletable []
 
 // updateCluster patches the current NatsCluster resource in order for it to reflect the current state.
 func (c *Cluster) updateCluster() error {
+	// Apply idempotent update to the server configuration,
+	// which may cause a reload if config has changed.
+	err := c.updateConfigSecret()
+	if err != nil {
+		c.logger.Errorf("failed to update cluster secret: %v", err)
+	}
+
 	if reflect.DeepEqual(c.originalCluster, c.cluster) {
 		return nil
 	}
