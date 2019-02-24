@@ -118,6 +118,19 @@ type ClusterSpec struct {
 
 	// NoAdvertise disables advertising of endpoints for clients.
 	NoAdvertise bool `json:"noAdvertise,omitempty"`
+
+	// ExtraRoutes is a list of extra routes to which the cluster will connect.
+	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
+}
+
+// ExtraRoute is a route that is not originally part of the NatsCluster
+// but that it will try to connect to.
+type ExtraRoute struct {
+	// Cluster is the name of a NatsCluster.
+	Cluster string `json:"cluster,omitempty"`
+
+	// Route is a network endpoint to which the cluster should connect.
+	Route string `json:"route,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.

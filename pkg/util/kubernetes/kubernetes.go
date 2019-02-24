@@ -356,6 +356,24 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 			Port: int(constants.ClusterPort),
 		},
 	}
+
+	if cluster.ExtraRoutes != nil {
+		routes := make([]string, 0)
+		for _, extraCluster := range cluster.ExtraRoutes {
+			switch {
+			case extraCluster.Route != "":
+				// If route is explicit just include as is.
+				routes = append(routes, extraCluster.Route)
+			case extraCluster.Cluster != "":
+				route := fmt.Sprintf("nats://%s:%d",
+					ManagementServiceName(extraCluster.Cluster),
+					constants.ClusterPort)
+				routes = append(routes, route)
+			}
+		}
+		sconfig.Cluster.Routes = routes
+	}
+
 	// Observe .spec.lameDuckDurationSeconds if specified.
 	if cluster.LameDuckDurationSeconds != nil {
 		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
@@ -396,7 +414,13 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 
 // UpdateConfigSecret applies the new configuration of the cluster,
 // such as modifying the routes available in the cluster.
-func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
+func UpdateConfigSecret(
+	kubecli corev1client.CoreV1Interface,
+	operatorcli natsalphav2client.NatsV1alpha2Interface,
+	clusterName, ns string,
+	cluster v1alpha2.ClusterSpec,
+	owner metav1.OwnerReference,
+) error {
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -414,6 +438,21 @@ func UpdateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
 			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
 		routes = append(routes, route)
+	}
+
+	if cluster.ExtraRoutes != nil {
+		for _, extraCluster := range cluster.ExtraRoutes {
+			switch {
+			case extraCluster.Route != "":
+				// If route is explicit just include as is.
+				routes = append(routes, extraCluster.Route)
+			case extraCluster.Cluster != "":
+				route := fmt.Sprintf("nats://%s:%d",
+					ManagementServiceName(extraCluster.Cluster),
+					constants.ClusterPort)
+				routes = append(routes, route)
+			}
+		}
 	}
 
 	sconfig := &natsconf.ServerConfig{
@@ -554,7 +593,7 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 }
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
-func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
+func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	labels := map[string]string{
 		LabelAppKey:            "nats",
 		LabelClusterNameKey:    clusterName,
@@ -610,13 +649,23 @@ func NewNatsPodSpec(name, clusterName string, cs v1alpha2.ClusterSpec, owner met
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
 
+	// Grab the A record that will correspond to the current pod
+	// so we can use it as the cluster advertise host.
+	// This helps with avoiding route connection errors in TLS-enabled clusters.
+	advertiseHost := fmt.Sprintf("%s.%s.%s.svc", name, ManagementServiceName(clusterName), namespace)
+
 	// Rely on the shared configuration map for configuring the cluster.
+	retries := strconv.Itoa(constants.ConnectRetries)
 	cmd := []string{
 		constants.NatsBinaryPath,
 		"-c",
 		constants.ConfigFilePath,
 		"-P",
 		constants.PidFilePath,
+		"--cluster_advertise",
+		advertiseHost,
+		"--connect_retries",
+		retries,
 	}
 	if cs.NoAdvertise {
 		cmd = append(cmd, "--no_advertise")

@@ -330,7 +330,7 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 	}
 
 	// Create the pod.
-	pod := kubernetesutil.NewNatsPodSpec(name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
+	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Namespace, name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
 	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
 	if err != nil {
 		return nil, err
@@ -473,11 +473,16 @@ func (c *Cluster) pollPods() (running []*v1.Pod, waiting []*v1.Pod, deletable []
 
 // updateCluster patches the current NatsCluster resource in order for it to reflect the current state.
 func (c *Cluster) updateCluster() error {
-	// Return if there are no changes.
+	// Apply idempotent update to the server configuration,
+	// which may cause a reload if config has changed.
+	err := c.updateConfigSecret()
+	if err != nil {
+		c.logger.Errorf("failed to update cluster secret: %v", err)
+	}
+
 	if reflect.DeepEqual(c.originalCluster, c.cluster) {
 		return nil
 	}
-
 	patchBytes, err := kubernetesutil.CreatePatch(c.originalCluster, c.cluster, &v1alpha2.NatsCluster{})
 	if err != nil {
 		return err
