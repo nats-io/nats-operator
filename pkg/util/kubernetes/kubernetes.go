@@ -15,10 +15,12 @@
 package kubernetes
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -378,6 +380,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	if cluster.LameDuckDurationSeconds != nil {
 		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
 	}
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -387,6 +393,12 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+
+	// FIXME: Quoted "include" causes include to be ignored.
+	// Remove once using NATS v2.0 as the default container image.
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), 1)
 	}
 
 	labels := LabelsForCluster(clusterName)
@@ -463,6 +475,11 @@ func UpdateConfigSecret(
 			Routes: routes,
 		},
 	}
+
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -472,6 +489,12 @@ func UpdateConfigSecret(
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+
+	// FIXME: Quoted "include" causes include to be ignored.
+	// Remove once using NATS v2.0 as the default container image.
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), 1)
 	}
 
 	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
@@ -643,6 +666,54 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
+
+	// Configure initializer container to resolve the external ip
+	// from the pod.
+	var (
+		advertiseExternalIP bool = cs.Pod != nil && cs.Pod.AdvertiseExternalIP
+		bootconfig          v1.Container
+	)
+	if advertiseExternalIP {
+		// TODO: Add default before releasing.
+		image := fmt.Sprintf("%s:%s", cs.Pod.BootConfigContainerImage, cs.Pod.BootConfigContainerImageTag)
+		bootconfig = v1.Container{
+			Name:  "bootconfig",
+			Image: image,
+		}
+		bootconfig.Env = []v1.EnvVar{
+			{
+				Name: "KUBERNETES_NODE_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+		}
+
+		// Add the empty directory mount for the pod, nats
+		// container and init container
+		mount := v1.VolumeMount{
+			Name:      "advertiseconfig",
+			MountPath: "/etc/nats-config/advertise",
+			SubPath:   "advertise",
+		}
+		bootconfig.VolumeMounts = []v1.VolumeMount{mount}
+		volumeMounts = append(volumeMounts, mount)
+
+		volume := v1.Volume{
+			Name: "advertiseconfig",
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}
+		volumes = append(volumes, volume)
+
+		bootconfig.Command = []string{
+			"nats-pod-bootconfig",
+			"-f", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigFilePath),
+		}
+	}
 	container.VolumeMounts = volumeMounts
 
 	if cs.Pod != nil {
@@ -680,12 +751,28 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: v1.PodSpec{
-			Hostname:      name,
-			Subdomain:     ManagementServiceName(clusterName),
-			RestartPolicy: v1.RestartPolicyNever,
-			Volumes:       volumes,
-		},
+	}
+
+	spec := &v1.PodSpec{}
+
+	// Initialize the pod spec with a template in case it is present.
+	if cs.PodTemplate != nil && &cs.PodTemplate.Spec != nil {
+		spec = cs.PodTemplate.Spec.DeepCopy()
+	}
+	pod.Spec = *spec
+
+	// Required overrides.
+	pod.Spec.Hostname = name
+	pod.Spec.Subdomain = ManagementServiceName(clusterName)
+	pod.Spec.Volumes = volumes
+
+	// Set default restart policy
+	if pod.Spec.RestartPolicy == "" {
+		pod.Spec.RestartPolicy = v1.RestartPolicyNever
+	}
+
+	if advertiseExternalIP {
+		pod.Spec.InitContainers = []v1.Container{bootconfig}
 	}
 	pod.Spec.Volumes = volumes
 
@@ -714,7 +801,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	}
 
 	if cs.Pod != nil && cs.Pod.EnableMetrics {
-		// Add pod annotations for promethues metrics
+		// Add pod annotations for prometheus metrics
 		pod.ObjectMeta.Annotations["prometheus.io/scrape"] = "true"
 		pod.ObjectMeta.Annotations["prometheus.io/port"] = strconv.Itoa(constants.MetricsPort)
 
