@@ -10,6 +10,7 @@ type ServerConfig struct {
 	Host             string               `json:"host,omitempty"`
 	Port             int                  `json:"port,omitempty"`
 	HTTPPort         int                  `json:"http_port,omitempty"`
+	HTTPSPort        int                  `json:"https_port,omitempty"`
 	Cluster          *ClusterConfig       `json:"cluster,omitempty"`
 	TLS              *TLSConfig           `json:"tls,omitempty"`
 	Debug            bool                 `json:"debug,omitempty"`
