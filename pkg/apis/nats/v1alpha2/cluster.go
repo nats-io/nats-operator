@@ -145,6 +145,9 @@ type TLSConfig struct {
 	// RoutesSecret is the secret containing the certificates
 	// to secure the port to which cluster routes connect.
 	RoutesSecret string `json:"routesSecret,omitempty"`
+
+	// EnableHttps makes the monitoring endpoint use https.
+	EnableHttps bool `json:"enableHttps,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.

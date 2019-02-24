@@ -128,12 +128,17 @@ func containerWithRequirements(c v1.Container, r v1.ResourceRequirements) v1.Con
 	return c
 }
 
-func natsLivenessProbe() *v1.Probe {
+func natsLivenessProbe(cs v1alpha2.ClusterSpec) *v1.Probe {
+	action := &v1.HTTPGetAction{
+		Port: intstr.IntOrString{IntVal: constants.MonitoringPort},
+	}
+	if cs.TLS != nil && cs.TLS.EnableHttps {
+		action.Scheme = "HTTPS"
+	}
+
 	return &v1.Probe{
 		Handler: v1.Handler{
-			HTTPGet: &v1.HTTPGetAction{
-				Port: intstr.IntOrString{IntVal: constants.MonitoringPort},
-			},
+			HTTPGet: action,
 		},
 		InitialDelaySeconds: 10,
 		TimeoutSeconds:      10,
