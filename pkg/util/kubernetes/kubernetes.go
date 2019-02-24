@@ -148,6 +148,12 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 		return
 	}
 
+	if cs.TLS.EnableHttps {
+		// Replace monitoring port with https one.
+		sconfig.HTTPSPort = int(constants.MonitoringPort)
+		sconfig.HTTPPort = 0
+	}
+
 	if cs.TLS.ServerSecret != "" {
 		sconfig.TLS = &natsconf.TLSConfig{
 			CAFile:   constants.ServerCAFilePath,
@@ -645,7 +651,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		enableClientsHostPort = cs.Pod.EnableClientsHostPort
 	}
 	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort)
-	container = containerWithLivenessProbe(container, natsLivenessProbe())
+	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
 	// In case TLS was enabled as part of the NATS cluster
 	// configuration then should include the configuration here.
