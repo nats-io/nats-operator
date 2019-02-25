@@ -144,3 +144,67 @@ func TestCreateClusterWithHTTPSConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateClusterWithVerifyAndMap(t *testing.T) {
+	natsCluster, err := f.CreateCluster(f.Namespace, "", 1, "", func(natsCluster *natsv1alpha2.NatsCluster) {
+		// The NatsCluster resource must be called "nats" in
+		// order for the pre-provisioned certificates to work.
+		natsCluster.Name = "nats-verify"
+		natsCluster.Spec.ServerImage = "wallyqs/nats-server"
+		natsCluster.Spec.Version = "edge-2.0.0-RC5"
+
+		// Enable TLS using pre-provisioned certificates.
+		natsCluster.Spec.TLS = &natsv1alpha2.TLSConfig{
+			ServerSecret: "nats-certs",
+			RoutesSecret: "nats-routes-tls",
+		}
+		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
+			EnableTLSAuth: true,
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Wait until the full mesh is formed.
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	err = f.WaitUntilSecretCondition(ctx1, natsCluster, func(event watchapi.Event) (bool, error) {
+		secret := event.Object.(*v1.Secret)
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if config.TLS == nil || !config.TLS.VerifyAndMap {
+			return false, nil
+		}
+
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			return false, nil
+		}
+		if len(pods) < 1 {
+			return false, nil
+		}
+		ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+		defer fn()
+		err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "TLS required for client connections")
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
