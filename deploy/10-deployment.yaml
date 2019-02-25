@@ -18,8 +18,8 @@ spec:
       serviceAccountName: nats-operator
       containers:
       - name: nats-operator
-        image: nats-operator:cluster-scoped
-        imagePullPolicy: Never
+        image: connecteverything/nats-operator:0.4.2-v1alpha2
+        imagePullPolicy: IfNotPresent
         args:
         - nats-operator
         # Uncomment to perform a cluster-scoped deployment in supported versions.
