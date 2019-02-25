@@ -137,12 +137,6 @@ func TestCreateClusterWithHTTPSConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
-	defer fn()
-	if err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "https"); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestCreateClusterWithVerifyAndMap(t *testing.T) {
@@ -159,7 +153,7 @@ func TestCreateClusterWithVerifyAndMap(t *testing.T) {
 			RoutesSecret: "nats-routes-tls",
 		}
 		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
-			EnableTLSAuth: true,
+			TLSVerifyAndMap: true,
 		}
 	})
 	if err != nil {
@@ -194,12 +188,6 @@ func TestCreateClusterWithVerifyAndMap(t *testing.T) {
 			return false, nil
 		}
 		if len(pods) < 1 {
-			return false, nil
-		}
-		ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
-		defer fn()
-		err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "TLS required for client connections")
-		if err != nil {
 			return false, nil
 		}
 		return true, nil

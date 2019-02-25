@@ -168,7 +168,7 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			KeyFile:  constants.RoutesKeyFilePath,
 		}
 	}
-	if cs.Auth != nil && cs.Auth.EnableTLSAuth {
+	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
 		sconfig.TLS.VerifyAndMap = true
 	}
 }

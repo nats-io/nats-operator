@@ -239,8 +239,8 @@ type AuthConfig struct {
 	// allow to clients to send their auth credentials.
 	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`
 
-	// EnableTLSAuth toggles the verify and map.
-	EnableTLSAuth bool `json:"enableTLSAuth,omitempty"`
+	// TLSVerifyAndMap toggles verify and map to auth based on TLS certs.
+	TLSVerifyAndMap bool `json:"tlsVerifyAndMap,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {
