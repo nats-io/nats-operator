@@ -238,6 +238,9 @@ type AuthConfig struct {
 	// ClientsAuthTimeout is the time in seconds that the NATS server will
 	// allow to clients to send their auth credentials.
 	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`
+
+	// TLSVerifyAndMap toggles verify and map to auth based on TLS certs.
+	TLSVerifyAndMap bool `json:"tlsVerifyAndMap,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {

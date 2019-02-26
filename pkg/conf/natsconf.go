@@ -38,6 +38,7 @@ type TLSConfig struct {
 	CipherSuites     []string `json:"cipher_suites,omitempty"`
 	CurvePreferences []string `json:"curve_preferences,omitempty"`
 	Timeout          float64  `json:"timeout,omitempty"`
+	VerifyAndMap     bool     `json:"verify_and_map,omitempty"`
 }
 
 type AuthorizationConfig struct {
