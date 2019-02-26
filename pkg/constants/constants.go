@@ -30,6 +30,9 @@ const (
 	// MetricsPort is the port for the prometheus metrics endpoint.
 	MetricsPort = 7777
 
+	// ConnectRetries is the number of retries for an implicit route.
+	ConnectRetries = 10
+
 	// ConfigMapVolumeName is the name of the volume use for the shared config map.
 	ConfigMapVolumeName = "nats-config"
 
