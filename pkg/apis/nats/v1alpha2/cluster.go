@@ -121,6 +121,7 @@ type ClusterSpec struct {
 
 	// PodTemplate is the optional template to use for the pods.
 	PodTemplate *v1.PodTemplateSpec `json:"template,omitempty"`
+
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
 }
@@ -144,6 +145,9 @@ type TLSConfig struct {
 	// RoutesSecret is the secret containing the certificates
 	// to secure the port to which cluster routes connect.
 	RoutesSecret string `json:"routesSecret,omitempty"`
+
+	// EnableHttps makes the monitoring endpoint use https.
+	EnableHttps bool `json:"enableHttps,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
@@ -234,6 +238,9 @@ type AuthConfig struct {
 	// ClientsAuthTimeout is the time in seconds that the NATS server will
 	// allow to clients to send their auth credentials.
 	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`
+
+	// TLSVerifyAndMap toggles verify and map to auth based on TLS certs.
+	TLSVerifyAndMap bool `json:"tlsVerifyAndMap,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {

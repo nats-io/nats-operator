@@ -10,6 +10,7 @@ type ServerConfig struct {
 	Host             string               `json:"host,omitempty"`
 	Port             int                  `json:"port,omitempty"`
 	HTTPPort         int                  `json:"http_port,omitempty"`
+	HTTPSPort        int                  `json:"https_port,omitempty"`
 	Cluster          *ClusterConfig       `json:"cluster,omitempty"`
 	TLS              *TLSConfig           `json:"tls,omitempty"`
 	Debug            bool                 `json:"debug,omitempty"`
@@ -37,6 +38,7 @@ type TLSConfig struct {
 	CipherSuites     []string `json:"cipher_suites,omitempty"`
 	CurvePreferences []string `json:"curve_preferences,omitempty"`
 	Timeout          float64  `json:"timeout,omitempty"`
+	VerifyAndMap     bool     `json:"verify_and_map,omitempty"`
 }
 
 type AuthorizationConfig struct {
