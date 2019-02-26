@@ -19,6 +19,7 @@ type ServerConfig struct {
 	MaxPayload       int                  `json:"max_payload,omitempty"`
 	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
 	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
+	Include          string               `json:"include,omitempty"`
 }
 
 type ClusterConfig struct {

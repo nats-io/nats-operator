@@ -78,6 +78,11 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(int64)
 		**out = **in
 	}
+	if in.PodTemplate != nil {
+		in, out := &in.PodTemplate, &out.PodTemplate
+		*out = new(v1.PodTemplateSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

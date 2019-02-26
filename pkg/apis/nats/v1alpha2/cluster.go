@@ -118,6 +118,9 @@ type ClusterSpec struct {
 
 	// NoAdvertise disables advertising of endpoints for clients.
 	NoAdvertise bool `json:"noAdvertise,omitempty"`
+
+	// PodTemplate is the optional template to use for the pods.
+	PodTemplate *v1.PodTemplateSpec `json:"template,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -190,6 +193,17 @@ type PodPolicy struct {
 	// EnableClientsHostPort will bind a host port for the NATS container clients port,
 	// also meaning that only a single NATS server can be running on that machine.
 	EnableClientsHostPort bool `json:"enableClientsHostPort,omitempty"`
+
+	// AdvertiseExternalIP will configure the client advertise address for a pod
+	// to be the external IP of the pod where it is running.
+	AdvertiseExternalIP bool `json:"advertiseExternalIP,omitempty"`
+
+	// BootConfigContainerImage is the image to use for the initialize
+	// container that generates config on the fly for the nats server.
+	BootConfigContainerImage string `json:"bootconfigImage,omitempty"`
+
+	// BootConfigContainerImageTag is the tag of the bootconfig container image.
+	BootConfigContainerImageTag string `json:"bootconfigImageTag,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for
