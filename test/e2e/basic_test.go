@@ -277,27 +277,22 @@ func TestCreateServerWithCustomConfig(t *testing.T) {
 	var (
 		size    = 1
 		version = "1.4.0"
+		nc      *natsv1alpha2.NatsCluster
+		err     error
 	)
-
-	var (
-		nc  *natsv1alpha2.NatsCluster
-		err error
-	)
-
 	nc, err = f.CreateCluster(f.Namespace, "test-nats-", size, version,
-		func(natsCluster *natsv1alpha2.NatsCluster) {})
-	if err != nil {
-		t.Fatal(err)
-	}
-	nc, err = f.CreateCluster(f.Namespace, "test-nats-", 1, version,
 		func(natsCluster *natsv1alpha2.NatsCluster) {
 			// Custom config
 			natsCluster.Spec.ServerConfig = &natsv1alpha2.ServerConfig{
-				Debug:          true,
-				Trace:          true,
-				MaxConnections: 10,
-				MaxPayload:     128,
-				WriteDeadline:  "10s",
+				Debug:            true,
+				Trace:            true,
+				MaxConnections:   10,
+				MaxControlLine:   2048,
+				MaxPayload:       128,
+				MaxPending:       65536,
+				MaxSubscriptions: 200,
+				WriteDeadline:    "10s",
+				DisableLogtime:   true,
 			}
 		})
 	if err != nil {
@@ -332,7 +327,13 @@ func TestCreateServerWithCustomConfig(t *testing.T) {
 		if config.MaxPayload != 128 {
 			return false, nil
 		}
+		if config.MaxPending != 65536 {
+			return false, nil
+		}
 		if config.MaxConnections != 10 {
+			return false, nil
+		}
+		if config.Logtime {
 			return false, nil
 		}
 		return true, nil

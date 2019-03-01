@@ -132,11 +132,15 @@ type ClusterSpec struct {
 
 // ServerConfig is extra configuration for the NATS server.
 type ServerConfig struct {
-	Debug          bool   `json:"debug,omitempty"`
-	Trace          bool   `json:"trace,omitempty"`
-	WriteDeadline  string `json:"write_deadline,omitempty"`
-	MaxConnections int    `json:"max_connections,omitempty"`
-	MaxPayload     int    `json:"max_payload,omitempty"`
+	Debug            bool   `json:"debug,omitempty"`
+	Trace            bool   `json:"trace,omitempty"`
+	WriteDeadline    string `json:"write_deadline,omitempty"`
+	MaxConnections   int    `json:"max_connections,omitempty"`
+	MaxPayload       int    `json:"max_payload,omitempty"`
+	MaxPending       int    `json:"max_pending,omitempty"`
+	MaxSubscriptions int    `json:"max_subscriptions,omitempty"`
+	MaxControlLine   int    `json:"max_control_line,omitempty"`
+	DisableLogtime   bool   `json:"disable_logtime,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
@@ -309,19 +313,21 @@ const (
 )
 
 type ClusterStatus struct {
-	// Phase is the cluster running phase
+	// Phase is the cluster running phase.
 	Phase  ClusterPhase `json:"phase"`
 	Reason string       `json:"reason"`
 
-	// ControlPaused indicates the operator pauses the control of the cluster.
+	// ControlPaused indicates the operator pauses the control of
+	// the cluster.
 	ControlPaused bool `json:"controlPaused"`
 
-	// Condition keeps ten most recent cluster conditions
+	// Condition keeps ten most recent cluster conditions.
 	Conditions []ClusterCondition `json:"conditions"`
 
-	// Size is the current size of the cluster
+	// Size is the current size of the cluster.
 	Size int `json:"size"`
-	// CurrentVersion is the current cluster version
+
+	// CurrentVersion is the current cluster version.
 	CurrentVersion string `json:"currentVersion"`
 }
 

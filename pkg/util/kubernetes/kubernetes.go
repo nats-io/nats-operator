@@ -374,6 +374,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
 		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
 		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
+		sconfig.MaxPending = cluster.ServerConfig.MaxPending
+		sconfig.MaxSubscriptions = cluster.ServerConfig.MaxSubscriptions
+		sconfig.MaxControlLine = cluster.ServerConfig.MaxControlLine
+		sconfig.Logtime = !cluster.ServerConfig.DisableLogtime
 	}
 
 	if cluster.ExtraRoutes != nil {
@@ -499,6 +503,10 @@ func UpdateConfigSecret(
 		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
 		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
 		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
+		sconfig.MaxPending = cluster.ServerConfig.MaxPending
+		sconfig.MaxSubscriptions = cluster.ServerConfig.MaxSubscriptions
+		sconfig.MaxControlLine = cluster.ServerConfig.MaxControlLine
+		sconfig.Logtime = !cluster.ServerConfig.DisableLogtime
 	}
 
 	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
