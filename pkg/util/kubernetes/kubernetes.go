@@ -368,6 +368,14 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		},
 	}
 
+	if cluster.ServerConfig != nil {
+		sconfig.Debug = cluster.ServerConfig.Debug
+		sconfig.Trace = cluster.ServerConfig.Trace
+		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
+		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
+		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
+	}
+
 	if cluster.ExtraRoutes != nil {
 		routes := make([]string, 0)
 		for _, extraCluster := range cluster.ExtraRoutes {
@@ -483,6 +491,14 @@ func UpdateConfigSecret(
 			Port:   int(constants.ClusterPort),
 			Routes: routes,
 		},
+	}
+
+	if cluster.ServerConfig != nil {
+		sconfig.Debug = cluster.ServerConfig.Debug
+		sconfig.Trace = cluster.ServerConfig.Trace
+		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
+		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
+		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
 	}
 
 	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {

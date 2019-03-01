@@ -94,7 +94,11 @@ type ClusterSpec struct {
 	//
 	Version string `json:"version"`
 
+	// ServerImage is the image of the NATS server to use.
 	ServerImage string `json:"serverImage"`
+
+	// ServerConfig is the extra configuration for the NATS server.
+	ServerConfig *ServerConfig `json:"natsConfig,omitempty"`
 
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
@@ -124,6 +128,15 @@ type ClusterSpec struct {
 
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
+}
+
+// ServerConfig is extra configuration for the NATS server.
+type ServerConfig struct {
+	Debug          bool   `json:"debug,omitempty"`
+	Trace          bool   `json:"trace,omitempty"`
+	WriteDeadline  string `json:"write_deadline,omitempty"`
+	MaxConnections int    `json:"max_connections,omitempty"`
+	MaxPayload     int    `json:"max_payload,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
