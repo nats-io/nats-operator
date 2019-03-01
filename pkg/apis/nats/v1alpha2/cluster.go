@@ -94,7 +94,11 @@ type ClusterSpec struct {
 	//
 	Version string `json:"version"`
 
+	// ServerImage is the image of the NATS server to use.
 	ServerImage string `json:"serverImage"`
+
+	// ServerConfig is the extra configuration for the NATS server.
+	ServerConfig *ServerConfig `json:"natsConfig,omitempty"`
 
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
@@ -124,6 +128,19 @@ type ClusterSpec struct {
 
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
+}
+
+// ServerConfig is extra configuration for the NATS server.
+type ServerConfig struct {
+	Debug            bool   `json:"debug,omitempty"`
+	Trace            bool   `json:"trace,omitempty"`
+	WriteDeadline    string `json:"write_deadline,omitempty"`
+	MaxConnections   int    `json:"max_connections,omitempty"`
+	MaxPayload       int    `json:"max_payload,omitempty"`
+	MaxPending       int    `json:"max_pending,omitempty"`
+	MaxSubscriptions int    `json:"max_subscriptions,omitempty"`
+	MaxControlLine   int    `json:"max_control_line,omitempty"`
+	DisableLogtime   bool   `json:"disable_logtime,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
@@ -296,19 +313,21 @@ const (
 )
 
 type ClusterStatus struct {
-	// Phase is the cluster running phase
+	// Phase is the cluster running phase.
 	Phase  ClusterPhase `json:"phase"`
 	Reason string       `json:"reason"`
 
-	// ControlPaused indicates the operator pauses the control of the cluster.
+	// ControlPaused indicates the operator pauses the control of
+	// the cluster.
 	ControlPaused bool `json:"controlPaused"`
 
-	// Condition keeps ten most recent cluster conditions
+	// Condition keeps ten most recent cluster conditions.
 	Conditions []ClusterCondition `json:"conditions"`
 
-	// Size is the current size of the cluster
+	// Size is the current size of the cluster.
 	Size int `json:"size"`
-	// CurrentVersion is the current cluster version
+
+	// CurrentVersion is the current cluster version.
 	CurrentVersion string `json:"currentVersion"`
 }
 

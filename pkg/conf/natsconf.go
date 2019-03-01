@@ -15,9 +15,13 @@ type ServerConfig struct {
 	TLS              *TLSConfig           `json:"tls,omitempty"`
 	Debug            bool                 `json:"debug,omitempty"`
 	Trace            bool                 `json:"trace,omitempty"`
+	Logtime          bool                 `json:"logtime"`
 	WriteDeadline    string               `json:"write_deadline,omitempty"`
 	MaxConnections   int                  `json:"max_connections,omitempty"`
+	MaxControlLine   int                  `json:"max_control_line,omitempty"`
 	MaxPayload       int                  `json:"max_payload,omitempty"`
+	MaxPending       int                  `json:"max_pending,omitempty"`
+	MaxSubscriptions int                  `json:"max_subscriptions,omitempty"`
 	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
 	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
 	Include          string               `json:"include,omitempty"`

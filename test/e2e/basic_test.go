@@ -272,3 +272,73 @@ func TestCreateClustersWithExtraRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateServerWithCustomConfig(t *testing.T) {
+	var (
+		size    = 1
+		version = "1.4.0"
+		nc      *natsv1alpha2.NatsCluster
+		err     error
+	)
+	nc, err = f.CreateCluster(f.Namespace, "test-nats-", size, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {
+			// Custom config
+			natsCluster.Spec.ServerConfig = &natsv1alpha2.ServerConfig{
+				Debug:            true,
+				Trace:            true,
+				MaxConnections:   10,
+				MaxControlLine:   2048,
+				MaxPayload:       128,
+				MaxPending:       65536,
+				MaxSubscriptions: 200,
+				WriteDeadline:    "10s",
+				DisableLogtime:   true,
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(nc); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	ctx, done := context.WithTimeout(context.Background(), 120*time.Second)
+	defer done()
+	err = f.WaitUntilSecretCondition(ctx, nc, func(event watchapi.Event) (bool, error) {
+		secret := event.Object.(*v1.Secret)
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if !config.Debug || !config.Trace {
+			return false, nil
+		}
+		if config.WriteDeadline != "10s" {
+			return false, nil
+		}
+		if config.MaxPayload != 128 {
+			return false, nil
+		}
+		if config.MaxPending != 65536 {
+			return false, nil
+		}
+		if config.MaxConnections != 10 {
+			return false, nil
+		}
+		if config.Logtime {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
