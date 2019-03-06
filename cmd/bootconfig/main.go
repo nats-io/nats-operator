@@ -36,6 +36,7 @@ func main() {
 	fs.BoolVar(&showHelp, "h", false, "Show help")
 	fs.BoolVar(&showVersion, "v", false, "Show version")
 	fs.StringVar(&opts.ClientAdvertiseFileName, "f", "client_advertise.conf", "File name where the client advertise address will be written into")
+	fs.StringVar(&opts.GatewayAdvertiseFileName, "gf", "gateway_advertise.conf", "File name where the gateway advertise address will be written into")
 	fs.StringVar(&opts.TargetTag, "t", "nats.io/node-external-ip", "Tag that will be looked up from a node")
 	fs.Parse(os.Args[1:])
 

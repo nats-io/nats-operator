@@ -50,6 +50,10 @@ const (
 	// contains the external IP address.
 	BootConfigFilePath = "advertise/client_advertise.conf"
 
+	// BootConfigGatewayFilePath is the path to the include file that
+	// contains the external IP address.
+	BootConfigGatewayFilePath = "advertise/gateway_advertise.conf"
+
 	// PidFileVolumeName is the name of the volume used for the NATS server pid file.
 	PidFileVolumeName = "pid"
 
@@ -82,6 +86,16 @@ const (
 	DefaultRoutesCAFileName   = "ca.pem"
 	DefaultRoutesCertFileName = "route.pem"
 	DefaultRoutesKeyFileName  = "route-key.pem"
+
+	// GatewaySecretVolumeName is the name of the volume used for the routes certs.
+	GatewaySecretVolumeName = "gateway-tls-certs"
+
+	// RoutesCertsMountPath is the path where the certificates
+	// to secure routes connections are located.
+	GatewayCertsMountPath      = "/etc/nats-routes-tls-certs"
+	DefaultGatewayCAFileName   = "ca.pem"
+	DefaultGatewayCertFileName = "server.pem"
+	DefaultGatewayKeyFileName  = "server-key.pem"
 
 	// Default Docker Images
 	DefaultServerImage             = "nats"

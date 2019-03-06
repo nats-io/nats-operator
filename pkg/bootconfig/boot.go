@@ -27,7 +27,7 @@ import (
 	k8sclientcmd "k8s.io/client-go/tools/clientcmd"
 )
 
-const Version = "0.5.0"
+const Version = "0.5.2"
 
 type Options struct {
 	// TargetTag is the tag that will be looked up to find
@@ -37,6 +37,10 @@ type Options struct {
 	// ClientAdvertiseFileName is the name of the file where
 	// the advertise configuration will be written into.
 	ClientAdvertiseFileName string
+
+	// GatewayAdvertiseFileName is the name of the file where
+	// the advertise configuration will be written into for gateways.
+	GatewayAdvertiseFileName string
 
 	// NoSignals marks whether to enable the signal handler.
 	NoSignals bool
@@ -124,7 +128,15 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Could not write client advertise config: %s", err)
 	}
-	log.Infof("Successfully wrote to config to %q", c.opts.ClientAdvertiseFileName)
+	log.Infof("Successfully wrote client advertise config to %q", c.opts.ClientAdvertiseFileName)
+
+	gatewayAdvertiseConfig := fmt.Sprintf("\nadvertise = \"%s\"\n\n", externalAddress)
+
+	err = ioutil.WriteFile(c.opts.GatewayAdvertiseFileName, []byte(gatewayAdvertiseConfig), 0644)
+	if err != nil {
+		return fmt.Errorf("Could not write gateway advertise config: %s", err)
+	}
+	log.Infof("Successfully wrote gateway advertise config to %q", c.opts.GatewayAdvertiseFileName)
 
 	return nil
 }

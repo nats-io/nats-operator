@@ -128,6 +128,9 @@ type ClusterSpec struct {
 
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
+
+	// GatewayConfig is the configuration for the gateways.
+	GatewayConfig *GatewayConfig `json:"gatewayConfig,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.
@@ -151,6 +154,29 @@ type ExtraRoute struct {
 
 	// Route is a network endpoint to which the cluster should connect.
 	Route string `json:"route,omitempty"`
+}
+
+// GatewayConfig is the configuration for the gateway.
+type GatewayConfig struct {
+	// Name is the name of the gateway cluster.
+	Name string `json:"name,omitempty"`
+
+	// Port is the port that will bound from this host
+	// for external access.
+	Port int `json:"hostPort,omitempty"`
+
+	// Gateways is the list of remote gateways to which
+	// this cluster will be connecting.
+	Gateways []*RemoteGatewayOpts `json:"gateways,omitempty"`
+}
+
+// RemoteGatewayOpts is the configuration for a remote gateway entry.
+type RemoteGatewayOpts struct {
+	// Name is the name of the remote gateway.
+	Name string `json:"name"`
+
+	// URL is the endpoint of the remote gateway.
+	URL string `json:"url,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -186,6 +212,20 @@ type TLSConfig struct {
 	// RoutesSecretCertFileName is the name of the certificate in RoutesSecret
 	// (default: route.pem)
 	RoutesSecretCertFileName string `json:"routesSecretCertFileName,omitempty"`
+
+	// GatewaySecret is the secret containing the certificates
+	// to secure the port to which gateway routes connect.
+	GatewaySecret string `json:"gatewaySecret,omitempty"`
+
+	// GatewaySecretCAFileName is the name of the CA in GatewaySecret
+	// (default: ca.pem)
+	GatewaySecretCAFileName string `json:"gatewaySecretCAFileName,omitempty"`
+
+	// GatewaySecretKeyFileName is the name of the key in GatewaySecret
+	GatewaySecretKeyFileName string `json:"gatewaySecretKeyFileName,omitempty"`
+
+	// GatewaySecretCertFileName is the name of the certificate in GatewaySecret
+	GatewaySecretCertFileName string `json:"gatewaySecretCertFileName,omitempty"`
 
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`

@@ -178,6 +178,16 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout
 		}
 	}
+	if cs.TLS.GatewaySecret != "" {
+		sconfig.Gateway.TLS = &natsconf.TLSConfig{
+			CAFile:   filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName),
+			CertFile: filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName),
+			KeyFile:  filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName),
+		}
+		if cs.TLS.RoutesTLSTimeout > 0 {
+			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout
+		}
+	}
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
 		sconfig.TLS.VerifyAndMap = true
 	}
@@ -333,6 +343,25 @@ func addAuthConfig(
 	return nil
 }
 
+func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+	gateways := make([]*natsconf.RemoteGatewayOpts, 0)
+
+	for _, gw := range cluster.GatewayConfig.Gateways {
+		sgw := &natsconf.RemoteGatewayOpts{
+			Name: gw.Name,
+			URL:  gw.URL,
+		}
+		gateways = append(gateways, sgw)
+	}
+	sconfig.Gateway = &natsconf.GatewayConfig{
+		Name:     cluster.GatewayConfig.Name,
+		Port:     cluster.GatewayConfig.Port,
+		Gateways: gateways,
+		Include:  filepath.Join(".", constants.BootConfigGatewayFilePath),
+	}
+	return
+}
+
 // CreateAndWaitPod is an util for testing.
 // We should eventually get rid of this in critical code path and move it to test util.
 func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
@@ -420,6 +449,9 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	}
 	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
 		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+	if cluster.GatewayConfig != nil {
+		addGatewayConfig(sconfig, cluster)
 	}
 
 	addTLSConfig(sconfig, cluster)
@@ -528,7 +560,9 @@ func UpdateConfigSecret(
 	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
 		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
 	}
-
+	if cluster.GatewayConfig != nil {
+		addGatewayConfig(sconfig, cluster)
+	}
 	addTLSConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -657,6 +691,24 @@ func newNatsRoutesSecretVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsGatewaySecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: constants.GatewaySecretVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsGatewaySecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.GatewaySecretVolumeName,
+		MountPath: constants.GatewayCertsMountPath,
+	}
+}
+
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 	o.SetOwnerReferences(append(o.GetOwnerReferences(), r))
 }
@@ -693,7 +745,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
 		enableClientsHostPort = cs.Pod.EnableClientsHostPort
 	}
-	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort)
+
+	var gatewayPort int
+	if cs.GatewayConfig != nil {
+		gatewayPort = cs.GatewayConfig.Port
+	}
+
+	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort, gatewayPort)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
 	// In case TLS was enabled as part of the NATS cluster
@@ -714,6 +772,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			volumeMount := newNatsRoutesSecretVolumeMount()
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
+		if cs.TLS.GatewaySecret != "" {
+			volume = newNatsGatewaySecretVolume(cs.TLS.GatewaySecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsGatewaySecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}		
 	}
 
 	// Configure initializer container to resolve the external ip
@@ -761,6 +826,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		bootconfig.Command = []string{
 			"nats-pod-bootconfig",
 			"-f", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigFilePath),
+			"-gf", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigGatewayFilePath),
 		}
 	}
 	container.VolumeMounts = volumeMounts
