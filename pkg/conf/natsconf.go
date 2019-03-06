@@ -63,8 +63,9 @@ type User struct {
 // Permissions are the allowed subjects on a per
 // publish or subscribe basis.
 type Permissions struct {
-	Publish   []string `json:"publish,omitempty"`
-	Subscribe []string `json:"subscribe,omitempty"`
+	// Can be either a map with allow/deny or an array.
+	Publish   interface{} `json:"publish,omitempty"`
+	Subscribe interface{} `json:"subscribe,omitempty"`
 }
 
 // Marshal takes a server configuration and returns its
