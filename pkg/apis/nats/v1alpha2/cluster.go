@@ -135,12 +135,12 @@ type ServerConfig struct {
 	Debug            bool   `json:"debug,omitempty"`
 	Trace            bool   `json:"trace,omitempty"`
 	WriteDeadline    string `json:"write_deadline,omitempty"`
-	MaxConnections   int    `json:"max_connections,omitempty"`
-	MaxPayload       int    `json:"max_payload,omitempty"`
-	MaxPending       int    `json:"max_pending,omitempty"`
-	MaxSubscriptions int    `json:"max_subscriptions,omitempty"`
-	MaxControlLine   int    `json:"max_control_line,omitempty"`
-	DisableLogtime   bool   `json:"disable_logtime,omitempty"`
+	MaxConnections   int    `json:"maxConnections,omitempty"`
+	MaxPayload       int    `json:"maxPayload,omitempty"`
+	MaxPending       int    `json:"maxPending,omitempty"`
+	MaxSubscriptions int    `json:"maxSubscriptions,omitempty"`
+	MaxControlLine   int    `json:"maxControlLine,omitempty"`
+	DisableLogtime   bool   `json:"disableLogtime,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
