@@ -1,6 +1,6 @@
 {
   "users": [
-    {{- if .Values.auth.username }}
+    {{- if and (.Values.auth.username) (not .Values.auth.users) }}
     { 
       "username": "{{ .Values.auth.username }}",
       "password": "{{ .Values.auth.password }}"
