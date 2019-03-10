@@ -49,6 +49,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | Parameter                            | Description                                                                                  | Default                                         |
 | ------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `rbacEnabled`                        | Switch to enable/disable RBAC for this chart                                                 | `true`                                          |
+| `natsClusterVersion`                 | Version of the NATS server                                                                   | `1.4.1`                                         |
 | `image.registry`                     | NATS Operator image registry                                                                 | `docker.io`                                     |
 | `image.repository`                   | NATS Operator image name                                                                     | `connecteverything/nats-operator`               |
 | `image.tag`                          | NATS Operator image tag                                                                      | `0.2.3-v1alpha2`                                |
@@ -90,6 +91,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `tls.serverSecret`                   | Certificates to secure the NATS client connections (type: kubernetes.io/tls)                 | `nil`                                           |
 | `tls.routesSecret`                   | Certificates to secure the routes. (type: kubernetes.io/tls)                                 | `nil`                                           |
 | `clusterSize`                        | Number of NATS nodes                                                                         | `3`                                             |
+| `clusterScoped`                      | Enable cluster scoped installation (read carefully the warnings)                             | `false`                                         |
 | `configReload.enabled`               | Enable configuration reload                                                                  | `false`                                         |
 | `configReload.registry`              | Reload configuration image registry                                                          | `docker.io`                                     |
 | `configReload.repository`            | Reload configuration image name                                                              | `connecteverything/nats-server-config-reloader` |

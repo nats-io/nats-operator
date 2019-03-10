@@ -3,6 +3,9 @@
 ##
 rbacEnabled: true
 
+# Nats version. Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
+natsClusterVersion: 1.4.1
+
 image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
   registry: docker.io
