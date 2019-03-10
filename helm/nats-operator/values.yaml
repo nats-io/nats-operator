@@ -122,10 +122,16 @@ auth:
 
 tls:
   enabled: false
-  #serverSecret: 
+  #serverSecret:
   #routesSecret:
 
 clusterSize: 3
+
+## Operator scope
+## NOTE: If true
+## * Make sure that no othe NATS operator is running in the cluster
+## * The Release namespace must be "nats-io"
+clusterScoped: false
 
 ## Configuration Reload
 ## NOTE: Only supported in Kubernetes v1.12+.
