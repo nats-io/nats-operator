@@ -37,6 +37,11 @@ spec:
       - name: nats-operator
         image: {{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ .Values.pullPolicy  }}
+        {{- if .Values.clusterScoped }}
+        args:
+        - nats-operator
+        - --feature-gates=ClusterScoped=true
+        {{- end }}
         env:
         - name: MY_POD_NAMESPACE
           valueFrom:

@@ -1,4 +1,12 @@
 ** Please be patient while the chart is being deployed **
+{{- if .Values.clusterScoped }}
+
+** WARNING ! **: You've installed a cluster-scoped NATS Operator. Make sure that there are no other deployments of NATS Operator in the Kubernetes cluster.
+{{- if not (eq .Release.Namespace "nats-io") }}
+
+** WARNING ! **: The namespace must be "nats-io" however you used "{{ .Release.Namespace }}" !
+{{- end }}
+{{- end}}
 
 NATS can be accessed via port 4222 on the following DNS name from within your cluster:
 
