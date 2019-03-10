@@ -52,7 +52,7 @@ The following table lists the configurable parameters of the NATS chart and thei
 | `natsClusterVersion`                 | Version of the NATS server                                                                   | `1.4.1`                                         |
 | `image.registry`                     | NATS Operator image registry                                                                 | `docker.io`                                     |
 | `image.repository`                   | NATS Operator image name                                                                     | `connecteverything/nats-operator`               |
-| `image.tag`                          | NATS Operator image tag                                                                      | `0.2.3-v1alpha2`                                |
+| `image.tag`                          | NATS Operator image tag                                                                      | `0.4.3-v1alpha2`                                |
 | `image.pullPolicy`                   | Image pull policy                                                                            | `Always`                                        |
 | `image.pullSecrets`                  | Specify image pull secrets                                                                   | `nil`                                           |
 | `securityContext.enabled`            | Enable security context                                                                      | `true`                                          |
