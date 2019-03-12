@@ -115,9 +115,6 @@ func (gc *GC) collectResources(namespace string, option metav1.ListOptions, runn
 	if err := gc.collectServices(namespace, option, runningSet); err != nil {
 		gc.logger.Errorf("gc services failed: %v", err)
 	}
-	if err := gc.collectConfigMaps(namespace, option, runningSet); err != nil {
-		gc.logger.Errorf("gc configmap failed: %v", err)
-	}
 }
 
 func (gc *GC) collectPods(namespace string, option metav1.ListOptions, runningSet map[types.UID]bool) error {
