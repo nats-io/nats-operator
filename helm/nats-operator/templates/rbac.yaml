@@ -72,8 +72,7 @@ rules:
   resources:
   - namespaces
   - serviceaccounts
-  verbs:
-  - list
+  verbs: ["list", "get", "watch"]
 
 # Allow actions on Endpoints
 - apiGroups: [""]
