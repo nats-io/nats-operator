@@ -44,19 +44,19 @@ rules:
 - apiGroups: [""]
   resources:
   - pods
-  verbs: ["create", "get", "patch", "update", "delete", "list"]
+  verbs: ["create", "watch", "get", "patch", "update", "delete", "list"]
 
 # Allowed actions on Services
 - apiGroups: [""]
   resources:
   - services
-  verbs: ["create", "get", "patch", "update", "delete", "list"]
+  verbs: ["create", "watch", "get", "patch", "update", "delete", "list"]
 
 # Allowed actions on Secrets
 - apiGroups: [""]
   resources:
   - secrets
-  verbs: ["create", "get", "update", "delete", "list"]
+  verbs: ["create", "watch", "get", "update", "delete", "list"]
 
 # Allow all actions on some special subresources
 - apiGroups: [""]
@@ -72,14 +72,13 @@ rules:
   resources:
   - namespaces
   - serviceaccounts
-  verbs:
-  - list
+  verbs: ["list", "get", "watch"]
 
 # Allow actions on Endpoints
 - apiGroups: [""]
   resources:
   - endpoints
-  verbs: ["get", "list", "update"]
+  verbs: ["create", "watch", "get", "update", "delete", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 {{- if .Values.clusterScoped }}
