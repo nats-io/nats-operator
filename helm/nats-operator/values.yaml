@@ -3,11 +3,14 @@
 ##
 rbacEnabled: true
 
+# Nats version. Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
+natsClusterVersion: 1.4.1
+
 image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
   registry: docker.io
   repository: connecteverything/nats-operator
-  tag: 0.2.3-v1alpha2
+  tag: 0.4.3-v1alpha2
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -99,8 +102,7 @@ readinessProbe:
 auth:
   enabled: true
 
-  ## To use this feature, it is necessary to use a Kubernetes +v1.10 cluster with 
-  ## the TokenRequest and PodShareProcessNamespace feature flags enabled
+  # NOTE: Only supported in Kubernetes v1.12+ clusters having the "TokenRequest" API enabled.
   enableServiceAccounts: false
   
   ## This is where you enter a username/password for 1 user
@@ -123,14 +125,19 @@ auth:
 
 tls:
   enabled: false
-  #serverSecret: 
+  #serverSecret:
   #routesSecret:
 
 clusterSize: 3
 
+## Operator scope
+## NOTE: If true
+## * Make sure that no othe NATS operator is running in the cluster
+## * The Release namespace must be "nats-io"
+clusterScoped: false
+
 ## Configuration Reload
-##
-## On Kubernetes v1.10+ clusters with feature=--feature-gates=PodShareProcessNamespace=true
+## NOTE: Only supported in Kubernetes v1.12+.
 configReload:
   enabled: false
   registry: "docker.io"

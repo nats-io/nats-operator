@@ -1,0 +1,33 @@
+---
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-custom"
+spec:
+  size: 3
+  version: "1.4.1"
+
+  natsConfig:
+    debug: true
+    trace: true
+
+    # Duration within quotes
+    writeDeadline: "5s" 
+
+    # In bytes, in this case 5MB
+    maxPayload: 5242880
+
+    maxConnections: 10
+    maxSubscriptions: 10
+    maxPending: 1024 # In bytes
+    disableLogtime: true
+    maxControlLine: 2048
+    
+  pod:
+    # NOTE: Only supported in Kubernetes v1.12+.
+    enableConfigReload: true
+
+    # Defaults but can be customized to be a different image
+    reloaderImage: "connecteverything/nats-server-config-reloader"
+    reloaderImageTag: "0.2.2-v1alpha2"
+    reloaderImagePullPolicy: "IfNotPresent"

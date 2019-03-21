@@ -16,7 +16,7 @@ package constants
 
 const (
 	// DefaultNatsVersion is the nats server version to use.
-	DefaultNatsVersion = "1.3.0"
+	DefaultNatsVersion = "1.4.0"
 
 	// ClientPort is the port for the clients.
 	ClientPort = 4222
@@ -30,6 +30,9 @@ const (
 	// MetricsPort is the port for the prometheus metrics endpoint.
 	MetricsPort = 7777
 
+	// ConnectRetries is the number of retries for an implicit route.
+	ConnectRetries = 10
+
 	// ConfigMapVolumeName is the name of the volume use for the shared config map.
 	ConfigMapVolumeName = "nats-config"
 
@@ -42,6 +45,10 @@ const (
 
 	// ConfigFilePath is the absolute path to the NATS config file.
 	ConfigFilePath = ConfigMapMountPath + "/" + ConfigFileName
+
+	// BootConfigFilePath is the path to the include file that
+	// contains the external IP address.
+	BootConfigFilePath = "advertise/client_advertise.conf"
 
 	// PidFileVolumeName is the name of the volume used for the NATS server pid file.
 	PidFileVolumeName = "pid"
@@ -84,4 +91,12 @@ const (
 	DefaultMetricsImage            = "synadia/prometheus-nats-exporter"
 	DefaultMetricsImageTag         = "0.1.0"
 	DefaultMetricsImagePullPolicy  = "IfNotPresent"
+
+	// NatsBinaryPath is the path to the NATS binary inside the main container.
+	NatsBinaryPath = "/gnatsd"
+	// NatsContainerName is the name of the main container.
+	NatsContainerName = "nats"
+
+	// KubernetesNamespaceNatsIO represents the "nats-io" Kubernetes namespace.
+	KubernetesNamespaceNatsIO = "nats-io"
 )

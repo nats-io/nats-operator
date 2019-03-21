@@ -15,87 +15,91 @@
 package cluster
 
 import (
-	"github.com/nats-io/nats-operator/pkg/spec"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-
-	"k8s.io/api/core/v1"
 )
 
-// reconcile reconciles cluster current state to desired state specified by spec.
-// - it tries to reconcile the cluster to desired size.
-// - if the cluster needs upgrade, it tries to upgrade existing peers, one by one.
-func (c *Cluster) reconcile(pods []*v1.Pod) error {
-	c.logger.Debugln("Start reconciling...")
-	defer c.logger.Debugln("Finish reconciling")
-
-	spec := c.cluster.Spec
-
-	clusterNeedsResize := len(pods) != spec.Size
-	clusterNeedsUpgrade := needsUpgrade(pods, spec)
-
-	if clusterNeedsResize {
-		return c.reconcileSize(pods)
+// checkPods reconciles the number and the version of pods belonging to the current NATS cluster.
+func (c *Cluster) checkPods() error {
+	if err := c.reconcileSize(); err != nil {
+		return err
 	}
-	if clusterNeedsUpgrade {
-		return c.reconcileUpgrade(pods, spec)
+	return c.reconcileVersion()
+}
+
+// reconcileSize reconciles the size of the NATS cluster.
+func (c *Cluster) reconcileSize() error {
+	// Grab an up-to-date list of pods that are currently running.
+	// Pending pods may be ignored safely as we have previously made sure no pods are in pending state.
+	pods, _, _, err := c.pollPods()
+	if err != nil {
+		return err
 	}
 
-	c.status.SetCurrentVersion(spec.Version)
-	c.status.SetReadyCondition()
+	// Grab the current and desired size of the NATS cluster.
+	currentSize := len(pods)
+	desiredSize := c.cluster.Spec.Size
 
+	if currentSize > desiredSize {
+		// Report that we are scaling the cluster down.
+		c.cluster.Status.AppendScalingDownCondition(currentSize, desiredSize)
+		// Remove extra pods as required in order to meet the desired size.
+		// As we remove each pod, we must update the config secret so that routes are re-computed.
+		for idx := currentSize - 1; idx >= desiredSize; idx-- {
+			if err := c.tryGracefulPodDeletion(pods[idx]); err != nil {
+				return err
+			}
+			if err := c.updateConfigSecret(); err != nil {
+				return err
+			}
+		}
+	}
+
+	if currentSize < desiredSize {
+		// Report that we are scaling the cluster up.
+		c.cluster.Status.AppendScalingUpCondition(currentSize, desiredSize)
+		// Create pods as required in order to meet the desired size.
+		// As we create each pod, we must update the config secret so that routes are re-computed.
+		for idx := currentSize; idx < desiredSize; idx++ {
+			if _, err := c.createPod(); err != nil {
+				return err
+			}
+			if err := c.updateConfigSecret(); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Update the reported size before returning.
+	c.cluster.Status.SetSize(desiredSize)
 	return nil
 }
 
-// reconcileSize reconciles the size of cluster.
-func (c *Cluster) reconcileSize(pods []*v1.Pod) error {
-	spec := c.cluster.Spec
+// reconcileVersion reconciles the version of pods belonging to the NATS cluster.
+func (c *Cluster) reconcileVersion() error {
+	// Grab an up-to-date list of pods that are currently running.
+	// Pending pods may be ignored safely as we have previously made sure no pods are in pending state.
+	pods, _, _, err := c.pollPods()
+	if err != nil {
+		return err
+	}
 
-	c.logger.Infof("Cluster size needs reconciling: expected %d, has %d", spec.Size, len(pods))
+	// Grab the current and desired version of the NATS cluster.
+	currentVersion := c.cluster.Status.CurrentVersion
+	desiredVersion := c.cluster.Spec.Version
 
-	currentClusterSize := len(pods)
-	if currentClusterSize < spec.Size {
-		c.status.AppendScalingUpCondition(currentClusterSize, c.cluster.Spec.Size)
-		_, err := c.createPod()
-		if err != nil {
-			return err
-		}
-		if err = c.updateConfigMap(); err != nil {
-			c.logger.Warningf("error updating the shared config map: %s", err)
-		}
-
-	} else if currentClusterSize > spec.Size {
-		c.status.AppendScalingDownCondition(currentClusterSize, c.cluster.Spec.Size)
-		if err := c.removePod(pods[currentClusterSize-1].Name); err != nil {
-			return err
-		}
-		if err := c.updateConfigMap(); err != nil {
-			c.logger.Warningf("error updating the shared config map: %s", err)
+	if currentVersion != "" && currentVersion != desiredVersion {
+		// Report that we are upgrading the cluster's version.
+		c.cluster.Status.AppendUpgradingCondition(currentVersion, desiredVersion)
+		// Iterate over pods, upgrading them as necessary.
+		for _, pod := range pods {
+			if kubernetesutil.GetNATSVersion(pod) != c.cluster.Spec.Version {
+				c.maybeUpgradeMgmtService()
+				return c.upgradePod(pod)
+			}
 		}
 	}
 
-	return nil
-}
-
-func (c *Cluster) reconcileUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) error {
-	c.logger.Warningf("Cluster version doesn't match, reconciling...")
-	pod := pickPodToUpgrade(pods, cs.Version)
-	kubernetesutil.SetNATSVersion(pod, cs.Version)
-	c.maybeUpgradeMgmtService()
-	return c.upgradePod(pod)
-}
-
-// needsUpgrade determines whether cluster needs upgrade or not.
-func needsUpgrade(pods []*v1.Pod, cs spec.ClusterSpec) bool {
-	return len(pods) == cs.Size && pickPodToUpgrade(pods, cs.Version) != nil
-}
-
-// pickPodToUpgrade selects the first pod, if any, which version doesn't
-// correspond to desired version.
-func pickPodToUpgrade(pods []*v1.Pod, newVersion string) *v1.Pod {
-	for _, pod := range pods {
-		if kubernetesutil.GetNATSVersion(pod) != newVersion {
-			return pod
-		}
-	}
+	// Update the reported cluster version before returning.
+	c.cluster.Status.SetCurrentVersion(desiredVersion)
 	return nil
 }

@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
@@ -24,20 +25,29 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
-	c.status.AppendUpgradingCondition(c.cluster.Spec.Version, oldPod.GetName())
+// upgradePod upgrades the specified pod to the desired version for the current NATS cluster.
+// In order to do that, we first try to make NATS enter the "lame duck" mode.
+// If we succeed, we adopt a special upgrade procedure since the pod (or at least its "nats" container) will have been terminated and can't be upgraded directly.
+// If we fail, we stick to the usual method of upgrading the container's "image" field to the desired version.
+func (c *Cluster) upgradePod(pod *v1.Pod) error {
+	if err := c.enterLameDuckModeAndWaitTermination(pod); err != nil {
+		c.logger.Warn(err)
+		return c.upgradeRunningPod(pod)
+	}
+	return c.upgradeTerminatedPod(pod)
+}
 
+func (c *Cluster) upgradeRunningPod(oldPod *v1.Pod) error {
 	ns := c.cluster.Namespace
 
 	pod, err := c.config.KubeCli.Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("fail to get pod (%s): %v", oldPod.GetName(), err)
+		return fmt.Errorf("fail to get pod %q: %v", kubernetesutil.ResourceKey(oldPod), err)
 	}
 	oldpod := pod.DeepCopy()
 
-	c.logger.Infof("upgrading the NATS member %v from %s to %s", pod.GetName(), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
-	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version)
-	pod.Labels[kubernetesutil.LabelClusterVersionKey] = c.cluster.Spec.Version
+	c.logger.Infof("upgrading the NATS member %q from %s to %s", kubernetesutil.ResourceKey(oldPod), kubernetesutil.GetNATSVersion(pod), c.cluster.Spec.Version)
+	pod.Spec.Containers[0].Image = kubernetesutil.MakeNATSImage(c.cluster.Spec.Version, c.cluster.Spec.ServerImage)
 	kubernetesutil.SetNATSVersion(pod, c.cluster.Spec.Version)
 
 	patchdata, err := kubernetesutil.CreatePatch(oldpod, pod, v1.Pod{})
@@ -47,9 +57,31 @@ func (c *Cluster) upgradePod(oldPod *v1.Pod) error {
 
 	_, err = c.config.KubeCli.Pods(ns).Patch(pod.GetName(), types.StrategicMergePatchType, patchdata)
 	if err != nil {
-		return fmt.Errorf("fail to update the NATS member (%s): %v", pod.GetName(), err)
+		return fmt.Errorf("fail to update the NATS member %q: %v", kubernetesutil.ResourceKey(oldPod), err)
 	}
-	c.logger.Infof("finished upgrading the NATS member %v", pod.GetName())
+
+	// Wait for the pod to be running and ready.
+	c.logger.Infof("waiting for pod %q to become ready", kubernetesutil.ResourceKey(pod))
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+	if err := kubernetesutil.WaitUntilPodReady(ctx, c.config.KubeCli, pod); err != nil {
+		return err
+	}
+	c.logger.Infof("pod %q became ready", kubernetesutil.ResourceKey(pod))
+
+	c.logger.Infof("finished upgrading the NATS member %q", kubernetesutil.ResourceKey(pod))
+	return nil
+}
+
+// upgradeTerminatedPod upgrades the version of a pod for which one of the containers has already terminated.
+// It does this by deleting and re-creating the pod.
+func (c *Cluster) upgradeTerminatedPod(pod *v1.Pod) error {
+	if err := c.deletePod(pod); err != nil {
+		return err
+	}
+	if _, err := c.createPod(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -59,10 +91,10 @@ func (c *Cluster) maybeUpgradeMgmtService() error {
 
 	svc, err := c.config.KubeCli.Services(ns).Get(sn, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get service (%s): %v", sn, err)
+		return fmt.Errorf("failed to get service \"%s/%s\": %v", ns, sn, err)
 	}
 	if svc.Spec.Selector[kubernetesutil.LabelClusterVersionKey] == c.cluster.Spec.Version {
-		c.logger.Infof("NATS management service %v has already been updated to %s", svc.GetName(), c.cluster.Spec.Version)
+		c.logger.Infof("NATS management service %q has already been updated to %s", kubernetesutil.ResourceKey(svc), c.cluster.Spec.Version)
 		return nil
 	}
 	oldsvc := svc.DeepCopy()
@@ -76,8 +108,8 @@ func (c *Cluster) maybeUpgradeMgmtService() error {
 
 	_, err = c.config.KubeCli.Services(ns).Patch(svc.GetName(), types.StrategicMergePatchType, patchdata)
 	if err != nil {
-		return fmt.Errorf("fail to update the NATS management service (%s): %v", svc.GetName(), err)
+		return fmt.Errorf("fail to update the NATS management service %q: %v", kubernetesutil.ResourceKey(svc), err)
 	}
-	c.logger.Infof("finished upgrading the NATS management service %v", svc.GetName())
+	c.logger.Infof("finished upgrading the NATS management service %q", kubernetesutil.ResourceKey(svc))
 	return nil
 }

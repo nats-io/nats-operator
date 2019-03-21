@@ -1,12 +1,21 @@
 {
   "users": [
-    { "username": "user1", "password": "user1secret" },
-    { "username": "user2", "password": "user2secret",
-      "permissions": {
-	"publish": ["hello.*"],
-	"subscribe": ["hello.world"]
+      { "username": "user0", "password": "user0secret",
+	"permissions": {
+	    "publish": {
+		"allow": ["public.>"],
+		"deny": ["private.>"]
+	    }
+	}
+      },
+      { "username": "user1", "password": "user1secret"
+      },
+      { "username": "user2", "password": "user2secret",
+	"permissions": {
+	    "publish": ["hello.*"],
+	    "subscribe": ["hello.world"]
+	}
       }
-    }
   ],
   "default_permissions": {
     "publish": ["SANDBOX.*"],

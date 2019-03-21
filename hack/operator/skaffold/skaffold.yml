@@ -1,0 +1,27 @@
+apiVersion: skaffold/v1beta2
+kind: Config
+build:
+  artifacts:
+  # "gcr.io/project-id/nats-operator" is used to make it easy to support both local (Minikube, ...) and GKE deployments.
+  # To deploy to GKE, "project-id" must be replaced by the correct project ID, and the Cloud Build API must be enabled for said project.
+  - image: gcr.io/project-id/nats-operator
+    docker:
+      # Use a Dockerfile specific for development only.
+      dockerfile: __TMP_DIR__/Dockerfile
+deploy:
+  kubectl:
+    manifests:
+    # Make sure the prerequisites are in place.
+    - __TMP_DIR__/prereqs.yml
+    # Create a "nats-operator" deployment with a single replica to make debugging easier.
+    # NOTE: Any changes made to the podspec in "deploy/deployment.yaml" will have to be replayed on this file.
+    - __TMP_DIR__/deployment.yml
+profiles:
+- name: gke
+  build:
+    # For the "gke" profile, we must use the Google Cloud Build API to build the image.
+    googleCloudBuild: {}
+- name: local
+  build:
+    # For the "local" profile, we must perform the build locally.
+    local: {}

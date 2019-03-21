@@ -15,20 +15,29 @@
 package kubernetes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/nats-io/nats-operator/pkg/constants"
-	"github.com/nats-io/nats-operator/pkg/spec"
-
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	watchapi "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/watch"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(clusterName, version string) v1.Container {
-	return v1.Container{
+func natsPodContainer(clusterName, version string, serverImage string, enableClientsHostPort bool) v1.Container {
+	container := v1.Container{
 		Env: []v1.EnvVar{
 			{
 				Name:  "SVC",
@@ -39,26 +48,35 @@ func natsPodContainer(clusterName, version string) v1.Container {
 				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
 			},
 		},
-		Name:  "nats",
-		Image: MakeNATSImage(version),
-		Ports: []v1.ContainerPort{
-			{
-				Name:          "cluster",
-				ContainerPort: int32(constants.ClusterPort),
-				Protocol:      v1.ProtocolTCP,
-			},
-			{
-				Name:          "client",
-				ContainerPort: int32(constants.ClientPort),
-				Protocol:      v1.ProtocolTCP,
-			},
-			{
-				Name:          "monitoring",
-				ContainerPort: int32(constants.MonitoringPort),
-				Protocol:      v1.ProtocolTCP,
-			},
+		Name:  constants.NatsContainerName,
+		Image: MakeNATSImage(version, serverImage),
+	}
+
+	ports := []v1.ContainerPort{
+		{
+			Name:          "cluster",
+			ContainerPort: int32(constants.ClusterPort),
+			Protocol:      v1.ProtocolTCP,
+		},
+		{
+			Name:          "monitoring",
+			ContainerPort: int32(constants.MonitoringPort),
+			Protocol:      v1.ProtocolTCP,
 		},
 	}
+
+	port := v1.ContainerPort{
+		Name:          "client",
+		ContainerPort: int32(constants.ClientPort),
+		Protocol:      v1.ProtocolTCP,
+	}
+	if enableClientsHostPort {
+		port.HostPort = int32(constants.ClientPort)
+	}
+	ports = append(ports, port)
+	container.Ports = ports
+
+	return container
 }
 
 // natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.
@@ -110,12 +128,17 @@ func containerWithRequirements(c v1.Container, r v1.ResourceRequirements) v1.Con
 	return c
 }
 
-func natsLivenessProbe() *v1.Probe {
+func natsLivenessProbe(cs v1alpha2.ClusterSpec) *v1.Probe {
+	action := &v1.HTTPGetAction{
+		Port: intstr.IntOrString{IntVal: constants.MonitoringPort},
+	}
+	if cs.TLS != nil && cs.TLS.EnableHttps {
+		action.Scheme = "HTTPS"
+	}
+
 	return &v1.Probe{
 		Handler: v1.Handler{
-			HTTPGet: &v1.HTTPGetAction{
-				Port: intstr.IntOrString{IntVal: constants.MonitoringPort},
-			},
+			HTTPGet: action,
 		},
 		InitialDelaySeconds: 10,
 		TimeoutSeconds:      10,
@@ -148,7 +171,7 @@ func podWithAntiAffinity(pod *v1.Pod, ls *metav1.LabelSelector) *v1.Pod {
 	return pod
 }
 
-func applyPodPolicy(clusterName string, pod *v1.Pod, policy *spec.PodPolicy) {
+func applyPodPolicy(clusterName string, pod *v1.Pod, policy *v1alpha2.PodPolicy) {
 	if policy == nil {
 		return
 	}
@@ -164,7 +187,8 @@ func applyPodPolicy(clusterName string, pod *v1.Pod, policy *spec.PodPolicy) {
 		pod.Spec.Tolerations = policy.Tolerations
 	}
 
-	mergeLabels(pod.Labels, policy.Labels)
+	mergeMaps(pod.Labels, policy.Labels)
+	mergeMaps(pod.Annotations, policy.Annotations)
 
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == "nats" {
@@ -194,4 +218,76 @@ func PodSpecToPrettyJSON(pod *v1.Pod) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+// WaitUntilPodCondition establishes a watch on the specified pod and blocks until the specified condition function is satisfied.
+func WaitUntilPodCondition(ctx context.Context, kubeClient corev1.CoreV1Interface, pod *v1.Pod, fn watch.ConditionFunc) error {
+	// Create a selector that targets the specified pod.
+	fs := ByCoordinates(pod.Namespace, pod.Name)
+	// Grab a ListerWatcher with which we can watch the pod.
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.Pods(pod.Namespace).List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.Pods(pod.Namespace).Watch(options)
+		},
+	}
+	// Watch for updates to the specified pod until fn is satisfied.
+	last, err := watch.UntilWithSync(ctx, lw, &v1.Pod{}, nil, fn)
+	if err != nil {
+		return err
+	}
+	if last == nil {
+		return fmt.Errorf("no events received for pod %q", ResourceKey(pod))
+	}
+	return nil
+}
+
+// isPodRunningAndReady returns whether the specified pod is running, ready and has its ".status.podIP" field populated.
+func isPodRunningAndReady(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodRunning && podutil.IsPodReady(pod) && pod.Status.PodIP != ""
+}
+
+// WaitUntilPodReady establishes a watch on the specified pod and blocks until the pod is running, ready and has its ".status.podIP" field populated.
+func WaitUntilPodReady(ctx context.Context, kubeClient corev1.CoreV1Interface, pod *v1.Pod) error {
+	return WaitUntilPodCondition(ctx, kubeClient, pod, func(event watchapi.Event) (bool, error) {
+		switch event.Type {
+		case watchapi.Error:
+			return false, fmt.Errorf("got event of type error: %+v", event.Object)
+		case watchapi.Deleted:
+			return false, fmt.Errorf("pod %q has been deleted", ResourceKey(pod))
+		default:
+			pod = event.Object.(*v1.Pod)
+			return isPodRunningAndReady(pod), nil
+		}
+	})
+}
+
+// WaitUntilDeploymentCondition establishes a watch on the specified deployment and blocks until the specified condition function is satisfied.
+func WaitUntilDeploymentCondition(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string, fn watch.ConditionFunc) error {
+	// Create a selector that targets the specified deployment.
+	fs := ByCoordinates(namespace, name)
+	// Grab a ListerWatcher with which we can watch the deployment.
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.AppsV1().Deployments(namespace).List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
+			options.FieldSelector = fs.String()
+			return kubeClient.AppsV1().Deployments(namespace).Watch(options)
+		},
+	}
+	// Watch for updates to the specified deployment until fn is satisfied.
+	last, err := watch.UntilWithSync(ctx, lw, &appsv1.Deployment{}, nil, fn)
+	if err != nil {
+		return err
+	}
+	if last == nil {
+		return fmt.Errorf("no events received for deployment \"%s/%s\"", namespace, name)
+	}
+	return nil
 }

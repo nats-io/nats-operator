@@ -7,17 +7,24 @@ import (
 )
 
 type ServerConfig struct {
-	Host           string               `json:"host,omitempty"`
-	Port           int                  `json:"port,omitempty"`
-	HTTPPort       int                  `json:"http_port,omitempty"`
-	Cluster        *ClusterConfig       `json:"cluster,omitempty"`
-	TLS            *TLSConfig           `json:"tls,omitempty"`
-	Debug          bool                 `json:"debug,omitempty"`
-	Trace          bool                 `json:"trace,omitempty"`
-	WriteDeadline  string               `json:"write_deadline,omitempty"`
-	MaxConnections int                  `json:"max_connections,omitempty"`
-	MaxPayload     int                  `json:"max_payload,omitempty"`
-	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
+	Host             string               `json:"host,omitempty"`
+	Port             int                  `json:"port,omitempty"`
+	HTTPPort         int                  `json:"http_port,omitempty"`
+	HTTPSPort        int                  `json:"https_port,omitempty"`
+	Cluster          *ClusterConfig       `json:"cluster,omitempty"`
+	TLS              *TLSConfig           `json:"tls,omitempty"`
+	Debug            bool                 `json:"debug,omitempty"`
+	Trace            bool                 `json:"trace,omitempty"`
+	Logtime          bool                 `json:"logtime"`
+	WriteDeadline    string               `json:"write_deadline,omitempty"`
+	MaxConnections   int                  `json:"max_connections,omitempty"`
+	MaxControlLine   int                  `json:"max_control_line,omitempty"`
+	MaxPayload       int                  `json:"max_payload,omitempty"`
+	MaxPending       int                  `json:"max_pending,omitempty"`
+	MaxSubscriptions int                  `json:"max_subscriptions,omitempty"`
+	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
+	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
+	Include          string               `json:"include,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -35,6 +42,7 @@ type TLSConfig struct {
 	CipherSuites     []string `json:"cipher_suites,omitempty"`
 	CurvePreferences []string `json:"curve_preferences,omitempty"`
 	Timeout          float64  `json:"timeout,omitempty"`
+	VerifyAndMap     bool     `json:"verify_and_map,omitempty"`
 }
 
 type AuthorizationConfig struct {
@@ -55,8 +63,9 @@ type User struct {
 // Permissions are the allowed subjects on a per
 // publish or subscribe basis.
 type Permissions struct {
-	Publish   []string `json:"publish,omitempty"`
-	Subscribe []string `json:"subscribe,omitempty"`
+	// Can be either a map with allow/deny or an array.
+	Publish   interface{} `json:"publish,omitempty"`
+	Subscribe interface{} `json:"subscribe,omitempty"`
 }
 
 // Marshal takes a server configuration and returns its
@@ -76,4 +85,13 @@ func Marshal(conf *ServerConfig) ([]byte, error) {
 	}
 
 	return buf2.Bytes(), nil
+}
+
+// Unmarshal attempts to parse the specified byte array as JSON as a ServerConfig object.
+func Unmarshal(conf []byte) (*ServerConfig, error) {
+	res := &ServerConfig{}
+	if err := json.Unmarshal(conf, res); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

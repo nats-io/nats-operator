@@ -15,17 +15,21 @@
   name = "golang.org/x/time"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/api"
+  version = "kubernetes-1.12.4"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/apiextensions-apiserver"
+  version = "kubernetes-1.12.4"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/apimachinery"
+  version = "kubernetes-1.12.4"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/client-go"
+  version = "kubernetes-1.12.4"
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "gopkg.in/fsnotify/fsnotify.v1"

@@ -16,327 +16,321 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"sync"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/cluster"
-	"github.com/nats-io/nats-operator/pkg/spec"
-	natsalphav2client "github.com/nats-io/nats-operator/pkg/typed-client/v1alpha2/typed/pkg/spec"
-	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
-	"github.com/nats-io/nats-operator/pkg/util/probe"
-
 	"github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
+	extsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	kwatch "k8s.io/apimachinery/pkg/watch"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
+	natsinformers "github.com/nats-io/nats-operator/pkg/client/informers/externalversions"
+	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/cluster"
+	"github.com/nats-io/nats-operator/pkg/features"
+	"github.com/nats-io/nats-operator/pkg/garbagecollection"
+	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
-var (
-	ErrVersionOutdated = errors.New("requested version is outdated in apiserver")
-
-	initRetryWaitTime = 30 * time.Second
-
-	// Workaround for watching CR resource.
-	// TODO: remove this to use CR client.
-	KubeHttpCli *http.Client
-	MasterHost  string
+const (
+	// kubeFullResyncPeriod is the period of time between every full resync of core/v1 resources by the shared informer factory.
+	kubeFullResyncPeriod = 24 * time.Hour
+	// natsClusterControllerDefaultThreadiness is the number of workers the NatsCluster controller will use to process items from the work queue.
+	natsClusterControllerThreadiness = 2
+	// natsFullResyncPeriod is the period of time between every full resync of nats.io/v1alpha2 resources by the shared informer factory.
+	natsFullResyncPeriod = 24 * time.Hour
 )
 
-type Event struct {
-	Type   kwatch.EventType
-	Object *spec.NatsCluster
-}
-
+// Controller is the controller for NatsCluster resources.
 type Controller struct {
+	// NatsClusterController is based-off of a generic controller.
+	*genericController
+	// kubeInformerFactory allows us to create shared informers for the Kubernetes base API types.
+	kubeInformerFactory kubeinformers.SharedInformerFactory
+	// natsInformerFactory allows us to create shared informers for our API types.
+	natsInformerFactory natsinformers.SharedInformerFactory
+	// podLister is able to list/get Pod resources from a shared informer's store.
+	podLister corev1listers.PodLister
+	// secretLister is able to list/get Secret resources from a shared informer's store.
+	secretLister corev1listers.SecretLister
+	// serviceLister is able to list/get Service resources from a shared informer's store.
+	serviceLister corev1listers.ServiceLister
+	// natsClusterLister is able to list/get NatsCluster resources from a shared informer's store.
+	natsClustersLister natslisters.NatsClusterLister
+	// natsServiceRoleLister is able to list/get NatsServiceRole resources from a shared informer's store.
+	natsServiceRoleLister natslisters.NatsServiceRoleLister
+
 	logger *logrus.Entry
+
 	Config
-
-	// TODO: combine the three cluster map.
-	clusters map[string]*cluster.Cluster
-	// Kubernetes resource version of the clusters
-	clusterRVs map[string]string
-	stopChMap  map[string]chan struct{}
-
-	waitCluster sync.WaitGroup
 }
 
 type Config struct {
-	Namespace      string
-	ServiceAccount string
-	PVProvisioner  string
-	KubeCli        corev1client.CoreV1Interface
-	KubeExtCli     apiextensionsclient.Interface
-	OperatorCli    natsalphav2client.PkgSpecInterface
+	// FeatureMap is the map containing features and their status for the current instance of nats-operator.
+	FeatureMap features.FeatureMap
+	// NatsOperatorNamespace is the namespace under which the current instance of nats-operator is running.
+	NatsOperatorNamespace string
+	PVProvisioner         string
+	KubeCli               kubernetes.Interface
+	KubeConfig            *rest.Config
+	KubeExtCli            extsclient.Interface
+	OperatorCli           natsclient.Interface
 }
 
 func (c *Config) Validate() error {
 	return nil
 }
 
-func New(cfg Config) *Controller {
-	return &Controller{
-		logger: logrus.WithField("pkg", "controller"),
+// informer is an interface that represents an informer such as a PodInformer.
+type informer interface {
+	Informer() cache.SharedIndexInformer
+}
 
-		Config:     cfg,
-		clusters:   make(map[string]*cluster.Cluster),
-		clusterRVs: make(map[string]string),
-		stopChMap:  map[string]chan struct{}{},
+func NewNatsClusterController(cfg Config) *Controller {
+	// Check if nats-operator is operating at cluster or namespace scope.
+	// Based on this, we either watch all Kubernetes namespaces or just the one where nats-operator is deployed.
+	var (
+		watchedNamespace string
+	)
+	if cfg.FeatureMap.IsEnabled(features.ClusterScoped) {
+		// Watch all Kubernetes namespaces.
+		watchedNamespace = v1.NamespaceAll
+	} else {
+		// Watch only the Kubernetes namespace where nats-operator is deployed.
+		watchedNamespace = cfg.NatsOperatorNamespace
 	}
+	// Create shared informer factories for the types we are interested in.
+	// WithNamespace is used to filter resources belonging to "watchedNamespace".
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cfg.KubeCli, kubeFullResyncPeriod, kubeinformers.WithNamespace(watchedNamespace))
+	natsInformerFactory := natsinformers.NewSharedInformerFactoryWithOptions(cfg.OperatorCli, natsFullResyncPeriod, natsinformers.WithNamespace(watchedNamespace))
+	// Obtain references to shared informers for the required types.
+	podInformer := kubeInformerFactory.Core().V1().Pods()
+	secretInformer := kubeInformerFactory.Core().V1().Secrets()
+	serviceInformer := kubeInformerFactory.Core().V1().Services()
+	natsClustersInformer := natsInformerFactory.Nats().V1alpha2().NatsClusters()
+	natsServiceRoleInformer := natsInformerFactory.Nats().V1alpha2().NatsServiceRoles()
+
+	// Obtain references to listers for the required types.
+	podLister := podInformer.Lister()
+	secretLister := secretInformer.Lister()
+	serviceLister := serviceInformer.Lister()
+	natsClustersLister := natsClustersInformer.Lister()
+	natsServiceRoleLister := natsServiceRoleInformer.Lister()
+
+	// Create a new instance of Controller that uses the lister above.
+	c := &Controller{
+		genericController:     newGenericController(v1alpha2.CRDResourceKind, natsClusterControllerThreadiness),
+		kubeInformerFactory:   kubeInformerFactory,
+		natsInformerFactory:   natsInformerFactory,
+		podLister:             podLister,
+		secretLister:          secretLister,
+		serviceLister:         serviceLister,
+		natsClustersLister:    natsClustersLister,
+		natsServiceRoleLister: natsServiceRoleLister,
+		logger:                logrus.WithField("pkg", "controller"),
+		Config:                cfg,
+	}
+	// Make the controller wait for caches to sync.
+	c.hasSyncedFuncs = []cache.InformerSynced{
+		podInformer.Informer().HasSynced,
+		secretInformer.Informer().HasSynced,
+		serviceInformer.Informer().HasSynced,
+		natsClustersInformer.Informer().HasSynced,
+		natsServiceRoleInformer.Informer().HasSynced,
+	}
+	// Make processQueueItem the handler for items popped out of the work queue.
+	c.syncHandler = c.processQueueItem
+
+	// Setup an event handler to inform us when NatsCluster resources change.
+	natsClustersInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			clustersCreated.Inc()
+			clustersTotal.Inc()
+			c.enqueue(obj)
+		},
+		UpdateFunc: func(_, obj interface{}) {
+			clustersModified.Inc()
+			c.enqueue(obj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			clustersDeleted.Inc()
+			clustersTotal.Dec()
+			c.enqueue(obj)
+		},
+	})
+	// Also setup event handlers to inform us when related resources (secrets, services, pods ans NatsClusterRoles) change.
+	// This allows us to react promptly to, e.g., deleted pods or edited secrets.
+	for _, inf := range []informer{podInformer, secretInformer, serviceInformer, natsServiceRoleInformer} {
+		inf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: c.handleObject,
+			UpdateFunc: func(_, obj interface{}) {
+				c.handleObject(obj)
+			},
+			DeleteFunc: c.handleObject,
+		})
+	}
+
+	// Return the instance of Controller created above.
+	return c
+}
+
+// processQueueItem attempts to reconcile the state of the NatsCluster resource pointed at by the specified key.
+func (c *Controller) processQueueItem(key string) error {
+	// Convert the namespace/name string into a distinct namespace and name.
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
+		return nil
+	}
+
+	// Get the NatsCluster resource with this namespace/name.
+	natsCluster, err := c.natsClustersLister.NatsClusters(namespace).Get(name)
+	if err != nil {
+		// The NatsCluster resource may no longer exist, in which case we call the garbage collector.
+		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
+			// TODO Remove the garbage collection step and rely solely on the Kubernetes garbage collector.
+			c.logger.Warnf("natscluster %q was deleted", key)
+			garbagecollection.New(c.KubeCli.CoreV1()).CollectCluster(namespace, name, garbagecollection.NullUID)
+			return nil
+		}
+		return err
+	}
+
+	// Often, new objects don't have their apiVersion and kind fields filled, so we fill them in manually to avoid errors.
+	// https://github.com/kubernetes/apiextensions-apiserver/issues/29
+	// We also create a deep copy of the original object in order to avoid mutating the cache.
+	newObj := natsCluster.DeepCopy()
+	newObj.TypeMeta.APIVersion = newObj.GetGroupVersionKind().GroupVersion().String()
+	newObj.TypeMeta.Kind = newObj.GetGroupVersionKind().Kind
+	newObj.Spec.Cleanup()
+	return cluster.New(c.makeClusterConfig(), newObj).Reconcile()
 }
 
 func (c *Controller) Run(ctx context.Context) error {
-	var (
-		watchVersion string
-		err          error
-	)
-
-	for {
-		watchVersion, err = c.initResource()
-		if err == nil {
-			break
-		}
-		c.logger.Errorf("initialization failed: %v", err)
-		c.logger.Infof("retry in %v...", initRetryWaitTime)
-		time.Sleep(initRetryWaitTime)
-		// todo: add max retry?
-	}
-
-	c.logger.Infof("starts running from watch version: %s", watchVersion)
-
-	defer func() {
-		for _, stopC := range c.stopChMap {
-			close(stopC)
-		}
-		c.waitCluster.Wait()
-	}()
-
-	probe.SetReady()
-
-	eventCh, errCh := c.watch(watchVersion)
-
-	go func() {
-		pt := newPanicTimer(time.Minute, "unexpected long blocking (> 1 Minute) when handling cluster event")
-
-		for ev := range eventCh {
-			pt.start()
-			if err := c.handleClusterEvent(ev); err != nil {
-				c.logger.Warningf("fail to handle event: %v", err)
-			}
-			pt.stop()
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errCh:
+	// Register our CRDs, waiting for them to become ready.
+	err := kubernetesutil.InitCRDs(c.KubeExtCli)
+	if err != nil {
 		return err
 	}
-}
 
-func (c *Controller) handleClusterEvent(event *Event) error {
-	clus := event.Object
+	// Start the shared informer factories.
+	go c.kubeInformerFactory.Start(ctx.Done())
+	go c.natsInformerFactory.Start(ctx.Done())
 
-	if clus.Status.IsFailed() {
-		clustersFailed.Inc()
-		if event.Type == kwatch.Deleted {
-			delete(c.clusters, clus.Name)
-			delete(c.clusterRVs, clus.Name)
-			return nil
-		}
-		return fmt.Errorf("ignore failed cluster (%s). Please delete its CR", clus.Name)
+	// Handle any possible crashes and shutdown the workqueue when we're done.
+	defer runtime.HandleCrash()
+	defer c.workqueue.ShutDown()
+
+	c.logger.Debug("starting controller")
+
+	// Wait for the caches to be synced before starting workers.
+	c.logger.Debug("waiting for informer caches to sync")
+	if ok := cache.WaitForCacheSync(ctx.Done(), c.hasSyncedFuncs...); !ok {
+		return fmt.Errorf("failed to wait for informer caches to sync")
 	}
 
-	// TODO: add validation to spec update.
-	clus.Spec.Cleanup()
+	c.logger.Debug("starting workers")
 
-	switch event.Type {
-	case kwatch.Added:
-		if _, ok := c.clusters[clus.Name]; ok {
-			return fmt.Errorf("unsafe state. cluster (%s) was created before but we received event (%s)", clus.Name, event.Type)
-		}
-
-		stopC := make(chan struct{})
-		nc := cluster.New(c.makeClusterConfig(), clus, stopC, &c.waitCluster)
-
-		c.stopChMap[clus.Name] = stopC
-		c.clusters[clus.Name] = nc
-		c.clusterRVs[clus.Name] = clus.ResourceVersion
-
-		clustersCreated.Inc()
-		clustersTotal.Inc()
-
-	case kwatch.Modified:
-		if _, ok := c.clusters[clus.Name]; !ok {
-			return fmt.Errorf("unsafe state. cluster (%s) was never created but we received event (%s)", clus.Name, event.Type)
-		}
-		c.clusters[clus.Name].Update(clus)
-		c.clusterRVs[clus.Name] = clus.ResourceVersion
-		clustersModified.Inc()
-
-	case kwatch.Deleted:
-		if _, ok := c.clusters[clus.Name]; !ok {
-			return fmt.Errorf("unsafe state. cluster (%s) was never created but we received event (%s)", clus.Name, event.Type)
-		}
-		c.clusters[clus.Name].Delete()
-		delete(c.clusters, clus.Name)
-		delete(c.clusterRVs, clus.Name)
-		clustersDeleted.Inc()
-		clustersTotal.Dec()
+	// Launch "threadiness" workers to process work items.
+	for i := 0; i < c.threadiness; i++ {
+		go wait.Until(c.runWorker, time.Second, ctx.Done())
 	}
+
+	c.logger.Info("started workers")
+
+	// Block until the context is canceled.
+	<-ctx.Done()
 	return nil
 }
 
-func (c *Controller) findAllClusters() (string, error) {
-	c.logger.Info("finding existing clusters...")
-	clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.RESTClient(), c.Config.Namespace)
-	if err != nil {
-		return "", err
-	}
+// handleObject will take any resource implementing metav1.Object and attempt to find the NatsCluster resource that "owns" it.
+// It does this by looking at the object's metadata.ownerReferences field for an appropriate OwnerReference.
+// It then enqueues that NatsCluster resource to be processed.
+// If the object does not have an appropriate OwnerReference, it may still be a NatsServiceRole that references the NatsCluster in its spec, so we check for that as well.
+// Finally, the object may be a Secret referenced by one or more NatsCluster resources.
+// In case the object doesn't match any of the conditions above, it is simply skipped.
+func (c *Controller) handleObject(obj interface{}) {
+	var (
+		object metav1.Object
+		ok     bool
+	)
 
-	for i := range clusterList.Items {
-		clus := clusterList.Items[i]
-
-		if clus.Status.IsFailed() {
-			c.logger.Infof("ignore failed cluster (%s). Please delete its CR", clus.Name)
-			continue
+	if object, ok = obj.(metav1.Object); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			runtime.HandleError(fmt.Errorf("failed to decode object: invalid type"))
+			return
 		}
-
-		clus.Spec.Cleanup()
-
-		stopC := make(chan struct{})
-		nc := cluster.New(c.makeClusterConfig(), &clus, stopC, &c.waitCluster)
-		c.stopChMap[clus.Name] = stopC
-		c.clusters[clus.Name] = nc
-		c.clusterRVs[clus.Name] = clus.ResourceVersion
+		object, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			runtime.HandleError(fmt.Errorf("failed to decode object tombstone: invalid type"))
+			return
+		}
+		c.logger.Debugf("recovered deleted object %q from tombstone", kubernetesutil.ResourceKey(object))
 	}
 
-	return clusterList.ResourceVersion, nil
+	c.logger.Debugf("processing object %q", kubernetesutil.ResourceKey(object))
+
+	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+		// If this object is not owned by a NatsCluster resource, we should not do anything more with it.
+		if ownerRef.Kind != v1alpha2.CRDResourceKind {
+			return
+		}
+		// Attempt to get the owning NatsCluster resource.
+		natsCluster, err := c.natsClustersLister.NatsClusters(object.GetNamespace()).Get(ownerRef.Name)
+		if err != nil {
+			c.logger.Debugf("ignoring orphaned object %q of natscluster \"%s/%s\"", object.GetSelfLink(), object.GetNamespace(), ownerRef.Name)
+			return
+		}
+		// Enqueue the NatsCluster resource for later processing.
+		c.enqueue(natsCluster)
+		return
+	}
+
+	// If the current resource is a NatsServiceRole, we must enqueue the NatsCluster referenced by ".metadata.labels.nats_cluster" so that its configuration is reconciled.
+	if object, ok := obj.(*v1alpha2.NatsServiceRole); ok {
+		c.enqueueByCoordinates(object.Namespace, object.Labels[kubernetesutil.LabelClusterNameKey])
+		return
+	}
+
+	// If the current resource is a Secret, we must check whether there are any NatsCluster resources that references it via ".spec.auth.clientsAuthSecret" and enqueue them.
+	if object, ok := obj.(*v1.Secret); ok {
+		// List all NatsCluster resources in the same namespace as the current secret.
+		clusters, err := c.natsClustersLister.NatsClusters(object.Namespace).List(labels.Everything())
+		if err != nil {
+			runtime.HandleError(fmt.Errorf("failed to list natscluster resources"))
+			return
+		}
+		// Enqueue all NatsCluster resources which reference the current secret.
+		for _, cluster := range clusters {
+			if cluster.Spec.Auth != nil && cluster.Spec.Auth.ClientsAuthSecret == object.Name {
+				c.enqueue(cluster)
+			}
+		}
+		return
+	}
 }
 
 func (c *Controller) makeClusterConfig() cluster.Config {
 	return cluster.Config{
-		ServiceAccount: c.Config.ServiceAccount,
-		KubeCli:        c.KubeCli,
-		OperatorCli:    c.OperatorCli,
+		KubeCli:               c.KubeCli.CoreV1(),
+		OperatorCli:           c.OperatorCli.NatsV1alpha2(),
+		PodLister:             c.podLister,
+		SecretLister:          c.secretLister,
+		ServiceLister:         c.serviceLister,
+		NatsServiceRoleLister: c.natsServiceRoleLister,
+		KubeClient:            c.KubeCli,
+		KubeConfig:            c.KubeConfig,
+		NatsClient:            c.OperatorCli,
 	}
-}
-
-func (c *Controller) initResource() (string, error) {
-	watchVersion := "0"
-	err := c.initCRD()
-	if err == kubernetesutil.ErrCRDAlreadyExists {
-		return c.findAllClusters()
-	}
-	if err != nil {
-		return "", fmt.Errorf("fail to create CRD: %v", err)
-	}
-
-	return watchVersion, nil
-}
-
-func (c *Controller) initCRD() error {
-	err := kubernetesutil.CreateCRD(c.KubeExtCli)
-	if err != nil {
-		return err
-	}
-	return kubernetesutil.WaitCRDReady(c.KubeExtCli)
-}
-
-// watch creates a go routine, and watches the cluster.nats kind resources from
-// the given watch version. It emits events on the resources through the returned
-// event chan. Errors will be reported through the returned error chan. The go routine
-// exits on any error.
-func (c *Controller) watch(watchVersion string) (<-chan *Event, <-chan error) {
-	eventCh := make(chan *Event)
-	// On unexpected error case, controller should exit
-	errCh := make(chan error, 1)
-
-	go func() {
-		defer close(eventCh)
-
-		for {
-			resp, err := kubernetesutil.WatchClusters(MasterHost, c.Config.Namespace, KubeHttpCli, watchVersion)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				resp.Body.Close()
-				errCh <- errors.New("invalid status code: " + resp.Status)
-				return
-			}
-
-			c.logger.Infof("start watching at %v", watchVersion)
-
-			decoder := json.NewDecoder(resp.Body)
-			for {
-				ev, st, err := pollEvent(decoder)
-				if err != nil {
-					// API Server will close stream periodically so schedule a reconnect,
-					// also recover in case connection was broken for some reason.
-					if err == io.EOF || err == io.ErrUnexpectedEOF {
-						c.logger.Info("apiserver closed watch stream, retrying after 5s...")
-						time.Sleep(5 * time.Second)
-						break
-					}
-
-					c.logger.Errorf("received invalid event from API server: %v", err)
-					errCh <- err
-					return
-				}
-
-				if st != nil {
-					resp.Body.Close()
-
-					if st.Code == http.StatusGone {
-						// event history is outdated.
-						// if nothing has changed, we can go back to watch again.
-						clusterList, err := kubernetesutil.GetClusterList(c.Config.KubeCli.RESTClient(), c.Config.Namespace)
-						if err == nil && !c.isClustersCacheStale(clusterList.Items) {
-							watchVersion = clusterList.ResourceVersion
-							break
-						}
-
-						// if anything has changed (or error on relist), we have to rebuild the state.
-						// go to recovery path
-						errCh <- ErrVersionOutdated
-						return
-					}
-
-					c.logger.Fatalf("unexpected status response from API server: %v", st.Message)
-				}
-
-				c.logger.Debugf("NATS cluster event: %v %v", ev.Type, ev.Object.Spec)
-
-				watchVersion = ev.Object.ResourceVersion
-				eventCh <- ev
-			}
-
-			resp.Body.Close()
-		}
-	}()
-
-	return eventCh, errCh
-}
-
-func (c *Controller) isClustersCacheStale(currentClusters []spec.NatsCluster) bool {
-	if len(c.clusterRVs) != len(currentClusters) {
-		return true
-	}
-
-	for _, cc := range currentClusters {
-		rv, ok := c.clusterRVs[cc.Name]
-		if !ok || rv != cc.ResourceVersion {
-			return true
-		}
-	}
-
-	return false
 }

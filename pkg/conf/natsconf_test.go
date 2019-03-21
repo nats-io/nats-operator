@@ -12,16 +12,19 @@ func TestConfMarshal(t *testing.T) {
 		err    error
 	}{
 		{
-			input:  &ServerConfig{},
-			output: "{}",
-			err:    nil,
+			input: &ServerConfig{},
+			output: `{
+  "logtime": false
+}`,
+			err: nil,
 		},
 		{
 			input: &ServerConfig{
 				HTTPPort: 8222,
 			},
 			output: `{
-  "http_port": 8222
+  "http_port": 8222,
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -30,7 +33,8 @@ func TestConfMarshal(t *testing.T) {
 				Port: 4222,
 			},
 			output: `{
-  "port": 4222
+  "port": 4222,
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -41,9 +45,20 @@ func TestConfMarshal(t *testing.T) {
 			},
 			output: `{
   "port": 4222,
-  "http_port": 8222
+  "http_port": 8222,
+  "logtime": false
 }`,
 			err: nil,
+		},
+		{
+			input: &ServerConfig{
+				LameDuckDuration: "2m",
+				Logtime:          true,
+			},
+			output: `{
+  "logtime": true,
+  "lame_duck_duration": "2m"
+}`,
 		},
 		{
 			input: &ServerConfig{
@@ -58,7 +73,8 @@ func TestConfMarshal(t *testing.T) {
   "http_port": 8222,
   "cluster": {
     "port": 6222
-  }
+  },
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -85,7 +101,8 @@ func TestConfMarshal(t *testing.T) {
       "nats://nats-2.default.svc:6222",
       "nats://nats-3.default.svc:6222"
     ]
-  }
+  },
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -116,7 +133,8 @@ func TestConfMarshal(t *testing.T) {
     ]
   },
   "debug": true,
-  "trace": true
+  "trace": true,
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -153,7 +171,8 @@ func TestConfMarshal(t *testing.T) {
       "cert_file": "/etc/nats-tls/server.pem",
       "key_file": "/etc/nats-tls/server-key.pem"
     }
-  }
+  },
+  "logtime": false
 }`,
 			err: nil,
 		},
@@ -171,6 +190,7 @@ func TestConfMarshal(t *testing.T) {
 			output: `{
   "port": 4222,
   "http_port": 8222,
+  "logtime": false,
   "authorization": {
     "default_permissions": {
       "publish": [
@@ -184,6 +204,46 @@ func TestConfMarshal(t *testing.T) {
 }`,
 			err: nil,
 		},
+		{
+			input: &ServerConfig{
+				Authorization: &AuthorizationConfig{
+					DefaultPermissions: &Permissions{
+						Publish: map[string][]string{
+							"allow": []string{"hello", "world"},
+							"deny":  []string{"foo.*", "bar.>"},
+						},
+						Subscribe: map[string][]string{
+							"allow": []string{"hi", "everyone"},
+						},
+					},
+				},
+			},
+			output: `{
+  "logtime": false,
+  "authorization": {
+    "default_permissions": {
+      "publish": {
+        "allow": [
+          "hello",
+          "world"
+        ],
+        "deny": [
+          "foo.*",
+          "bar.>"
+        ]
+      },
+      "subscribe": {
+        "allow": [
+          "hi",
+          "everyone"
+        ]
+      }
+    }
+  }
+}`,
+
+			err: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -194,7 +254,7 @@ func TestConfMarshal(t *testing.T) {
 			}
 			o := strings.TrimSpace(string(res))
 			if o != tt.output {
-				t.Errorf("Unexpected output: %v", o)
+				t.Errorf("Expected %+v, got: %+v", tt.output, o)
 			}
 		})
 	}

@@ -1,3 +1,5 @@
+// +build e2e
+
 // Copyright 2017 The nats-operator Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,175 +17,328 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/spec"
-	"github.com/nats-io/nats-operator/test/e2e/e2eutil"
-	"github.com/nats-io/nats-operator/test/e2e/framework"
+	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
+	"github.com/nats-io/nats-operator/pkg/conf"
+	"github.com/nats-io/nats-operator/pkg/constants"
+	"k8s.io/api/core/v1"
+	watchapi "k8s.io/apimachinery/pkg/watch"
 )
 
+// TestCreateCluster creates a NatsCluster resource and waits for the full mesh to be formed.
 func TestCreateCluster(t *testing.T) {
-	f := framework.Global
-	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 3))
-	if err != nil {
+	var (
+		size    = 3
+		version = "1.3.0"
+	)
+
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
 		t.Fatal(err)
 	}
-
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
-		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
-			t.Fatal(err)
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
-		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
+	// Wait until the full mesh is formed.
+	ctx, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx, natsCluster, size, version); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// TestPauseControl tests the user can pause the operator from controlling
-// a NATS cluster.
+// TestPauseControl creates a NatsCluster resource and waits for the full mesh to be formed.
+// Then, it pauses control of the NatsCluster resource and scales it up to five nodes, expecting the operation to NOT be performed.
+// Finally, it resumes control of the NatsCluster resource and waits for the full five-node mesh to be formed.
 func TestPauseControl(t *testing.T) {
-	f := framework.Global
-	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 3))
-	if err != nil {
+	var (
+		initialSize = 3
+		finalSize   = 5
+		version     = "1.3.0"
+	)
+
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", initialSize, version); err != nil {
 		t.Fatal(err)
 	}
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
-		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
-			t.Fatal(err)
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
 		}
 	}()
 
-	names, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats)
-	if err != nil {
-		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
-	}
-
-	updateFunc := func(cl *spec.NatsCluster) {
-		cl.Spec.Paused = true
-	}
-	if testNats, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc); err != nil {
-		t.Fatalf("failed to pause control: %v", err)
-	}
-
-	// TODO: this is used to wait for the CR to be updated.
-	// TODO: make this wait for reliable
-	time.Sleep(5 * time.Second)
-
-	if err := e2eutil.KillMembers(f.KubeClient, f.Namespace, names[0]); err != nil {
+	// Wait until the full mesh is formed.
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, initialSize, version); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 2, 1, testNats); err != nil {
-		t.Fatalf("failed to wait for killed member to die: %v", err)
-	}
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 1, testNats); err == nil {
-		t.Fatalf("cluster should not be recovered: control is paused")
+
+	// Pause control of the cluster.
+	natsCluster.Spec.Paused = true
+	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
+		t.Fatal(err)
 	}
 
-	updateFunc = func(cl *spec.NatsCluster) {
-		cl.Spec.Paused = false
+	// Scale the cluster up to five members
+	natsCluster.Spec.Size = finalSize
+	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
+		t.Fatal(err)
 	}
-	if testNats, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc); err != nil {
-		t.Fatalf("failed to resume control: %v", err)
+	// Make sure that the full mesh is NOT formed with the current size (5) within the timeout period.
+	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, finalSize, version); err == nil {
+		t.Fatalf("the full mesh has formed while control is paused")
 	}
 
-	if _, err := e2eutil.WaitUntilPodSizeReached(t, f.KubeClient, 3, 6, testNats); err != nil {
-		t.Fatalf("failed to resize to 3 members NATS cluster: %v", err)
+	// Resume control of the cluster.
+	natsCluster.Spec.Paused = false
+	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
+		t.Fatal(err)
+	}
+	// Make sure that the full mesh is formed with the current size, since control has been resumed.
+	ctx3, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx3, natsCluster, finalSize, version); err != nil {
+		t.Fatal(err)
 	}
 }
 
-//func TestNatsUpgrade(t *testing.T) {
-//	f := framework.Global
-//	origNats := e2eutil.NewCluster("test-nats-", 3)
-//	origNats = e2eutil.ClusterWithVersion(origNats, "1.0.0")
-//	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, origNats)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	defer func() {
-//		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
-//			t.Fatal(err)
-//		}
-//	}()
-//
-//	err = e2eutil.WaitUntilPodSizeAndVersionAndRoutesReached(t, f.KubeClient, "1.0.0", 3, 18, testNats)
-//	if err != nil {
-//		t.Fatalf("failed to create 3 members NATS cluster: %v", err)
-//	}
-//
-//	updateFunc := func(cl *spec.NatsCluster) {
-//		cl = e2eutil.ClusterWithVersion(cl, "1.0.2")
-//	}
-//	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
-//	if err != nil {
-//		t.Fatalf("fail to update cluster version: %v", err)
-//	}
-//
-//	// We have seen in k8s 1.7.1 env it took 35s for the pod to restart with the new image.
-//	err = e2eutil.WaitUntilPodSizeAndVersionAndRoutesReached(t, f.KubeClient, "1.0.2", 3, 18, testNats)
-//	if err != nil {
-//		t.Fatalf("failed to wait new version NATS cluster: %v", err)
-//	}
-//}
+// TestCreateClusterWithHostPort creates a NatsCluster resource using
+// a host port with no advertise for clients.
+func TestCreateClusterWithHostPort(t *testing.T) {
+	var (
+		size    = 1
+		version = "1.3.0"
+	)
 
-func TestResizeCluster3To5(t *testing.T) {
-	f := framework.Global
-	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 3))
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+			EnableClientsHostPort: true,
+		}
+		natsCluster.Spec.NoAdvertise = true
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
-		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
-			t.Fatal(err)
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
-		t.Fatalf("failed to create NATS cluster with 3 members: %v", err)
-	}
+	// List pods belonging to the NATS cluster, and make
+	// sure that every route is listed in the
+	// configuration.
+	var attempts int
+	for range time.NewTicker(1 * time.Second).C {
+		if attempts >= 30 {
+			t.Fatalf("Timed out waiting for pods with host port")
+		}
+		attempts++
 
-	updateFunc := func(cl *spec.NatsCluster) {
-		cl = e2eutil.ClusterWithSize(cl, 5)
-	}
-	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
-	if err != nil {
-		t.Fatalf("fail to update cluster version: %v", err)
-	}
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			continue
+		}
+		if len(pods) == 0 {
+			continue
+		}
 
-	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 5, 12, testNats); err != nil {
-		t.Fatalf("failed to resize NATS cluster to 5 members: %v", err)
+		var foundNoAdvertise bool
+		pod := pods[0]
+		container := pod.Spec.Containers[0]
+		for _, v := range container.Command {
+			if v == "--no_advertise" {
+				foundNoAdvertise = true
+			}
+		}
+		if !foundNoAdvertise {
+			t.Error("Container not configured with no advertise")
+		}
+
+		var foundHostPort bool
+		for _, port := range container.Ports {
+			if port.ContainerPort == int32(4222) && port.HostPort == int32(4222) {
+				foundHostPort = true
+			}
+		}
+		if !foundHostPort {
+			t.Error("Container not configured with host port")
+		}
+
+		break
 	}
 }
 
-func TestResizeCluster5To3(t *testing.T) {
-	f := framework.Global
-	testNats, err := e2eutil.CreateCluster(t, f.CRClient, f.Namespace, e2eutil.NewCluster("test-nats-", 5))
+func TestCreateClustersWithExtraRoutes(t *testing.T) {
+	var (
+		size    = 3
+		version = "1.4.0"
+	)
+
+	var (
+		ncA *natsv1alpha2.NatsCluster
+		ncB *natsv1alpha2.NatsCluster
+		err error
+	)
+
+	ncA, err = f.CreateCluster(f.Namespace, "test-nats-", size, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {})
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Mesh the cluster with the other cluster.
+	ncB, err = f.CreateCluster(f.Namespace, "test-nats-", 1, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {
+			natsCluster.Spec.ExtraRoutes = []*natsv1alpha2.ExtraRoute{
+				{Cluster: ncA.Name},
+				{Route: "nats://127.0.0.1:6222"},
+			}
+
+			// Use a host port to confirm the routes
+			natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+				EnableClientsHostPort: true,
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
-		if err := e2eutil.DeleteCluster(t, f.CRClient, f.KubeClient, testNats); err != nil {
-			t.Fatal(err)
+		if err = f.DeleteCluster(ncA); err != nil {
+			t.Error(err)
+		}
+		if err = f.DeleteCluster(ncB); err != nil {
+			t.Error(err)
 		}
 	}()
 
-	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 5, 12, testNats); err != nil {
-		t.Fatalf("failed to create NATS cluster with 5 members: %v", err)
-	}
+	ctx, done := context.WithTimeout(context.Background(), 120*time.Second)
+	defer done()
+	err = f.WaitUntilSecretCondition(ctx, ncB, func(event watchapi.Event) (bool, error) {
+		// Grab the secret from the event.
+		secret := event.Object.(*v1.Secret)
+		// Make sure that the "nats.conf" key is present in the secret.
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
 
-	updateFunc := func(cl *spec.NatsCluster) {
-		cl = e2eutil.ClusterWithSize(cl, 3)
-	}
-	_, err = e2eutil.UpdateCluster(f.CRClient, testNats, 10, updateFunc)
+		// Grab the ServerConfig object that corresponds to "nats.conf".
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if config.Cluster == nil || config.Cluster.Routes == nil {
+			return false, nil
+		}
+		routes := config.Cluster.Routes
+		if len(routes) == 3 {
+			return true, nil
+		}
+		return false, nil
+	})
 	if err != nil {
-		t.Fatalf("fail to update cluster version: %v", err)
+		t.Fatal(err)
+	}
+}
+
+func TestCreateServerWithCustomConfig(t *testing.T) {
+	var (
+		size    = 1
+		version = "1.4.0"
+		nc      *natsv1alpha2.NatsCluster
+		err     error
+	)
+	nc, err = f.CreateCluster(f.Namespace, "test-nats-", size, version,
+		func(natsCluster *natsv1alpha2.NatsCluster) {
+			// Custom config
+			natsCluster.Spec.ServerConfig = &natsv1alpha2.ServerConfig{
+				Debug:            true,
+				Trace:            true,
+				MaxConnections:   10,
+				MaxControlLine:   2048,
+				MaxPayload:       128,
+				MaxPending:       65536,
+				MaxSubscriptions: 200,
+				WriteDeadline:    "10s",
+				DisableLogtime:   true,
+			}
+		})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if _, err := e2eutil.WaitUntilPodSizeAndRoutesReached(t, f.KubeClient, 3, 12, testNats); err != nil {
-		t.Fatalf("failed to resize NATS cluster to 3 members: %v", err)
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(nc); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	ctx, done := context.WithTimeout(context.Background(), 120*time.Second)
+	defer done()
+	err = f.WaitUntilSecretCondition(ctx, nc, func(event watchapi.Event) (bool, error) {
+		secret := event.Object.(*v1.Secret)
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if !config.Debug || !config.Trace {
+			return false, nil
+		}
+		if config.WriteDeadline != "10s" {
+			return false, nil
+		}
+		if config.MaxPayload != 128 {
+			return false, nil
+		}
+		if config.MaxPending != 65536 {
+			return false, nil
+		}
+		if config.MaxConnections != 10 {
+			return false, nil
+		}
+		if config.Logtime {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
