@@ -48,7 +48,6 @@ import (
 	"github.com/nats-io/nats-operator/pkg/debug"
 	"github.com/nats-io/nats-operator/pkg/debug/local"
 	"github.com/nats-io/nats-operator/pkg/features"
-	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
 	"github.com/nats-io/nats-operator/version"
@@ -210,17 +209,6 @@ func run(ctx context.Context, featureMap features.FeatureMap, kubeCfg *rest.Conf
 	// Initialize the controller for NatsCluster resources.
 	c := controller.NewNatsClusterController(cfg)
 
-	// Start the garbage collector.
-	var (
-		gcNamespace string
-	)
-	if featureMap.IsEnabled(features.ClusterScoped) {
-		gcNamespace = v1.NamespaceAll
-	} else {
-		gcNamespace = namespace
-	}
-	go periodicFullGC(cfg.KubeCli.CoreV1(), gcNamespace, gcInterval)
-
 	// Start the chaos engine if the current instance is not cluster-scoped.
 	if !featureMap.IsEnabled(features.ClusterScoped) {
 		startChaos(context.Background(), cfg.KubeCli.CoreV1(), cfg.NatsOperatorNamespace, chaosLevel)
@@ -240,16 +228,6 @@ func newControllerConfig(featureMap features.FeatureMap, kubeConfig *rest.Config
 		KubeExtCli:            extsClient,
 		OperatorCli:           natsClient,
 		KubeConfig:            kubeConfig,
-	}
-}
-
-func periodicFullGC(kubecli corev1client.CoreV1Interface, namespace string, d time.Duration) {
-	gc := garbagecollection.New(kubecli)
-	timer := time.NewTicker(d)
-	defer timer.Stop()
-	for {
-		<-timer.C
-		gc.FullyCollect(namespace)
 	}
 }
 
