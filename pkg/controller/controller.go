@@ -38,7 +38,6 @@ import (
 	natslisters "github.com/nats-io/nats-operator/pkg/client/listers/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/cluster"
 	"github.com/nats-io/nats-operator/pkg/features"
-	"github.com/nats-io/nats-operator/pkg/garbagecollection"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 )
 
@@ -196,11 +195,9 @@ func (c *Controller) processQueueItem(key string) error {
 	// Get the NatsCluster resource with this namespace/name.
 	natsCluster, err := c.natsClustersLister.NatsClusters(namespace).Get(name)
 	if err != nil {
-		// The NatsCluster resource may no longer exist, in which case we call the garbage collector.
+		// The NatsCluster resource may no longer exist.
 		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
-			// TODO Remove the garbage collection step and rely solely on the Kubernetes garbage collector.
 			c.logger.Warnf("natscluster %q was deleted", key)
-			garbagecollection.New(c.KubeCli.CoreV1()).CollectCluster(namespace, name, garbagecollection.NullUID)
 			return nil
 		}
 		return err
