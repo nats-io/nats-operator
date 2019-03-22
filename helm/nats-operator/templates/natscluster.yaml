@@ -16,11 +16,12 @@ spec:
     metricsImage: {{ .Values.metrics.repository }}
     metricsImageTag: {{ .Values.metrics.tag }}
     metricsImagePullPolicy: {{ .Values.metrics.pullPolicy }}
-
+  {{- if .Values.auth.enabled }}
   auth:
     enableServiceAccounts: {{ .Values.auth.enableServiceAccounts }}
     clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth
     clientsAuthTimeout: 5
+  {{- end }}
 
   {{- if .Values.tls.enabled }}
   tls:
