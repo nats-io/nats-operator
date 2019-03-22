@@ -24,6 +24,7 @@ import (
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"k8s.io/api/core/v1"
 	watchapi "k8s.io/apimachinery/pkg/watch"
 )
@@ -334,6 +335,93 @@ func TestCreateServerWithCustomConfig(t *testing.T) {
 			return false, nil
 		}
 		if config.Logtime {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateAndDeleteClusterDependencies(t *testing.T) {
+	var (
+		size        = 1
+		version     = "1.4.0"
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, done := context.WithTimeout(context.Background(), waitTimeout)
+	defer done()
+
+	err = f.WaitUntilSecretCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
+		// Just check that the secret is present.
+		secret := event.Object.(*v1.Secret)
+		_, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+
+		// Wait for a single pod to be created.
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			return false, err
+		}
+		if len(pods) < 1 {
+			return false, nil
+		}
+
+		// Confirm that there is a service for the NatsCluster.
+		svcs, err := f.ServicesForNatsCluster(natsCluster)
+		if err != nil {
+			return false, err
+		}
+		if len(svcs) < 1 {
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the cluster and there should be no more pods,
+	// secrets or services.
+	if err = f.DeleteCluster(natsCluster); err != nil {
+		t.Error(err)
+	}
+
+	// Wait for all the pods to report the expected routes and version.
+	err = retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
+		// Wait for the single pod to be deleted.
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			return false, err
+		}
+		if len(pods) > 0 {
+			return false, nil
+		}
+
+		// Confirm that there is a service for the NatsCluster
+		// and it is gone now.
+		svcs, err := f.ServicesForNatsCluster(natsCluster)
+		if err != nil {
+			return false, err
+		}
+		if len(svcs) > 0 {
+			return false, nil
+		}
+
+		secrets, err := f.SecretsForNatsCluster(natsCluster)
+		if err != nil {
+			return false, err
+		}
+		if len(secrets) > 0 {
 			return false, nil
 		}
 		return true, nil

@@ -155,6 +155,26 @@ func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([
 	return pods.Items, nil
 }
 
+// ServicesForNatsCluster returns a slice containing all pods that belong
+// to the specified NatsCluster resource.
+func (f *Framework) ServicesForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Service, error) {
+	svc, err := f.KubeClient.CoreV1().Services(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
+	if err != nil {
+		return nil, err
+	}
+	return svc.Items, nil
+}
+
+// SecretsForNatsCluster returns a slice containing all pods that belong
+// to the specified NatsCluster resource.
+func (f *Framework) SecretsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Secret, error) {
+	secrets, err := f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
+	if err != nil {
+		return nil, err
+	}
+	return secrets.Items, nil
+}
+
 // RouteCountForPod returns the number of routes reported by the
 // specified pod.
 func (f *Framework) RouteCountForPod(pod v1.Pod) (int, error) {
