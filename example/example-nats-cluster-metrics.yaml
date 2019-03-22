@@ -9,4 +9,4 @@ spec:
   pod:
     enableMetrics: true
     metricsImage: "synadia/prometheus-nats-exporter"
-    metricsImageTag: "0.1.0"
+    metricsImageTag: "0.2.0"

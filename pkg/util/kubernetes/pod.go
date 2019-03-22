@@ -114,6 +114,8 @@ func natsPodMetricsContainer(image, tag, pullPolicy string) v1.Container {
 			"-routez",
 			"-subz",
 			"-varz",
+			"-channelz",
+			"-serverz",
 			fmt.Sprintf("http://localhost:%d", constants.MonitoringPort)},
 	}
 }
