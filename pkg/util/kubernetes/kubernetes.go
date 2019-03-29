@@ -160,12 +160,19 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			CertFile: constants.ServerCertFilePath,
 			KeyFile:  constants.ServerKeyFilePath,
 		}
+
+		if cs.TLS.ClientsTLSTimeout > 0 {
+			sconfig.TLS.Timeout = cs.TLS.ClientsTLSTimeout
+		}
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
 			CAFile:   constants.RoutesCAFilePath,
 			CertFile: constants.RoutesCertFilePath,
 			KeyFile:  constants.RoutesKeyFilePath,
+		}
+		if cs.TLS.RoutesTLSTimeout > 0 {
+			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout
 		}
 	}
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {

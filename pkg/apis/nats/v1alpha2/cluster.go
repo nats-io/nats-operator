@@ -165,6 +165,14 @@ type TLSConfig struct {
 
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`
+
+	// ClientsTLSTimeout is the time in seconds that the NATS server will
+	// allow to clients to finish the TLS handshake.
+	ClientsTLSTimeout float64 `json:"clientsTLSTimeout,omitempty"`
+
+	// RoutesTLSTimeout is the time in seconds that the NATS server will
+	// allow to routes to finish the TLS handshake.
+	RoutesTLSTimeout float64 `json:"routesTLSTimeout,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
