@@ -245,6 +245,9 @@ type PodPolicy struct {
 
 	// BootConfigContainerImageTag is the tag of the bootconfig container image.
 	BootConfigContainerImageTag string `json:"bootconfigImageTag,omitempty"`
+
+	// VolumeMounts is a list of k8s volume mount definitions for the nats container
+	VolumeMounts []v1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // AuthConfig is the authorization configuration for
