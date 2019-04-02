@@ -128,36 +128,25 @@ func WaitCRDs(extsClient extsclientset.Interface) error {
 
 // createOrUpdateCRD creates or updates the specified custom resource definition according to the provided specification.
 func createOrUpdateCRD(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
-	// Attempt to register the CRD.
-	_, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
-	if err == nil {
-		// Registration was successful.
+	// At this point the CRD may already exist from manual creation. Attempt to get the CRD
+	d, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{})
+
+	// CRD already exists, but it's what we expect.
+	if err == nil && reflect.DeepEqual(d.Spec, crd.Spec) {
 		return nil
 	}
-	if !IsKubernetesResourceAlreadyExistError(err) {
-		// The crd doesn't exist yet but we've got an unexpected error while registering it.
+
+	// CRD already exists, and is different than what is expected.
+	if err == nil {
+		// Attempt to update the CRD by setting its spec to the expected value.
+		d.Spec = crd.Spec
+		_, err = extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Update(d)
 		return err
 	}
 
-	// At this point the CRD already exists but its spec may differ.
-	// This can happen, for instance, if the user has tampered with the CRD.
-	// Hence, we do our best to bring in line with our expectations.
-	// Fetch the latest version of the CRD.
-	d, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{})
-	if err != nil {
-		// We've failed to fetch the latest version of the CRD, so return accordingly.
-		return err
-	}
-	if reflect.DeepEqual(d.Spec, crd.Spec) {
-		// The specs match, so there's nothing to do.
-		return nil
-	}
-	// Attempt to update the CRD by setting its spec to the expected value.
-	d.Spec = crd.Spec
-	if _, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Update(d); err != nil {
-		return err
-	}
-	return nil
+	// No CRD existed, attempt to register the CRD.
+	_, err = extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	return err
 }
 
 // waitCRDReady blocks until the specified custom resource definition has been established and is ready for being used.
