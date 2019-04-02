@@ -661,16 +661,18 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
 func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
-	labels := map[string]string{
-		LabelAppKey:            "nats",
-		LabelClusterNameKey:    clusterName,
-		LabelClusterVersionKey: cs.Version,
-	}
-	annotations := map[string]string{}
-
-	containers := make([]v1.Container, 0)
-	volumes := make([]v1.Volume, 0)
-	volumeMounts := make([]v1.VolumeMount, 0)
+	var (
+		enableClientsHostPort bool
+		annotations           = map[string]string{}
+		containers            = make([]v1.Container, 0)
+		volumes               = make([]v1.Volume, 0)
+		volumeMounts          = make([]v1.VolumeMount, 0)
+		labels                = map[string]string{
+			LabelAppKey:            "nats",
+			LabelClusterNameKey:    clusterName,
+			LabelClusterVersionKey: cs.Version,
+		}
+	)
 
 	// ConfigMap: Volume declaration for the Pod and Container.
 	volume := newNatsConfigMapVolume(clusterName)
@@ -684,11 +686,9 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	// User supplied volumes and mounts
-	volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
-
-	var enableClientsHostPort bool
 	if cs.Pod != nil {
+		// User supplied volumes and mounts
+		volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
 		enableClientsHostPort = cs.Pod.EnableClientsHostPort
 	}
 	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort)
