@@ -11,6 +11,7 @@ env:
 install:
 - go get -u github.com/cloudflare/cfssl/cmd/cfssl
 - go get -u github.com/cloudflare/cfssl/cmd/cfssljson
+- make dep
 
 before_script:
 - go version

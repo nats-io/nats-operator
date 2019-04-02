@@ -3,16 +3,17 @@ SHELL := /bin/bash
 # build.e2e builds the nats-operator-e2e test binary.
 .PHONY: build.e2e
 build.e2e:
-	@GOOS=linux GOARCH=amd64 go test -tags e2e -c -o build/nats-operator-e2e ./test/e2e/*.go
+	@GOOS=linux GO111MODULE=on GOARCH=amd64 go test -tags e2e -c -o build/nats-operator-e2e ./test/e2e/*.go
 
 # build.operator builds the nats-operator binary.
 .PHONY: build.operator
 build.operator: gen
-	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \
+	@GOOS=linux GO111MODULE=on GOARCH=amd64 CGO_ENABLED=0 go build \
 		-ldflags "-d -s -w -X github.com/nats-io/nats-operator/version.GitSHA=`git rev-parse --short HEAD`" \
 		-tags netgo \
 		-installsuffix cgo \
 		-o build/nats-operator ./cmd/operator/main.go
+
 
 # dep fetches required dependencies.
 .PHONY: dep
@@ -20,7 +21,6 @@ dep: KUBERNETES_VERSION := 1.12.4
 dep: KUBERNETES_CODE_GENERATOR_PKG := k8s.io/code-generator
 dep: KUBERNETES_APIMACHINERY_PKG := k8s.io/apimachinery
 dep:
-	@dep ensure -v
 	@go get -d $(KUBERNETES_CODE_GENERATOR_PKG)/...
 	@cd $(GOPATH)/src/$(KUBERNETES_CODE_GENERATOR_PKG) && \
 		git fetch origin && \
@@ -29,6 +29,7 @@ dep:
 	@cd $(GOPATH)/src/$(KUBERNETES_APIMACHINERY_PKG) && \
 		git fetch origin && \
 		git checkout -f kubernetes-$(KUBERNETES_VERSION) --quiet
+
 
 # e2e runs the end-to-end test suite.
 .PHONY: e2e
@@ -52,5 +53,5 @@ run:
 
 # gen executes the code generation step.
 .PHONY: gen
-gen: dep
+gen:
 	@./hack/codegen.sh
