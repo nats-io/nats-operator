@@ -684,6 +684,9 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
+	// User supplied volumes and mounts
+	volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
+
 	var enableClientsHostPort bool
 	if cs.Pod != nil {
 		enableClientsHostPort = cs.Pod.EnableClientsHostPort
@@ -808,7 +811,6 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	// Required overrides.
 	pod.Spec.Hostname = name
 	pod.Spec.Subdomain = ManagementServiceName(clusterName)
-	pod.Spec.Volumes = volumes
 
 	// Set default restart policy
 	if pod.Spec.RestartPolicy == "" {
@@ -816,9 +818,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	}
 
 	if advertiseExternalIP {
-		pod.Spec.InitContainers = []v1.Container{bootconfig}
+		pod.Spec.InitContainers = append(pod.Spec.InitContainers, bootconfig)
 	}
-	pod.Spec.Volumes = volumes
 
 	// Enable PID namespace sharing and attach sidecar that
 	// reloads the server whenever the config file is updated.
@@ -867,7 +868,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		containers = append(containers, metricsContainer)
 	}
 
-	pod.Spec.Containers = containers
+	pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, volumes...)
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
