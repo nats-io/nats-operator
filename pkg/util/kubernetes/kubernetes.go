@@ -661,16 +661,18 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
 func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
-	labels := map[string]string{
-		LabelAppKey:            "nats",
-		LabelClusterNameKey:    clusterName,
-		LabelClusterVersionKey: cs.Version,
-	}
-	annotations := map[string]string{}
-
-	containers := make([]v1.Container, 0)
-	volumes := make([]v1.Volume, 0)
-	volumeMounts := make([]v1.VolumeMount, 0)
+	var (
+		enableClientsHostPort bool
+		annotations           = map[string]string{}
+		containers            = make([]v1.Container, 0)
+		volumes               = make([]v1.Volume, 0)
+		volumeMounts          = make([]v1.VolumeMount, 0)
+		labels                = map[string]string{
+			LabelAppKey:            "nats",
+			LabelClusterNameKey:    clusterName,
+			LabelClusterVersionKey: cs.Version,
+		}
+	)
 
 	// ConfigMap: Volume declaration for the Pod and Container.
 	volume := newNatsConfigMapVolume(clusterName)
@@ -684,8 +686,9 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	volumeMount = newNatsPidFileVolumeMount()
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	var enableClientsHostPort bool
 	if cs.Pod != nil {
+		// User supplied volumes and mounts
+		volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
 		enableClientsHostPort = cs.Pod.EnableClientsHostPort
 	}
 	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort)
@@ -808,7 +811,6 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	// Required overrides.
 	pod.Spec.Hostname = name
 	pod.Spec.Subdomain = ManagementServiceName(clusterName)
-	pod.Spec.Volumes = volumes
 
 	// Set default restart policy
 	if pod.Spec.RestartPolicy == "" {
@@ -816,9 +818,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	}
 
 	if advertiseExternalIP {
-		pod.Spec.InitContainers = []v1.Container{bootconfig}
+		pod.Spec.InitContainers = append(pod.Spec.InitContainers, bootconfig)
 	}
-	pod.Spec.Volumes = volumes
 
 	// Enable PID namespace sharing and attach sidecar that
 	// reloads the server whenever the config file is updated.
@@ -867,7 +868,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		containers = append(containers, metricsContainer)
 	}
 
-	pod.Spec.Containers = containers
+	pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	pod.Spec.Volumes = append(pod.Spec.Volumes, volumes...)
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
 
