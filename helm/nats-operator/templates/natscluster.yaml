@@ -1,33 +1,38 @@
+{{- if .Values.cluster.create }}
 apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:
-  name: "nats-cluster"
+  name: {{ .Values.cluster.name }}
+{{- if and .Values.clusterScoped .Values.cluster.namespace }}
+  namespace: {{ .Values.cluster.namespace }}
+{{- end }}
 spec:
-  size: {{ .Values.clusterSize }}
-  version: {{ .Values.natsClusterVersion }}
+  size: {{ .Values.cluster.size }}
+  version: {{ .Values.cluster.version }}
 
   pod:
-    enableConfigReload: {{ .Values.configReload.enabled }}
-    reloaderImage: {{ .Values.configReload.repository }}
-    reloaderImageTag: {{ .Values.configReload.tag }}
-    reloaderImagePullPolicy: {{ .Values.configReload.pullPolicy }}
+    enableConfigReload: {{ .Values.cluster.configReload.enabled }}
+    reloaderImage: {{ .Values.cluster.configReload.repository }}
+    reloaderImageTag: {{ .Values.cluster.configReload.tag }}
+    reloaderImagePullPolicy: {{ .Values.cluster.configReload.pullPolicy }}
 
-    enableMetrics: {{ .Values.metrics.enabled }}
-    metricsImage: {{ .Values.metrics.repository }}
-    metricsImageTag: {{ .Values.metrics.tag }}
-    metricsImagePullPolicy: {{ .Values.metrics.pullPolicy }}
-  {{- if .Values.auth.enabled }}
+    enableMetrics: {{ .Values.cluster.metrics.enabled }}
+    metricsImage: {{ .Values.cluster.metrics.repository }}
+    metricsImageTag: {{ .Values.cluster.metrics.tag }}
+    metricsImagePullPolicy: {{ .Values.cluster.metrics.pullPolicy }}
+  {{- if .Values.cluster.auth.enabled }}
   auth:
-    enableServiceAccounts: {{ .Values.auth.enableServiceAccounts }}
-    clientsAuthSecret: {{ template "nats.fullname" . }}-clients-auth
+    enableServiceAccounts: {{ .Values.cluster.auth.enableServiceAccounts }}
+    clientsAuthSecret: {{ .Values.cluster.name }}-clients-auth
     clientsAuthTimeout: 5
   {{- end }}
 
-  {{- if .Values.tls.enabled }}
+  {{- if .Values.cluster.tls.enabled }}
   tls:
     # Certificates to secure the NATS client connections:
-    serverSecret: {{ .Values.tls.serverSecret }}
+    serverSecret: {{ .Values.cluster.tls.serverSecret }}
 
     # Certificates to secure the routes.
-    routesSecret: {{ .Values.tls.routesSecret }}
+    routesSecret: {{ .Values.cluster.tls.routesSecret }}
   {{- end }}
+{{- end }}
