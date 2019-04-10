@@ -3,8 +3,11 @@
 ##
 rbacEnabled: true
 
-# Nats version. Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
-natsClusterVersion: 1.4.1
+## Operator scope
+## NOTE: If true
+## * Make sure that no othe NATS operator is running in the cluster
+## * The Release namespace must be "nats-io"
+clusterScoped: false
 
 image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
@@ -95,61 +98,69 @@ readinessProbe:
   failureThreshold: 6
   successThreshold: 1
 
-## Client Authentication
-## ref: https://github.com/nats-io/gnatsd#authentication
-## note: token not supported only user/password will work with this chart version 
-##
-auth:
-  enabled: true
+cluster:
+  ## Create a NATS Cluster when installing the operator
+  create: true
 
-  # NOTE: Only supported in Kubernetes v1.12+ clusters having the "TokenRequest" API enabled.
-  enableServiceAccounts: false
-  
-  ## This is where you enter a username/password for 1 user
-  username: "my-user"
-  password: "T0pS3cr3t"
+  name: nats-cluster
 
-  ## This is a where you can specify 2 or more users
-  users: {}
-  #- username: "another-user-1"
-  #  password: "another-password-1"
-  #- username: "another-user-2"
-  #  password: "another-password-2"
-  #  permissions:
-  #    publish: ["hello.*"]
-  #    subscribe: ["hello.world"]
+  ## Choose namespace for cluster deployment if clusterScoped is set to true
+  # namesapce: "some-namespace"
 
-  defaultPermissions: {}
-    #publish: ["SANDBOX.*"]
-    #subscribe: ["PUBLIC.>"]
+  ## Nats version
+  ## Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
+  version: 1.4.1
 
-tls:
-  enabled: false
-  #serverSecret:
-  #routesSecret:
+  ## Cluster Size
+  size: 3
 
-clusterSize: 3
+  ## Client Authentication
+  ## ref: https://github.com/nats-io/gnatsd#authentication
+  ## note: token not supported only user/password will work with this chart version
+  ##
+  auth:
+    enabled: true
 
-## Operator scope
-## NOTE: If true
-## * Make sure that no othe NATS operator is running in the cluster
-## * The Release namespace must be "nats-io"
-clusterScoped: false
+    # NOTE: Only supported in Kubernetes v1.12+ clusters having the "TokenRequest" API enabled.
+    enableServiceAccounts: false
 
-## Configuration Reload
-## NOTE: Only supported in Kubernetes v1.12+.
-configReload:
-  enabled: false
-  registry: "docker.io"
-  repository: "connecteverything/nats-server-config-reloader"
-  tag: "0.2.2-v1alpha2"
-  pullPolicy: "IfNotPresent"
+    ## This is where you enter a username/password for 1 user
+    username: "my-user"
+    password: "T0pS3cr3t"
 
-## Prometheus Metrics Exporter
-##
-metrics:
-  enabled: false
-  registry: "docker.io"
-  repository: "synadia/prometheus-nats-exporter"
-  tag: "0.2.0"
-  pullPolicy: "IfNotPresent"
+    ## This is a where you can specify 2 or more users
+    users: []
+    #- username: "another-user-1"
+    #  password: "another-password-1"
+    #- username: "another-user-2"
+    #  password: "another-password-2"
+    #  permissions:
+    #    publish: ["hello.*"]
+    #    subscribe: ["hello.world"]
+
+    defaultPermissions: {}
+      #publish: ["SANDBOX.*"]
+      #subscribe: ["PUBLIC.>"]
+
+  tls:
+    enabled: false
+    #serverSecret:
+    #routesSecret:
+
+  ## Configuration Reload
+  ## NOTE: Only supported in Kubernetes v1.12+.
+  configReload:
+    enabled: false
+    registry: "docker.io"
+    repository: "connecteverything/nats-server-config-reloader"
+    tag: "0.2.2-v1alpha2"
+    pullPolicy: "IfNotPresent"
+
+  ## Prometheus Metrics Exporter
+  ##
+  metrics:
+    enabled: false
+    registry: "docker.io"
+    repository: "synadia/prometheus-nats-exporter"
+    tag: "0.2.0"
+    pullPolicy: "IfNotPresent"
