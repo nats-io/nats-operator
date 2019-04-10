@@ -2,20 +2,22 @@ apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: {{ template "nats.fullname" . }}
+  labels:
+    app: {{ template "nats.name" . }}
+    chart: {{ template "nats.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: "{{ template "nats.name" . }}"
-      chart: "{{ template "nats.chart" . }}"
-      release: "{{ .Release.Name }}"
+      app: {{ template "nats.name" . }}
+      release: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app: "{{ template "nats.name" . }}"
-        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
-        release: "{{ .Release.Name }}"
-        heritage: "{{ .Release.Service }}"
+        app: {{ template "nats.name" . }}
+        release: {{ .Release.Name }}
       {{- if .Values.podLabels }}
         {{ .Values.podLabels}}
       {{- end }}
