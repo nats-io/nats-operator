@@ -1,6 +1,6 @@
 name: nats-operator
-version: 0.1.0
-appVersion: 0.2.3
+version: 0.1.1
+appVersion: 0.4.4
 description: Nats operator creates/configures/manages nats clusters atop Kubernetes
 keywords:
 - addressing
