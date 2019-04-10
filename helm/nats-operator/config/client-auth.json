@@ -1,16 +1,16 @@
 {
   "users": [
-    {{- if and (.Values.auth.username) (not .Values.auth.users) }}
-    { 
-      "username": "{{ .Values.auth.username }}",
-      "password": "{{ .Values.auth.password }}"
+    {{- if and (.Values.cluster.auth.username) (not .Values.cluster.auth.users) }}
+    {
+      "username": "{{ .Values.cluster.auth.username }}",
+      "password": "{{ .Values.cluster.auth.password }}"
     }
     {{- end }}
-   
-    {{- if .Values.auth.users }}
-    {{ $length := len .Values.auth.users }}
-    {{- range $index, $user := .Values.auth.users }}
-    { 
+
+    {{- if .Values.cluster.auth.users }}
+    {{ $length := len .Values.cluster.auth.users }}
+    {{- range $index, $user := .Values.cluster.auth.users }}
+    {
       "username": "{{ $user.username }}",
       "password": "{{ $user.password }}"
       {{- if $user.permissions }},
@@ -19,7 +19,7 @@
     }{{- if lt (add1 $index) $length }},{{ end }}
     {{- end}}
     {{- end }}
-  ]{{- if .Values.auth.defaultPermissions }},
-  "default_permissions": {{ toJson .Values.auth.defaultPermissions | replace "\\u003e" ">" }}
+  ]{{- if .Values.cluster.auth.defaultPermissions }},
+  "default_permissions": {{ toJson .Values.cluster.auth.defaultPermissions | replace "\\u003e" ">" }}
   {{- end}}
 }
