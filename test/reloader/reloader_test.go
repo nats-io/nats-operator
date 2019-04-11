@@ -10,10 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats-operator/pkg/reloader"
+	natsreloader "github.com/nats-io/nats-operator/pkg/reloader"
 )
 
+var configContents = `port = 2222`
+
 func TestReloader(t *testing.T) {
+	// Setup a pidfile that points to us
 	pid := os.Getpid()
 	pidfile, err := ioutil.TempFile(os.TempDir(), "nats-pid-")
 	if err != nil {
@@ -26,28 +29,34 @@ func TestReloader(t *testing.T) {
 	}
 	defer os.Remove(pidfile.Name())
 
-	configfile, err := ioutil.TempFile(os.TempDir(), "nats-conf-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(configfile.Name())
-
-	if _, err := configfile.WriteString("port = 4222"); err != nil {
-		t.Fatal(err)
-	}
-
 	// Create tempfile with contents, then update it
 	nconfig := &natsreloader.Config{
-		PidFile:    pidfile.Name(),
-		ConfigFile: configfile.Name(),
+		PidFile:     pidfile.Name(),
+		ConfigFiles: []string{},
 	}
+
+	var configFiles []*os.File
+	for i := 0; i < 2; i++ {
+		configFile, err := ioutil.TempFile(os.TempDir(), "nats-conf-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(configFile.Name())
+
+		if _, err := configFile.WriteString(configContents); err != nil {
+			t.Fatal(err)
+		}
+		configFiles = append(configFiles, configFile)
+		nconfig.ConfigFiles = append(nconfig.ConfigFiles, configFile.Name())
+	}
+
 	r, err := natsreloader.NewReloader(nconfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
 
-	var success = false
+	var signals = 0
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -59,26 +68,29 @@ func TestReloader(t *testing.T) {
 
 		// Success when receiving the first signal
 		for range c {
-			success = true
-			cancel()
-			return
+			signals++
 		}
 	}()
 
 	go func() {
-		for i := 0; i < 5; i++ {
-			if _, err := configfile.WriteString("port = 4222"); err != nil {
-				return
+		for _, configfile := range configFiles {
+			for i := 0; i < 5; i++ {
+				// Append some more stuff to the config
+				if _, err := configfile.WriteAt([]byte(configContents), 0); err != nil {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
 			}
-			time.Sleep(1 * time.Second)
 		}
+		cancel()
 	}()
 
 	err = r.Run(ctx)
 	if err != nil && err != context.Canceled {
 		t.Fatal(err)
 	}
-	if !success {
+	// We should have gotten only one signal for each configuration file
+	if signals == len(configFiles) {
 		t.Fatalf("Timed out waiting for reloading signal")
 	}
 }
