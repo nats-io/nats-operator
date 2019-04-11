@@ -321,6 +321,11 @@ func addAuthConfig(
 			break
 		}
 		return nil
+	} else if cs.Auth.ClientsAuthFile != "" {
+		sconfig.Authorization = &natsconf.AuthorizationConfig{
+			Include: cs.Auth.ClientsAuthFile,
+		}
+		return nil
 	}
 	return nil
 }
@@ -427,9 +432,7 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 
 	// FIXME: Quoted "include" causes include to be ignored.
 	// Remove once using NATS v2.0 as the default container image.
-	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
-		rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), 1)
-	}
+	rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), -1)
 
 	labels := LabelsForCluster(clusterName)
 	cm := &v1.Secret{
@@ -840,7 +843,12 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			imagePullPolicy = cs.Pod.ReloaderImagePullPolicy
 		}
 
-		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy)
+		authFilePath := ""
+		if cs.Auth != nil {
+			authFilePath = cs.Auth.ClientsAuthFile
+		}
+
+		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy, authFilePath)
 		reloaderContainer.VolumeMounts = volumeMounts
 		containers = append(containers, reloaderContainer)
 	}

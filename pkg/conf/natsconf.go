@@ -52,6 +52,7 @@ type AuthorizationConfig struct {
 	Timeout            int          `json:"timeout,omitempty"`
 	Users              []*User      `json:"users,omitempty"`
 	DefaultPermissions *Permissions `json:"default_permissions,omitempty"`
+	Include            string       `json:"include,omitempty"`
 }
 
 type User struct {
