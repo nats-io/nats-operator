@@ -22,11 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
-	"github.com/nats-io/go-nats"
+	nats "github.com/nats-io/go-nats"
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/conf"
+	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
@@ -101,6 +101,68 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 	// Skip the test if "ShareProcessNamespace" is not enabled.
 	f.Require(t, framework.ShareProcessNamespace)
 
+	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
+	ConfigReloadTestHelper(t, func(natsCluster *natsv1alpha2.NatsCluster, cas *v1.Secret) {
+		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
+			// Use the secret created above for client authentication.
+			ClientsAuthSecret: cas.Name,
+		}
+		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+			// Enable configuration reloading.
+			EnableConfigReload: true,
+		}
+	})
+}
+
+// TestConfigReloadOnClientAuthSecretChange creates a secret containing authentication data for a NATS cluster.
+// This secret initially contains two users ("user-1" and "user-2") and the corresponding password.
+// Then, the test creates a NatsCluster resource that uses this secret for authentication, and makes sure that "user-1" can connect to the NATS cluster.
+// Finally, it removes the entry that corresponds to "user-1" from the authentication secret, and makes sure that "user-1" cannot connect to the NATS cluster anymore.
+func TestConfigReloadOnClientAuthFileChange(t *testing.T) {
+	// Skip the test if "ShareProcessNamespace" is not enabled.
+	f.Require(t, framework.ShareProcessNamespace)
+
+	ConfigReloadTestHelper(t, func(natsCluster *natsv1alpha2.NatsCluster, cas *v1.Secret) {
+		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
+			// Use the secret created above for client authentication.
+			ClientsAuthFile: "authconfig/auth.json",
+		}
+		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
+			// Enable configuration reloading.
+			EnableConfigReload: true,
+			VolumeMounts: []v1.VolumeMount{
+				v1.VolumeMount{
+					Name:      "authconfig",
+					MountPath: "/etc/nats-config/authconfig",
+				},
+			},
+		}
+		natsCluster.Spec.PodTemplate = &v1.PodTemplateSpec{
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					v1.Volume{
+						Name: "authconfig",
+						VolumeSource: v1.VolumeSource{
+							Secret: &v1.SecretVolumeSource{
+								SecretName: cas.Name,
+								Items: []v1.KeyToPath{
+									v1.KeyToPath{
+										Key:  "data",
+										Path: "auth.json",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	})
+}
+
+type NatsClusterCustomizerWSecret func(natsCluster *natsv1alpha2.NatsCluster, cas *v1.Secret)
+
+func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecret) {
 	var (
 		username1 = "user-1"
 		username2 = "user-2"
@@ -165,15 +227,9 @@ func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 
 	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
 	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
-		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
-			// Use the secret created above for client authentication.
-			ClientsAuthSecret: cas.Name,
-		}
-		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
-			// Enable configuration reloading.
-			EnableConfigReload: true,
-		}
+		customizer(natsCluster, cas)
 	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
