@@ -803,7 +803,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	spec := &v1.PodSpec{}
 
 	// Initialize the pod spec with a template in case it is present.
-	if cs.PodTemplate != nil && &cs.PodTemplate.Spec != nil {
+	if cs.PodTemplate != nil {
 		spec = cs.PodTemplate.Spec.DeepCopy()
 	}
 	pod.Spec = *spec
