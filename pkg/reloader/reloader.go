@@ -107,18 +107,18 @@ func (r *Reloader) Run(ctx context.Context) error {
 
 	// Preload config hashes, so we know their digests
 	// up front and avoid potentially reloading when unnecessary.
-	for _, configFile := range r.ConfigFiles {
-		h := sha256.New()
-		f, err := os.Open(configFile)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(h, f); err != nil {
-			return err
-		}
-		digest := h.Sum(nil)
-		lastConfigAppliedCache[configFile] = digest
-	}
+	//for _, configFile := range r.ConfigFiles {
+	//	h := sha256.New()
+	//	f, err := os.Open(configFile)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if _, err := io.Copy(h, f); err != nil {
+	//		return err
+	//	}
+	//	digest := h.Sum(nil)
+	//	lastConfigAppliedCache[configFile] = digest
+	//}
 
 WaitForEvent:
 	for {
