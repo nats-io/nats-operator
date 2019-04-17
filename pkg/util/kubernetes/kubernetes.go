@@ -156,9 +156,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 
 	if cs.TLS.ServerSecret != "" {
 		sconfig.TLS = &natsconf.TLSConfig{
-			CAFile:   constants.ServerCAFilePath,
-			CertFile: constants.ServerCertFilePath,
-			KeyFile:  constants.ServerKeyFilePath,
+			CAFile:   constants.ServerCertsMountPath + "/" + cs.TLS.ServerSecretCAFileName,
+			CertFile: constants.ServerCertsMountPath + "/" + cs.TLS.ServerSecretCertFileName,
+			KeyFile:  constants.ServerCertsMountPath + "/" + cs.TLS.ServerSecretKeyFileName,
 		}
 
 		if cs.TLS.ClientsTLSTimeout > 0 {
@@ -167,9 +167,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
-			CAFile:   constants.RoutesCAFilePath,
-			CertFile: constants.RoutesCertFilePath,
-			KeyFile:  constants.RoutesKeyFilePath,
+			CAFile:   constants.RoutesCertsMountPath + "/" + cs.TLS.RoutesSecretCAFileName,
+			CertFile: constants.RoutesCertsMountPath + "/" + cs.TLS.RoutesSecretCertFileName,
+			KeyFile:  constants.RoutesCertsMountPath + "/" + cs.TLS.RoutesSecretKeyFileName,
 		}
 		if cs.TLS.RoutesTLSTimeout > 0 {
 			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout

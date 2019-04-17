@@ -159,9 +159,33 @@ type TLSConfig struct {
 	// to secure the port to which the clients connect.
 	ServerSecret string `json:"serverSecret,omitempty"`
 
+	// ServerSecretCAFileName is the name of the CA in ServerSecret
+	// (default: ca.pem)
+	ServerSecretCAFileName string `json:"serverSecretCAFileName,omitempty"`
+
+	// ServerSecretKeyFileName is the name of the key in ServerSecret
+	// (default: server-key.pem)
+	ServerSecretKeyFileName string `json:"serverSecretKeyFileName,omitempty"`
+
+	// ServerSecretCertFileName is the name of the certificate in ServerSecret
+	// (default: server.pem)
+	ServerSecretCertFileName string `json:"serverSecretCertFileName,omitempty"`
+
 	// RoutesSecret is the secret containing the certificates
 	// to secure the port to which cluster routes connect.
 	RoutesSecret string `json:"routesSecret,omitempty"`
+
+	// RoutesSecretCAFileName is the name of the CA in RoutesSecret
+	// (default: ca.pem)
+	RoutesSecretCAFileName string `json:"routesSecretCAFileName,omitempty"`
+
+	// RoutesSecretKeyFileName is the name of the key in RoutesSecret
+	// (default: route-key.pem)
+	RoutesSecretKeyFileName string `json:"routesSecretKeyFileName,omitempty"`
+
+	// RoutesSecretCertFileName is the name of the certificate in RoutesSecret
+	// (default: route.pem)
+	RoutesSecretCertFileName string `json:"routesSecretCertFileName,omitempty"`
 
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`
@@ -293,6 +317,27 @@ func (c *ClusterSpec) Cleanup() {
 	}
 
 	c.Version = strings.TrimLeft(c.Version, "v")
+
+	if c.TLS != nil {
+		if len(c.TLS.ServerSecretCAFileName) == 0 {
+			c.TLS.ServerSecretCAFileName = constants.DefaultServerCAFileName
+		}
+		if len(c.TLS.ServerSecretCertFileName) == 0 {
+			c.TLS.ServerSecretCertFileName = constants.DefaultServerCertFileName
+		}
+		if len(c.TLS.ServerSecretKeyFileName) == 0 {
+			c.TLS.ServerSecretKeyFileName = constants.DefaultServerKeyFileName
+		}
+		if len(c.TLS.RoutesSecretCAFileName) == 0 {
+			c.TLS.RoutesSecretCAFileName = constants.DefaultRoutesCAFileName
+		}
+		if len(c.TLS.RoutesSecretCertFileName) == 0 {
+			c.TLS.RoutesSecretCertFileName = constants.DefaultRoutesCertFileName
+		}
+		if len(c.TLS.RoutesSecretKeyFileName) == 0 {
+			c.TLS.RoutesSecretKeyFileName = constants.DefaultRoutesKeyFileName
+		}
+	}
 }
 
 type ClusterPhase string

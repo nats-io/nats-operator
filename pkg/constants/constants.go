@@ -68,20 +68,20 @@ const (
 
 	// ServerCertsMountPath is the path where the server certificates
 	// to secure clients connections are located.
-	ServerCertsMountPath = "/etc/nats-server-tls-certs"
-	ServerCAFilePath     = ServerCertsMountPath + "/ca.pem"
-	ServerCertFilePath   = ServerCertsMountPath + "/server.pem"
-	ServerKeyFilePath    = ServerCertsMountPath + "/server-key.pem"
+	ServerCertsMountPath      = "/etc/nats-server-tls-certs"
+	DefaultServerCAFileName   = "ca.pem"
+	DefaultServerCertFileName = "server.pem"
+	DefaultServerKeyFileName  = "server-key.pem"
 
 	// RoutesSecretVolumeName is the name of the volume used for the routes certs.
 	RoutesSecretVolumeName = "routes-tls-certs"
 
 	// RoutesCertsMountPath is the path where the certificates
 	// to secure routes connections are located.
-	RoutesCertsMountPath = "/etc/nats-routes-tls-certs"
-	RoutesCAFilePath     = RoutesCertsMountPath + "/ca.pem"
-	RoutesCertFilePath   = RoutesCertsMountPath + "/route.pem"
-	RoutesKeyFilePath    = RoutesCertsMountPath + "/route-key.pem"
+	RoutesCertsMountPath      = "/etc/nats-routes-tls-certs"
+	DefaultRoutesCAFileName   = "ca.pem"
+	DefaultRoutesCertFileName = "route.pem"
+	DefaultRoutesKeyFileName  = "route-key.pem"
 
 	// Default Docker Images
 	DefaultServerImage             = "nats"
