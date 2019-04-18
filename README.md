@@ -159,9 +159,21 @@ spec:
   tls:
     # Certificates to secure the NATS client connections:
     serverSecret: "nats-clients-tls"
+    # Name of the CA in nats-clients-tls
+    serverSecretCAFileName: "ca.pem"
+    # Name of the key in nats-clients-tls
+    serverSecretKeyFileName: "server-key.pem"
+    # Name of the certificate in nats-clients-tls
+    serverSecretCertFileName: "server.pem"
 
     # Certificates to secure the routes.
     routesSecret: "nats-routes-tls"
+    # Name of the CA in nats-routes-tls
+    routesSecretCAFileName: "ca.pem"
+    # Name of the key in nats-routes-tls
+    routesSecretKeyFileName: "route-key.pem"
+    # Name of the certificate in nats-routes-tls
+    routesSecretCertFileName: "route.pem"
 ```
 
 In order for TLS to be properly established between the nodes, it is 
