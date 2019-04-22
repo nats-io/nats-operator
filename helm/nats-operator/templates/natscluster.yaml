@@ -1,3 +1,4 @@
+---
 {{- if .Values.cluster.create }}
 apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
@@ -35,4 +36,27 @@ spec:
     # Certificates to secure the routes.
     routesSecret: {{ .Values.cluster.tls.routesSecret }}
   {{- end }}
+---
+{{- if and .Values.cluster.metrics.enabled .Values.cluster.metrics.servicemonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.cluster.name }}
+{{- if and .Values.clusterScoped .Values.cluster.namespace }}
+  namespace: {{ .Values.cluster.namespace }}
+{{- end }}
+  labels:
+    app: nats
+    nats_cluster: {{ .Values.cluster.name }}
+    prometheus: {{ .Values.cluster.metrics.servicemonitor.prometheusInstance }}
+spec:
+  jobLabel: nats-{{ .Values.cluster.name }}
+  selector:
+    matchLabels:
+      app: nats
+      nats_cluster: {{ .Values.cluster.name }}
+  endpoints:
+  - port: metrics
+    interval: 60s
+{{- end }}
 {{- end }}
