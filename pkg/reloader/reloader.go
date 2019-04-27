@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -20,7 +20,7 @@ import (
 // Config represents the configuration of the reloader.
 type Config struct {
 	PidFile       string
-	ConfigFile    string
+	ConfigFiles   []string
 	MaxRetries    int
 	RetryWaitSecs int
 }
@@ -39,10 +39,6 @@ type Reloader struct {
 
 	// quit shutsdown the reloader.
 	quit func()
-
-	// lastAppliedVersion is the last config update
-	// done by the proces..
-	lastAppliedVersion []byte
 }
 
 // Run starts the main loop.
@@ -94,41 +90,80 @@ func (r *Reloader) Run(ctx context.Context) error {
 	// Follow configuration updates in the directory where
 	// the config file is located and trigger reload when
 	// it is either recreated or written into.
-	if err := configWatcher.Add(path.Dir(r.ConfigFile)); err != nil {
-		return err
+	for i := range r.ConfigFiles {
+		// Ensure our paths are canonical
+		r.ConfigFiles[i], _ = filepath.Abs(r.ConfigFiles[i])
+		// Use directory here because k8s remounts the entire folder
+		// the config file lives in. So, watch the folder so we properly receive events.
+		if err := configWatcher.Add(filepath.Dir(r.ConfigFiles[i])); err != nil {
+			return err
+		}
 	}
 
 	attempts = 0
+	// lastConfigAppliedCache is the last config update
+	// applied by us
+	lastConfigAppliedCache := make(map[string][]byte)
+
+	// Preload config hashes, so we know their digests
+	// up front and avoid potentially reloading when unnecessary.
+	for _, configFile := range r.ConfigFiles {
+		h := sha256.New()
+		f, err := os.Open(configFile)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(h, f); err != nil {
+			return err
+		}
+		digest := h.Sum(nil)
+		lastConfigAppliedCache[configFile] = digest
+	}
+
+WaitForEvent:
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case event := <-configWatcher.Events:
 			log.Printf("Event: %+v \n", event)
-			// FIXME: This captures all events in the same folder, should
-			// narrow down to updates to the config file involved only.
-			if event.Op != fsnotify.Write && event.Op != fsnotify.Create {
+			touchedInfo, err := os.Stat(event.Name)
+			if err != nil {
 				continue
 			}
 
-			h := sha256.New()
-			f, err := os.Open(r.ConfigFile)
-			if err != nil {
-				log.Printf("Error: %s\n", err)
-				continue
-			}
-			if _, err := io.Copy(h, f); err != nil {
-				log.Printf("Error: %s\n", err)
-				continue
-			}
-			digest := h.Sum(nil)
-			if r.lastAppliedVersion != nil {
-				if bytes.Equal(r.lastAppliedVersion, digest) {
-					// Skip since no meaningful change
+			for _, configFile := range r.ConfigFiles {
+				configInfo, err := os.Stat(configFile)
+				if err != nil {
+					log.Printf("Error: %s\n", err)
+					continue WaitForEvent
+				}
+				if !os.SameFile(touchedInfo, configInfo) {
 					continue
 				}
+
+				h := sha256.New()
+				f, err := os.Open(configFile)
+				if err != nil {
+					log.Printf("Error: %s\n", err)
+					continue WaitForEvent
+				}
+				if _, err := io.Copy(h, f); err != nil {
+					log.Printf("Error: %s\n", err)
+					continue WaitForEvent
+				}
+				digest := h.Sum(nil)
+				lastConfigHash, ok := lastConfigAppliedCache[configFile]
+				if ok && bytes.Equal(lastConfigHash, digest) {
+					// No meaningful change or this is the first time we've checked
+					continue WaitForEvent
+				}
+				lastConfigAppliedCache[configFile] = digest
+
+				// We only get an event for one file at a time, we can stop checking
+				// config files here and continue with our business.
+				break
 			}
-			r.lastAppliedVersion = digest
 
 		case err := <-configWatcher.Errors:
 			log.Printf("Error: %s\n", err)
