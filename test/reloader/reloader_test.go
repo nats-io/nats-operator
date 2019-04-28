@@ -97,7 +97,9 @@ func TestReloader(t *testing.T) {
 		t.Fatal(err)
 	}
 	// We should have gotten only one signal for each configuration file
-	if signals != len(configFiles) {
-		t.Fatalf("Wrong number of signals received.")
+	got := signals
+	expected := len(configFiles)
+	if got != expected {
+		t.Fatalf("Wrong number of signals received. Expected: %v, got: %v", expected, got)
 	}
 }
