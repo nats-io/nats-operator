@@ -287,6 +287,10 @@ type AuthConfig struct {
 	// configuration in JSON.
 	ClientsAuthSecret string `json:"clientsAuthSecret,omitempty"`
 
+	// ClientsAuthFile is the path that nats-operator should read
+	// auth secrets from on disk.
+	ClientsAuthFile string `json:"clientsAuthFile,omitempty"`
+
 	// ClientsAuthTimeout is the time in seconds that the NATS server will
 	// allow to clients to send their auth credentials.
 	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`

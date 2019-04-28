@@ -17,6 +17,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -129,7 +130,10 @@ func TestConfigReloadOnClientAuthFileChange(t *testing.T) {
 		}
 		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
 			// Enable configuration reloading.
-			EnableConfigReload: true,
+			EnableConfigReload:      true,
+			ReloaderImage:           "wallyqs/nats-server-config-reloader",
+			ReloaderImageTag:        "0.4.5-v1alpha2",
+			ReloaderImagePullPolicy: "Always",
 			VolumeMounts: []v1.VolumeMount{
 				v1.VolumeMount{
 					Name:      "authconfig",
@@ -169,7 +173,7 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 		password1 = "pass-1"
 		password2 = "pass-2"
 		size      = 1
-		version   = "1.3.0"
+		version   = "1.4.0"
 	)
 
 	var (
@@ -210,11 +214,24 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 			},
 		},
 	}
-	// Serialize the object containing authentication data.
-	if d, err = json.Marshal(auth); err != nil {
+	// Serialize the object containing authentication data,
+	// we are using wildcard so need to unescape the HTML
+	// which the JSON encoder does by default...
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err = encoder.Encode(auth)
+	if err != nil {
 		t.Fatal(err)
 	}
+	buf2 := &bytes.Buffer{}
+	err = json.Indent(buf2, buf.Bytes(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Create a secret containing authentication data.
+	d = buf2.Bytes()
 	if cas, err = f.CreateSecret(f.Namespace, "data", d); err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +243,7 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 	}()
 
 	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
-	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
+	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-reload-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		customizer(natsCluster, cas)
 	})
 
@@ -257,12 +274,23 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 
 	// Remove "user1" from the list of allowed users.
 	auth.Users = auth.Users[1:]
-	// Serialize the object containing authentication data.
-	if d, err = json.Marshal(auth); err != nil {
+
+	// Serialize the object containing authentication data again.
+	buf = &bytes.Buffer{}
+	encoder = json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err = encoder.Encode(auth)
+	if err != nil {
 		t.Fatal(err)
 	}
+	buf2 = &bytes.Buffer{}
+	err = json.Indent(buf2, buf.Bytes(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Update the client authentication secret with the new contents.
-	cas.Data["data"] = d
+	cas.Data["data"] = buf2.Bytes()
 	if cas, err = f.PatchSecret(cas); err != nil {
 		t.Fatal(err)
 	}

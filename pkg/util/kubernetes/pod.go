@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -94,7 +95,9 @@ func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string) v1.Co
 		},
 	}
 	if authFilePath != "" {
-		container.Command = append(container.Command, "-config", authFilePath)
+		// The volume is mounted as a subdirectory under the NATS config.
+		af := filepath.Join(constants.ConfigMapMountPath, authFilePath)
+		container.Command = append(container.Command, "-config", af)
 	}
 	return container
 }
