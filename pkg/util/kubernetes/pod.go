@@ -18,9 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -80,8 +81,8 @@ func natsPodContainer(clusterName, version string, serverImage string, enableCli
 }
 
 // natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.
-func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
-	return v1.Container{
+func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string) v1.Container {
+	container := v1.Container{
 		Name:            "reloader",
 		Image:           fmt.Sprintf("%s:%s", image, tag),
 		ImagePullPolicy: v1.PullPolicy(pullPolicy),
@@ -93,6 +94,12 @@ func natsPodReloaderContainer(image, tag, pullPolicy string) v1.Container {
 			constants.PidFilePath,
 		},
 	}
+	if authFilePath != "" {
+		// The volume is mounted as a subdirectory under the NATS config.
+		af := filepath.Join(constants.ConfigMapMountPath, authFilePath)
+		container.Command = append(container.Command, "-config", af)
+	}
+	return container
 }
 
 // natsPodMetricsContainer returns a NATS server pod container spec for prometheus metrics exporter.

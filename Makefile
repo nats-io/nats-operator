@@ -38,7 +38,7 @@ e2e: NAMESPACE ?= default
 e2e:
 	FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=operator $(MAKE) run
 	FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=run NAMESPACE=$(NAMESPACE) PROFILE=local TARGET=e2e $(MAKE) run
-	@go test -tags e2e -v ./test/e2e/main_test.go -feature-gates=ClusterScoped=$(FEATURE_GATE_CLUSTER_SCOPED) -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
+	@go test -timeout 20m -tags e2e -v ./test/e2e/main_test.go -feature-gates=ClusterScoped=$(FEATURE_GATE_CLUSTER_SCOPED) -kubeconfig $(KUBECONFIG) -namespace $(NAMESPACE) -wait
 
 # run deploys either nats-operator or nats-operator-e2e to the Kubernetes cluster targeted by the current kubeconfig.
 .PHONY: run

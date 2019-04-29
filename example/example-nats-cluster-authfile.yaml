@@ -1,0 +1,40 @@
+# This is an example NatsCluster manifest which uses a 3rd party initContainer
+# to fetch the authorization credentials from outside kubernetes.
+#
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: nats-auth-file-example
+  namespace: default
+spec:
+  size: 1
+  version: "1.4.1"
+
+  natsConfig:
+    maxPayload: 20971520
+
+  pod:
+    enableConfigReload: true
+
+    volumeMounts:
+      - name: authconfig
+        mountPath: /etc/nats-config/authconfig
+
+  auth:
+    # Needs to be under /etc/nats-config where nats looks
+    # for its config file, or it won't be able to be included
+    # by /etc/nats-config/gnatsd.conf
+    clientsAuthFile: "authconfig/auth.json"
+
+  template:
+    spec:
+      initContainers:
+        - name: secret-getter
+          image: "busybox"
+          command: ["sh", "-c", "echo 'users = [ { user: 'foo', pass: 'bar' } ]' > /etc/nats-config/authconfig/auth.json"]
+          volumeMounts:
+            - name: authconfig
+              mountPath: /etc/nats-config/authconfig
+      volumes:
+        - name: authconfig
+          emptyDir: {}

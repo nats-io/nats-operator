@@ -23,12 +23,14 @@ import (
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 )
 
-// TestUpgradeCluster creates a NatsCluster resource with version 1.2.0 and waits for the full mesh to be formed.
-// Then, it updates the ".spec.version" field of the NatsCluster resource to 1.3.0 and waits for the upgrade to be performed.
+// TestUpgradeCluster creates a NatsCluster resource with version
+// 1.3.0 and waits for the full mesh to be formed.  Then, it updates
+// the ".spec.version" field of the NatsCluster resource to 1.4.0 and
+// waits for the upgrade to be performed.
 func TestUpgradeCluster(t *testing.T) {
 	var (
-		initialVersion = "1.2.0"
-		finalVersion   = "1.3.0"
+		initialVersion = "1.3.0"
+		finalVersion   = "1.4.0"
 		size           = 2
 	)
 
@@ -55,7 +57,6 @@ func TestUpgradeCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Upgrade the cluster's version to 1.3.0.
 	natsCluster.Spec.Version = finalVersion
 	if natsCluster, err = f.PatchCluster(natsCluster); err != nil {
 		t.Fatal(err)
