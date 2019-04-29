@@ -33,11 +33,14 @@ type podLDMResult struct {
 	timestamp time.Time
 }
 
-// TestLameDuckModeWhenScalingDown creates a NatsCluster resource with five members and waits for the full mesh to be formed.
-// Then, it sets a size of 3 in the NatsCluster resource and waits for the scale-down operation to complete while making sure that each pod has been placed in the "lame duck" mode.
+// TestLameDuckModeWhenScalingDown creates a NatsCluster resource with
+// five members and waits for the full mesh to be formed.  Then, it
+// sets a size of 3 in the NatsCluster resource and waits for the
+// scale-down operation to complete while making sure that each pod has
+// been placed in the "lame duck" mode.
 func TestLameDuckModeWhenScalingDown(t *testing.T) {
 	var (
-		initialSize = 9
+		initialSize = 3
 		finalSize   = 1
 		// TODO Replace with an adequate stable tag once there is one.
 		version = "5d86964"
