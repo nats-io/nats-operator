@@ -7,11 +7,25 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	"github.com/nats-io/nats-operator/pkg/reloader"
+	natsreloader "github.com/nats-io/nats-operator/pkg/reloader"
 	"github.com/nats-io/nats-operator/version"
 )
+
+// StringSet is a wrapper for []string to allow using it with the flags package.
+type StringSet []string
+
+func (s *StringSet) String() string {
+	return strings.Join([]string(*s), ", ")
+}
+
+// Set appends the value provided to the list of strings.
+func (s *StringSet) Set(val string) error {
+	*s = append(*s, val)
+	return nil
+}
 
 func main() {
 	fs := flag.NewFlagSet("nats-server-config-reloader", flag.ExitOnError)
@@ -25,21 +39,28 @@ func main() {
 	var (
 		showHelp    bool
 		showVersion bool
+		fileSet     StringSet
 	)
+
+	nconfig := &natsreloader.Config{}
 	fs.BoolVar(&showHelp, "h", false, "Show help")
 	fs.BoolVar(&showHelp, "help", false, "Show help")
 	fs.BoolVar(&showVersion, "v", false, "Show version")
 	fs.BoolVar(&showVersion, "version", false, "Show version")
 
-	nconfig := &natsreloader.Config{}
 	fs.StringVar(&nconfig.PidFile, "P", "/var/run/nats/gnatsd.pid", "NATS Server Pid File")
 	fs.StringVar(&nconfig.PidFile, "pid", "/var/run/nats/gnatsd.pid", "NATS Server Pid File")
-	fs.StringVar(&nconfig.ConfigFile, "c", "/etc/nats/gnatsd.conf", "NATS Server Config File")
-	fs.StringVar(&nconfig.ConfigFile, "config", "/etc/nats/gnatsd.conf", "NATS Server Config File")
+	fs.Var(&fileSet, "c", "NATS Server Config File (may be repeated to specify more than one)")
+	fs.Var(&fileSet, "config", "NATS Server Config File (may be repeated to specify more than one)")
 	fs.IntVar(&nconfig.MaxRetries, "max-retries", 5, "Max attempts to trigger reload")
 	fs.IntVar(&nconfig.RetryWaitSecs, "retry-wait-secs", 2, "Time to back off when reloading fails before retrying")
 
 	fs.Parse(os.Args[1:])
+
+	nconfig.ConfigFiles = fileSet
+	if len(fileSet) == 0 {
+		nconfig.ConfigFiles = []string{"/etc/nats-config/gnatsd.conf"}
+	}
 
 	switch {
 	case showHelp:
