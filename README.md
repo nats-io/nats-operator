@@ -159,40 +159,150 @@ spec:
   tls:
     # Certificates to secure the NATS client connections:
     serverSecret: "nats-clients-tls"
-    # Name of the CA in nats-clients-tls
-    serverSecretCAFileName: "ca.pem"
-    # Name of the key in nats-clients-tls
-    serverSecretKeyFileName: "server-key.pem"
-    # Name of the certificate in nats-clients-tls
-    serverSecretCertFileName: "server.pem"
 
     # Certificates to secure the routes.
     routesSecret: "nats-routes-tls"
-    # Name of the CA in nats-routes-tls
-    routesSecretCAFileName: "ca.pem"
-    # Name of the key in nats-routes-tls
-    routesSecretKeyFileName: "route-key.pem"
-    # Name of the certificate in nats-routes-tls
-    routesSecretCertFileName: "route.pem"
 ```
 
 In order for TLS to be properly established between the nodes, it is 
 necessary to create a wildcard certificate that matches the subdomain
 created for the service from the clients and the one for the routes.
 
-The `routesSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
+By default, the `routesSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
 for the CA, server private and public key respectively.
 
 ```
 $ kubectl create secret generic nats-routes-tls --from-file=ca.pem --from-file=route-key.pem --from-file=route.pem
 ```
 
-Similarly, the `serverSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
+Similarly, by default the `serverSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
 for the CA, server private key and public key used to secure the connection
 with the clients.
 
 ```
 $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
+```
+
+NATS also supports kubernetes.io/tls secrets (like the ones managed by cert-manager) and any secrets containing a CA, private and public keys with arbitrary names.
+It is possible to overwrite the default names as follows:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+  version: "1.3.0"
+
+  tls:
+    # Certificates to secure the NATS client connections:
+    serverSecret: "nats-clients-tls"
+    # Name of the CA in serverSecret
+    serverSecretCAFileName: "ca.crt"
+    # Name of the key in serverSecret
+    serverSecretKeyFileName: "tls.key"
+    # Name of the certificate in serverSecret
+    serverSecretCertFileName: "tls.crt"
+
+    # Certificates to secure the routes.
+    routesSecret: "nats-routes-tls"
+    # Name of the CA in routesSecret
+    routesSecretCAFileName: "ca.crt"
+    # Name of the key in routesSecret
+    routesSecretKeyFileName: "tls.key"
+    # Name of the certificate in routesSecret
+    routesSecretCertFileName: "tls.crt"
+```
+
+### Cert-Manager
+
+If [cert-manager](https://github.com/jetstack/cert-manager) is available in your cluster, you can easily generate TLS certificates for NATS as follows:
+
+Create a self-signed cluster issuer (or namespace-bound issuer) to create NATS' CA certificate:
+
+```yaml
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: selfsigning
+spec:
+  selfSigned: {}
+```
+
+Create your NATS cluster's CA certificate using the new `selfsigning` issuer:
+
+```yaml
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: nats-ca
+spec:
+  secretName: nats-ca
+  duration: 8736h # 1 year
+  renewBefore: 240h # 10 days
+  issuerRef:
+    name: selfsigning
+    kind: ClusterIssuer
+  commonName: nats-ca
+  organization:
+  - Your organization
+  isCA: true
+```
+
+Create your NATS cluster issuer based on the new `nats-ca` CA:
+
+```yaml
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Issuer
+metadata:
+  name: nats-ca
+spec:
+  ca:
+    secretName: nats-ca
+```
+
+Create your NATS cluster's server certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
+
+```yaml
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: nats-server-tls
+spec:
+  secretName: nats-server-tls
+  duration: 2160h # 90 days
+  renewBefore: 240h # 10 days
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  organization:
+  - Your organization
+  commonName: nats.nats-io.svc.cluster.local
+  dnsNames:
+  - nats.nats-io.svc
+```
+
+Create your NATS cluster's routes certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
+
+```yaml
+apiVersion: certmanager.k8s.io/v1alpha1
+kind: Certificate
+metadata:
+  name: nats-routes-tls
+spec:
+  secretName: nats-routes-tls
+  duration: 2160h # 90 days
+  renewBefore: 240h # 10 days
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  organization:
+  - Your organization
+  commonName: "*.nats-mgmt.nats-io.svc.cluster.local"
+  dnsNames:
+  - "*.nats-mgmt.nats-io.svc"
 ```
 
 ### Authorization
