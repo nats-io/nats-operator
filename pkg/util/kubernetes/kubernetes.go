@@ -164,6 +164,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 		if cs.TLS.ClientsTLSTimeout > 0 {
 			sconfig.TLS.Timeout = cs.TLS.ClientsTLSTimeout
 		}
+
+		// Verifying clients cert is disabled by default.
+		sconfig.TLS.Verify = cs.TLS.Verify
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
