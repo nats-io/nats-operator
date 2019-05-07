@@ -197,6 +197,9 @@ type TLSConfig struct {
 	// RoutesTLSTimeout is the time in seconds that the NATS server will
 	// allow to routes to finish the TLS handshake.
 	RoutesTLSTimeout float64 `json:"routesTLSTimeout,omitempty"`
+
+	// Verify toggles verifying TLS certs for clients.
+	Verify bool `json:"verify,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
