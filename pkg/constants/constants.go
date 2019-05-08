@@ -86,10 +86,10 @@ const (
 	// Default Docker Images
 	DefaultServerImage             = "nats"
 	DefaultReloaderImage           = "connecteverything/nats-server-config-reloader"
-	DefaultReloaderImageTag        = "0.2.2-v1alpha2"
+	DefaultReloaderImageTag        = "0.4.5-v1alpha2"
 	DefaultReloaderImagePullPolicy = "IfNotPresent"
 	DefaultMetricsImage            = "synadia/prometheus-nats-exporter"
-	DefaultMetricsImageTag         = "0.2.0"
+	DefaultMetricsImageTag         = "0.2.2"
 	DefaultMetricsImagePullPolicy  = "IfNotPresent"
 
 	// NatsBinaryPath is the path to the NATS binary inside the main container.
