@@ -523,6 +523,41 @@ spec:
     clientsAuthTimeout: 5
 ```
 
+## Connecting operated NATS clusters to external NATS clusters
+
+By using the `extraRoutes` field on the spec you can make the operated
+NATS cluster create routes against clusters outside of Kubernetes:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  size: 3
+  version: "1.4.1"
+
+  extraRoutes:
+    - route: "nats://nats-a.example.com:6222"
+    - route: "nats://nats-b.example.com:6222"
+    - route: "nats://nats-c.example.com:6222"
+```
+
+It is also possible to connect to another operated NATS cluster as follows:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-v2-2"
+spec:
+  size: 3
+  version: "1.4.1"
+
+  extraRoutes:
+    - cluster: "nats-v2-1"
+```
+
 ## Development
 
 ### Building the Docker Image
