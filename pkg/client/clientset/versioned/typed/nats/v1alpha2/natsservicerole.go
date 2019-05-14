@@ -17,6 +17,8 @@
 package v1alpha2
 
 import (
+	"time"
+
 	v1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	scheme "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,11 +75,16 @@ func (c *natsServiceRoles) Get(name string, options v1.GetOptions) (result *v1al
 
 // List takes label and field selectors, and returns the list of NatsServiceRoles that match those selectors.
 func (c *natsServiceRoles) List(opts v1.ListOptions) (result *v1alpha2.NatsServiceRoleList, err error) {
+	var timeout time.Duration
+	if opts.TimeoutSeconds != nil {
+		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
+	}
 	result = &v1alpha2.NatsServiceRoleList{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("natsserviceroles").
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Timeout(timeout).
 		Do().
 		Into(result)
 	return
@@ -85,11 +92,16 @@ func (c *natsServiceRoles) List(opts v1.ListOptions) (result *v1alpha2.NatsServi
 
 // Watch returns a watch.Interface that watches the requested natsServiceRoles.
 func (c *natsServiceRoles) Watch(opts v1.ListOptions) (watch.Interface, error) {
+	var timeout time.Duration
+	if opts.TimeoutSeconds != nil {
+		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
+	}
 	opts.Watch = true
 	return c.client.Get().
 		Namespace(c.ns).
 		Resource("natsserviceroles").
 		VersionedParams(&opts, scheme.ParameterCodec).
+		Timeout(timeout).
 		Watch()
 }
 
@@ -131,10 +143,15 @@ func (c *natsServiceRoles) Delete(name string, options *v1.DeleteOptions) error 
 
 // DeleteCollection deletes a collection of objects.
 func (c *natsServiceRoles) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+	var timeout time.Duration
+	if listOptions.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("natsserviceroles").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
+		Timeout(timeout).
 		Body(options).
 		Do().
 		Error()
