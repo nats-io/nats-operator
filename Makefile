@@ -16,7 +16,7 @@ build.operator: gen
 
 # dep fetches required dependencies.
 .PHONY: dep
-dep: KUBERNETES_VERSION := 1.12.4
+dep: KUBERNETES_VERSION := 1.13.6
 dep: KUBERNETES_CODE_GENERATOR_PKG := k8s.io/code-generator
 dep: KUBERNETES_APIMACHINERY_PKG := k8s.io/apimachinery
 dep:

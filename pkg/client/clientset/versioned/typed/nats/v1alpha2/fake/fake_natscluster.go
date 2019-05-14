@@ -117,7 +117,7 @@ func (c *FakeNatsClusters) DeleteCollection(options *v1.DeleteOptions, listOptio
 // Patch applies the patch and returns the patched natsCluster.
 func (c *FakeNatsClusters) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha2.NatsCluster, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(natsclustersResource, c.ns, name, data, subresources...), &v1alpha2.NatsCluster{})
+		Invokes(testing.NewPatchSubresourceAction(natsclustersResource, c.ns, name, pt, data, subresources...), &v1alpha2.NatsCluster{})
 
 	if obj == nil {
 		return nil, err
