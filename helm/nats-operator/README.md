@@ -40,12 +40,24 @@ parameters that can be configured during installation.
 
 > **Tip**: List all releases using `helm list`
 
+> **Tip**: If you want to RE-INSTALL the NATS Operator, please ensure you deleted `*.nats.io` custom resource definitions
+> ```shell 
+> $ kubectl delete crd/natsserviceroles.nats.io
+> $ kubectl delete crd/natsclusters.nats.io   
+> ```
+
 ## Uninstalling the Chart
 
 To uninstall/delete the `my-release` deployment:
 
 ```bash
-$ helm delete my-release
+# Delete Helm release
+$ helm delete my-release --purge
+
+# Delete CRDs
+$ kubectl delete crd/natsserviceroles.nats.io
+$ kubectl delete crd/natsclusters.nats.io
+
 ```
 
 The command removes all the Kubernetes components associated with the chart and
