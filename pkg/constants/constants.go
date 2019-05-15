@@ -90,9 +90,9 @@ const (
 	// GatewaySecretVolumeName is the name of the volume used for the routes certs.
 	GatewaySecretVolumeName = "gateway-tls-certs"
 
-	// RoutesCertsMountPath is the path where the certificates
+	// GatewayCertsMountPath is the path where the certificates
 	// to secure routes connections are located.
-	GatewayCertsMountPath      = "/etc/nats-routes-tls-certs"
+	GatewayCertsMountPath      = "/etc/nats-gateways-tls-certs"
 	DefaultGatewayCAFileName   = "ca.pem"
 	DefaultGatewayCertFileName = "server.pem"
 	DefaultGatewayKeyFileName  = "server-key.pem"

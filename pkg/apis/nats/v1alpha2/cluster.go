@@ -238,6 +238,10 @@ type TLSConfig struct {
 	// allow to routes to finish the TLS handshake.
 	RoutesTLSTimeout float64 `json:"routesTLSTimeout,omitempty"`
 
+	// GatewaysTLSTimeout is the time in seconds that the NATS server will
+	// allow to routes to finish the TLS handshake.
+	GatewaysTLSTimeout float64 `json:"gatewaysTLSTimeout,omitempty"`
+
 	// Verify toggles verifying TLS certs for clients.
 	Verify bool `json:"verify,omitempty"`
 }

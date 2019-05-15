@@ -184,8 +184,8 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			CertFile: filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName),
 			KeyFile:  filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName),
 		}
-		if cs.TLS.RoutesTLSTimeout > 0 {
-			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout
+		if cs.TLS.GatewaysTLSTimeout > 0 {
+			sconfig.Gateway.TLS.Timeout = cs.TLS.GatewaysTLSTimeout
 		}
 	}
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
@@ -778,7 +778,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 
 			volumeMount := newNatsGatewaySecretVolumeMount()
 			volumeMounts = append(volumeMounts, volumeMount)
-		}		
+		}
 	}
 
 	// Configure initializer container to resolve the external ip
