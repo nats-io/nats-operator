@@ -97,6 +97,26 @@ const (
 	DefaultGatewayCertFileName = "server.pem"
 	DefaultGatewayKeyFileName  = "server-key.pem"
 
+	// LeafnodeSecretVolumeName is the name of the volume used for the routes certs.
+	LeafnodeSecretVolumeName = "leafnode-tls-certs"
+
+	// LeafnodeCertsMountPath is the path where the certificates
+	// to secure routes connections are located.
+	LeafnodeCertsMountPath      = "/etc/nats-leafnodes-tls-certs"
+	DefaultLeafnodeCAFileName   = "ca.pem"
+	DefaultLeafnodeCertFileName = "server.pem"
+	DefaultLeafnodeKeyFileName  = "server-key.pem"
+
+	// OperatorJWTMountPath is the path where the JWT for the
+	// operator is located.
+	OperatorJWTMountPath = "/etc/nats-operator"
+
+	// OperatorJWTVolumeName is the name of the volume where the JWT is located.
+	OperatorJWTVolumeName = "operator-jwt"
+
+	// DefaultOperatorJWTFileName is the JWT operator file name.
+	DefaultOperatorJWTFileName = "op.jwt"
+
 	// Default Docker Images
 	DefaultServerImage             = "nats"
 	DefaultReloaderImage           = "connecteverything/nats-server-config-reloader"

@@ -37,7 +37,7 @@ import (
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(clusterName, version string, serverImage string, enableClientsHostPort bool, gatewayPort int) v1.Container {
+func natsPodContainer(clusterName, version string, serverImage string, enableClientsHostPort bool, gatewayPort int, leafnodePort int) v1.Container {
 	container := v1.Container{
 		Env: []v1.EnvVar{
 			{
@@ -82,6 +82,15 @@ func natsPodContainer(clusterName, version string, serverImage string, enableCli
 			ContainerPort: int32(gatewayPort),
 			Protocol:      v1.ProtocolTCP,
 			HostPort:      int32(gatewayPort),
+		}
+		ports = append(ports, port)
+	}
+	if leafnodePort > 0 {
+		port := v1.ContainerPort{
+			Name:          "leaf",
+			ContainerPort: int32(leafnodePort),
+			Protocol:      v1.ProtocolTCP,
+			HostPort:      int32(leafnodePort),
 		}
 		ports = append(ports, port)
 	}

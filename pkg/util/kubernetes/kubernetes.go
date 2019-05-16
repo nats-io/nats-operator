@@ -188,6 +188,18 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			sconfig.Gateway.TLS.Timeout = cs.TLS.GatewaysTLSTimeout
 		}
 	}
+	if cs.TLS.LeafnodeSecret != "" {
+		// Reuse the same settings as those for clients.
+		sconfig.LeafNode.TLS = &natsconf.TLSConfig{
+			CAFile:   filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName),
+			CertFile: filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName),
+			KeyFile:  filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName),
+		}
+		timeout := cs.TLS.LeafnodesTLSTimeout
+		if timeout > 0 {
+			sconfig.LeafNode.TLS.Timeout = timeout
+		}
+	}
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
 		sconfig.TLS.VerifyAndMap = true
 	}
@@ -359,7 +371,25 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		Gateways: gateways,
 		Include:  filepath.Join(".", constants.BootConfigGatewayFilePath),
 	}
+
+	// Add the same for leaf nodes if present
+	if cluster.LeafNodeConfig != nil {
+		sconfig.LeafNode = &natsconf.LeafNodeServerConfig{
+			Port:    cluster.LeafNodeConfig.Port,
+			Include: "./advertise/gateway_advertise.conf",
+		}
+	}
 	return
+}
+
+// addOperatorConfig fills in the operator configuration to be used in the config map.
+func addOperatorConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
+	if cs.OperatorConfig == nil {
+		return
+	}
+	sconfig.JWT = filepath.Join(constants.OperatorJWTMountPath, constants.DefaultOperatorJWTFileName)
+	sconfig.Account = cs.OperatorConfig.Account
+	sconfig.Resolver = cs.OperatorConfig.Resolver
 }
 
 // CreateAndWaitPod is an util for testing.
@@ -412,20 +442,6 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		},
 	}
 
-	if cluster.ServerConfig != nil {
-		sconfig.Debug = cluster.ServerConfig.Debug
-		sconfig.Trace = cluster.ServerConfig.Trace
-		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
-		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
-		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
-		sconfig.MaxPending = cluster.ServerConfig.MaxPending
-		sconfig.MaxSubscriptions = cluster.ServerConfig.MaxSubscriptions
-		sconfig.MaxControlLine = cluster.ServerConfig.MaxControlLine
-		sconfig.Logtime = !cluster.ServerConfig.DisableLogtime
-	} else {
-		sconfig.Logtime = true
-	}
-
 	if cluster.ExtraRoutes != nil {
 		routes := make([]string, 0)
 		for _, extraCluster := range cluster.ExtraRoutes {
@@ -443,23 +459,11 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		sconfig.Cluster.Routes = routes
 	}
 
-	// Observe .spec.lameDuckDurationSeconds if specified.
-	if cluster.LameDuckDurationSeconds != nil {
-		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
-	}
-	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
-		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
-	}
-	if cluster.GatewayConfig != nil {
-		addGatewayConfig(sconfig, cluster)
-	}
-
-	addTLSConfig(sconfig, cluster)
+	addConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
 	}
-
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
@@ -543,32 +547,11 @@ func UpdateConfigSecret(
 		},
 	}
 
-	if cluster.ServerConfig != nil {
-		sconfig.Debug = cluster.ServerConfig.Debug
-		sconfig.Trace = cluster.ServerConfig.Trace
-		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
-		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
-		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
-		sconfig.MaxPending = cluster.ServerConfig.MaxPending
-		sconfig.MaxSubscriptions = cluster.ServerConfig.MaxSubscriptions
-		sconfig.MaxControlLine = cluster.ServerConfig.MaxControlLine
-		sconfig.Logtime = !cluster.ServerConfig.DisableLogtime
-	} else {
-		sconfig.Logtime = true
-	}
-
-	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
-		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
-	}
-	if cluster.GatewayConfig != nil {
-		addGatewayConfig(sconfig, cluster)
-	}
-	addTLSConfig(sconfig, cluster)
+	addConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
 	}
-
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
@@ -593,6 +576,35 @@ func UpdateConfigSecret(
 
 	_, err = kubecli.Secrets(ns).Update(cm)
 	return err
+}
+
+func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+	if cluster.ServerConfig != nil {
+		sconfig.Debug = cluster.ServerConfig.Debug
+		sconfig.Trace = cluster.ServerConfig.Trace
+		sconfig.WriteDeadline = cluster.ServerConfig.WriteDeadline
+		sconfig.MaxConnections = cluster.ServerConfig.MaxConnections
+		sconfig.MaxPayload = cluster.ServerConfig.MaxPayload
+		sconfig.MaxPending = cluster.ServerConfig.MaxPending
+		sconfig.MaxSubscriptions = cluster.ServerConfig.MaxSubscriptions
+		sconfig.MaxControlLine = cluster.ServerConfig.MaxControlLine
+		sconfig.Logtime = !cluster.ServerConfig.DisableLogtime
+	} else {
+		sconfig.Logtime = true
+	}
+
+	// Observe .spec.lameDuckDurationSeconds if specified.
+	if cluster.LameDuckDurationSeconds != nil {
+		sconfig.LameDuckDuration = fmt.Sprintf("%ds", *cluster.LameDuckDurationSeconds)
+	}
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Include = filepath.Join(".", constants.BootConfigFilePath)
+	}
+	if cluster.GatewayConfig != nil {
+		addGatewayConfig(sconfig, cluster)
+	}
+	addTLSConfig(sconfig, cluster)
+	addOperatorConfig(sconfig, cluster)
 }
 
 func newNatsConfigMapVolume(clusterName string) v1.Volume {
@@ -709,6 +721,42 @@ func newNatsGatewaySecretVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsLeafnodeSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: constants.LeafnodeSecretVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsLeafnodeSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.LeafnodeSecretVolumeName,
+		MountPath: constants.LeafnodeCertsMountPath,
+	}
+}
+
+func newNatsOperatorJWTSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: constants.OperatorJWTVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsOperatorJWTSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.OperatorJWTVolumeName,
+		MountPath: constants.OperatorJWTMountPath,
+	}
+}
+
 func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 	o.SetOwnerReferences(append(o.GetOwnerReferences(), r))
 }
@@ -750,8 +798,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	if cs.GatewayConfig != nil {
 		gatewayPort = cs.GatewayConfig.Port
 	}
+	var leafnodePort int
+	if cs.LeafNodeConfig != nil {
+		leafnodePort = cs.LeafNodeConfig.Port
+	}
 
-	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage, enableClientsHostPort, gatewayPort)
+	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage,
+		enableClientsHostPort, gatewayPort, leafnodePort)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
 	// In case TLS was enabled as part of the NATS cluster
@@ -779,6 +832,21 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			volumeMount := newNatsGatewaySecretVolumeMount()
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
+		if cs.TLS.LeafnodeSecret != "" {
+			volume = newNatsLeafnodeSecretVolume(cs.TLS.LeafnodeSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsLeafnodeSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+	}
+
+	if cs.OperatorConfig != nil {
+		volume = newNatsOperatorJWTSecretVolume(cs.OperatorConfig.Secret)
+		volumes = append(volumes, volume)
+
+		volumeMount := newNatsOperatorJWTSecretVolumeMount()
+		volumeMounts = append(volumeMounts, volumeMount)
 	}
 
 	// Configure initializer container to resolve the external ip
