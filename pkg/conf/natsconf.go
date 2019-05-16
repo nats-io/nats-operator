@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
 	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
 	Include          string               `json:"include,omitempty"`
+	Gateway          *GatewayConfig       `json:"gateway,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -32,6 +33,24 @@ type ClusterConfig struct {
 	Routes        []string             `json:"routes,omitempty"`
 	TLS           *TLSConfig           `json:"tls,omitempty"`
 	Authorization *AuthorizationConfig `json:"authorization,omitempty"`
+}
+
+type GatewayConfig struct {
+	Name           string               `json:"name,omitempty"`
+	Host           string               `json:"addr,omitempty"`
+	Port           int                  `json:"port,omitempty"`
+	TLS            *TLSConfig           `json:"tls,omitempty"`
+	TLSTimeout     float64              `json:"tls_timeout,omitempty"`
+	Advertise      string               `json:"advertise,omitempty"`
+	ConnectRetries int                  `json:"connect_retries,omitempty"`
+	Gateways       []*RemoteGatewayOpts `json:"gateways,omitempty"`
+	Include        string               `json:"include,omitempty"`
+	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
+}
+
+type RemoteGatewayOpts struct {
+	Name string `json:"name"`
+	URL  string `json:"url,omitempty"`
 }
 
 type TLSConfig struct {

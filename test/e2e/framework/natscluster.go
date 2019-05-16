@@ -418,3 +418,45 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 		}
 	}
 }
+
+// WaitUntilPodBootContainerLogLineMatches waits until a line in the logs for the
+// pod with the specified index and belonging to the specified
+// NatsCluster resource matches the provided regular expression.
+func (f *Framework) WaitUntilPodBootContainerLogLineMatches(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, podIndex int, regex string) error {
+	req := f.KubeClient.CoreV1().Pods(natsCluster.Namespace).GetLogs(fmt.Sprintf("%s-%d", natsCluster.Name, podIndex), &v1.PodLogOptions{
+		Container: "bootconfig",
+		Follow:    true,
+	})
+	r, err := req.Stream()
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	rd := bufio.NewReader(r)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("failed to find a matching log line within the specified timeout")
+		default:
+			// Read a single line from the logs and check
+			// whether it matches the specified regular
+			// expression.
+			str, err := rd.ReadString('\n')
+			if err != nil && err != io.EOF {
+				return err
+			}
+			if err == io.EOF {
+				return fmt.Errorf("failed to find a matching log line before EOF")
+			}
+			m, err := regexp.MatchString(regex, str)
+			if err != nil {
+				return err
+			}
+			// If the current log line matches the regular
+			// expression, return.
+			if m {
+				return nil
+			}
+		}
+	}
+}
