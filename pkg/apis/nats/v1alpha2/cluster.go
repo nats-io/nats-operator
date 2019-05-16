@@ -154,9 +154,9 @@ type ServerConfig struct {
 
 // OperatorConfig is the operator configuration from a server.
 type OperatorConfig struct {
-	Secret   string `json:"secret,omitempty"`
-	Account  string `json:"account,omitempty"`
-	Resolver string `json:"resolver,omitempty"`
+	Secret        string `json:"secret,omitempty"`
+	SystemAccount string `json:"account,omitempty"`
+	Resolver      string `json:"resolver,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
@@ -423,6 +423,24 @@ func (c *ClusterSpec) Cleanup() {
 		}
 		if len(c.TLS.RoutesSecretKeyFileName) == 0 {
 			c.TLS.RoutesSecretKeyFileName = constants.DefaultRoutesKeyFileName
+		}
+		if len(c.TLS.GatewaySecretCAFileName) == 0 {
+			c.TLS.GatewaySecretCAFileName = constants.DefaultGatewayCAFileName
+		}
+		if len(c.TLS.GatewaySecretCertFileName) == 0 {
+			c.TLS.GatewaySecretCertFileName = constants.DefaultGatewayCertFileName
+		}
+		if len(c.TLS.GatewaySecretKeyFileName) == 0 {
+			c.TLS.GatewaySecretKeyFileName = constants.DefaultGatewayKeyFileName
+		}
+		if len(c.TLS.LeafnodeSecretCAFileName) == 0 {
+			c.TLS.LeafnodeSecretCAFileName = constants.DefaultLeafnodeCAFileName
+		}
+		if len(c.TLS.LeafnodeSecretCertFileName) == 0 {
+			c.TLS.LeafnodeSecretCertFileName = constants.DefaultLeafnodeCertFileName
+		}
+		if len(c.TLS.LeafnodeSecretKeyFileName) == 0 {
+			c.TLS.LeafnodeSecretKeyFileName = constants.DefaultLeafnodeKeyFileName
 		}
 	}
 }

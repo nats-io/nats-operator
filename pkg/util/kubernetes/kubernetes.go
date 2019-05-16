@@ -388,7 +388,7 @@ func addOperatorConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) 
 		return
 	}
 	sconfig.JWT = filepath.Join(constants.OperatorJWTMountPath, constants.DefaultOperatorJWTFileName)
-	sconfig.Account = cs.OperatorConfig.Account
+	sconfig.SystemAccount = cs.OperatorConfig.SystemAccount
 	sconfig.Resolver = cs.OperatorConfig.Resolver
 }
 
@@ -856,8 +856,17 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		bootconfig          v1.Container
 	)
 	if advertiseExternalIP {
-		// TODO: Add default before releasing.
-		image := fmt.Sprintf("%s:%s", cs.Pod.BootConfigContainerImage, cs.Pod.BootConfigContainerImageTag)
+		var (
+			bootconfigImage    = constants.DefaultBootconfigImage
+			bootconfigImageTag = constants.DefaultBootconfigImageTag
+		)
+		if cs.Pod.BootConfigContainerImage != "" {
+			bootconfigImage = cs.Pod.BootConfigContainerImage
+		}
+		if cs.Pod.BootConfigContainerImageTag != "" {
+			bootconfigImageTag = cs.Pod.BootConfigContainerImageTag
+		}
+		image := fmt.Sprintf("%s:%s", bootconfigImage, bootconfigImageTag)
 		bootconfig = v1.Container{
 			Name:  "bootconfig",
 			Image: image,

@@ -28,7 +28,7 @@ type ServerConfig struct {
 	Gateway          *GatewayConfig        `json:"gateway,omitempty"`
 	LeafNode         *LeafNodeServerConfig `json:"leaf,omitempty"`
 	JWT              string                `json:"operator,omitempty"`
-	Account          string                `json:"system_account,omitempty"`
+	SystemAccount    string                `json:"system_account,omitempty"`
 	Resolver         string                `json:"resolver,omitempty"`
 }
 

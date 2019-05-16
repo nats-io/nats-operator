@@ -125,6 +125,8 @@ const (
 	DefaultMetricsImage            = "synadia/prometheus-nats-exporter"
 	DefaultMetricsImageTag         = "0.2.2"
 	DefaultMetricsImagePullPolicy  = "IfNotPresent"
+	DefaultBootconfigImage         = "connecteverything/nats-boot-config"
+	DefaultBootconfigImageTag      = "0.5.2"
 
 	// NatsBinaryPath is the path to the NATS binary inside the main container.
 	NatsBinaryPath = "/gnatsd"

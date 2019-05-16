@@ -48,9 +48,7 @@ func TestCreateServerWithGateways(t *testing.T) {
 			}
 
 			cluster.Spec.Pod = &natsv1alpha2.PodPolicy{
-				AdvertiseExternalIP:         true,
-				BootConfigContainerImage:    "wallyqs/nats-boot-config",
-				BootConfigContainerImageTag: "0.5.2",
+				AdvertiseExternalIP: true,
 			}
 
 			cluster.Spec.GatewayConfig = &natsv1alpha2.GatewayConfig{
@@ -161,9 +159,7 @@ func TestCreateServerWithGatewayAndLeafnodes(t *testing.T) {
 			}
 
 			cluster.Spec.Pod = &natsv1alpha2.PodPolicy{
-				AdvertiseExternalIP:         true,
-				BootConfigContainerImage:    "wallyqs/nats-boot-config",
-				BootConfigContainerImageTag: "0.5.2",
+				AdvertiseExternalIP: true,
 			}
 
 			cluster.Spec.GatewayConfig = &natsv1alpha2.GatewayConfig{
@@ -182,9 +178,9 @@ func TestCreateServerWithGatewayAndLeafnodes(t *testing.T) {
 				},
 			}
 			cluster.Spec.OperatorConfig = &natsv1alpha2.OperatorConfig{
-				Secret:   jwtSecret,
-				Account:  systemAccount,
-				Resolver: resolver,
+				Secret:        jwtSecret,
+				SystemAccount: systemAccount,
+				Resolver:      resolver,
 			}
 			cluster.Spec.LeafNodeConfig = &natsv1alpha2.LeafNodeConfig{
 				Port: 4224,
@@ -226,47 +222,16 @@ func TestCreateServerWithGatewayAndLeafnodes(t *testing.T) {
 		if config.JWT != "/etc/nats-operator/op.jwt" {
 			return false, nil
 		}
-		if config.Account != systemAccount {
+		if config.SystemAccount != systemAccount {
 			return false, nil
 		}
 		if config.Resolver != resolver {
 			return false, nil
 		}
 
-		// pods, err := f.PodsForNatsCluster(nc)
-		// if err != nil {
-		// 	return false, nil
-		// }
-		// if len(pods) < 1 {
-		// 	return false, nil
-		// }
 		return true, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// for i := 0; i < 30; i++ {
-	// 	ctx, done = context.WithTimeout(context.Background(), waitTimeout)
-	// 	defer done()
-	// 	if err = f.WaitUntilPodBootContainerLogLineMatches(ctx, nc, 1, `advertise`); err != nil {
-	// 		t.Logf("Error: %v", err)
-	// 		time.Sleep(2 * time.Second)
-	// 		continue
-	// 	}
-	// 	if err = f.WaitUntilPodLogLineMatches(ctx, nc, 1, `Trusted Operators`); err != nil {
-	// 		t.Logf("Error: %v", err)
-	// 		time.Sleep(2 * time.Second)
-	// 		continue
-	// 	}
-	// 	if err = f.WaitUntilPodLogLineMatches(ctx, nc, 1, `Listening for leafnode connections`); err != nil {
-	// 		t.Logf("Error: %v", err)
-	// 		time.Sleep(2 * time.Second)
-	// 		continue
-	// 	}
-	// 	break
-	// }
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
 }
