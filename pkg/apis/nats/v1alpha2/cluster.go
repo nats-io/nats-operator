@@ -155,7 +155,7 @@ type ServerConfig struct {
 // OperatorConfig is the operator configuration from a server.
 type OperatorConfig struct {
 	Secret        string `json:"secret,omitempty"`
-	SystemAccount string `json:"account,omitempty"`
+	SystemAccount string `json:"systemAccount,omitempty"`
 	Resolver      string `json:"resolver,omitempty"`
 }
 
