@@ -131,6 +131,12 @@ type ClusterSpec struct {
 
 	// GatewayConfig is the configuration for the gateways.
 	GatewayConfig *GatewayConfig `json:"gatewayConfig,omitempty"`
+
+	// LeafNodeConfig is the configuration for the leafnode.
+	LeafNodeConfig *LeafNodeConfig `json:"leafnodeConfig,omitempty"`
+
+	// OperatorConfig is the operator configuration from a server.
+	OperatorConfig *OperatorConfig `json:"operatorConfig,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.
@@ -144,6 +150,13 @@ type ServerConfig struct {
 	MaxSubscriptions int    `json:"maxSubscriptions,omitempty"`
 	MaxControlLine   int    `json:"maxControlLine,omitempty"`
 	DisableLogtime   bool   `json:"disableLogtime,omitempty"`
+}
+
+// OperatorConfig is the operator configuration from a server.
+type OperatorConfig struct {
+	Secret        string `json:"secret,omitempty"`
+	SystemAccount string `json:"account,omitempty"`
+	Resolver      string `json:"resolver,omitempty"`
 }
 
 // ExtraRoute is a route that is not originally part of the NatsCluster
@@ -177,6 +190,11 @@ type RemoteGatewayOpts struct {
 
 	// URL is the endpoint of the remote gateway.
 	URL string `json:"url,omitempty"`
+}
+
+// LeafNodeConfig is the configuration for leafnodes.
+type LeafNodeConfig struct {
+	Port int `json:"hostPort,omitempty"`
 }
 
 // TLSConfig is the optional TLS configuration for the cluster.
@@ -227,6 +245,20 @@ type TLSConfig struct {
 	// GatewaySecretCertFileName is the name of the certificate in GatewaySecret
 	GatewaySecretCertFileName string `json:"gatewaySecretCertFileName,omitempty"`
 
+	// LeafnodeSecret is the secret containing the certificates
+	// to secure the port to which leafnode routes connect.
+	LeafnodeSecret string `json:"leafnodeSecret,omitempty"`
+
+	// LeafnodeSecretCAFileName is the name of the CA in LeafnodeSecret
+	// (default: ca.pem)
+	LeafnodeSecretCAFileName string `json:"leafnodeSecretCAFileName,omitempty"`
+
+	// LeafnodeSecretKeyFileName is the name of the key in LeafnodeSecret
+	LeafnodeSecretKeyFileName string `json:"leafnodeSecretKeyFileName,omitempty"`
+
+	// LeafnodeSecretCertFileName is the name of the certificate in LeafnodeSecret
+	LeafnodeSecretCertFileName string `json:"leafnodeSecretCertFileName,omitempty"`
+
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`
 
@@ -241,6 +273,10 @@ type TLSConfig struct {
 	// GatewaysTLSTimeout is the time in seconds that the NATS server will
 	// allow to routes to finish the TLS handshake.
 	GatewaysTLSTimeout float64 `json:"gatewaysTLSTimeout,omitempty"`
+
+	// LeafnodesTLSTimeout is the time in seconds that the NATS server will
+	// allow to routes to finish the TLS handshake.
+	LeafnodesTLSTimeout float64 `json:"leafnodesTLSTimeout,omitempty"`
 
 	// Verify toggles verifying TLS certs for clients.
 	Verify bool `json:"verify,omitempty"`
@@ -387,6 +423,24 @@ func (c *ClusterSpec) Cleanup() {
 		}
 		if len(c.TLS.RoutesSecretKeyFileName) == 0 {
 			c.TLS.RoutesSecretKeyFileName = constants.DefaultRoutesKeyFileName
+		}
+		if len(c.TLS.GatewaySecretCAFileName) == 0 {
+			c.TLS.GatewaySecretCAFileName = constants.DefaultGatewayCAFileName
+		}
+		if len(c.TLS.GatewaySecretCertFileName) == 0 {
+			c.TLS.GatewaySecretCertFileName = constants.DefaultGatewayCertFileName
+		}
+		if len(c.TLS.GatewaySecretKeyFileName) == 0 {
+			c.TLS.GatewaySecretKeyFileName = constants.DefaultGatewayKeyFileName
+		}
+		if len(c.TLS.LeafnodeSecretCAFileName) == 0 {
+			c.TLS.LeafnodeSecretCAFileName = constants.DefaultLeafnodeCAFileName
+		}
+		if len(c.TLS.LeafnodeSecretCertFileName) == 0 {
+			c.TLS.LeafnodeSecretCertFileName = constants.DefaultLeafnodeCertFileName
+		}
+		if len(c.TLS.LeafnodeSecretKeyFileName) == 0 {
+			c.TLS.LeafnodeSecretKeyFileName = constants.DefaultLeafnodeKeyFileName
 		}
 	}
 }
