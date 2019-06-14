@@ -2,7 +2,7 @@
 
 [![License Apache 2.0](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Build Status](https://travis-ci.org/nats-io/nats-operator.svg?branch=master)](https://travis-ci.org/nats-io/nats-operator)
-[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.5.0)](https://github.com/nats-io/nats-operator/releases/tag/v0.5.0)
+[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.6.0)](https://github.com/nats-io/nats-operator/releases/tag/v0.6.0)
 
 NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
 
@@ -45,14 +45,18 @@ The operation mode must be chosen when installing NATS Operator and cannot be ch
 To perform a namespace-scoped installation of NATS Operator in the Kubernetes cluster pointed at by the current context, you may run:
 
 ```console
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.5.0/00-prereqs.yaml
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.5.0/10-deployment.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.6.0/00-prereqs.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.6.0/10-deployment.yaml
 ``` 
 
 This will, by default, install NATS Operator in the `default` namespace and observe `NatsCluster` resources created in the `default` namespace, alone.
 In order to install in a different namespace, you must first create said namespace and edit the manifests above in order to specify its name wherever necessary.
 
-**WARNING:** To perform multiple namespace-scoped installations of NATS Operator, you must manually edit the `nats-operator-binding` cluster role binding in `deploy/00-prereqs.yaml` file in order to add all the required service accounts.
+**WARNING:** To perform multiple namespace-scoped installations of NATS Operator, you must manually edit the `nats-operator-bindin
+
+
+
+g` cluster role binding in `deploy/00-prereqs.yaml` file in order to add all the required service accounts.
 Failing to do so may cause all NATS Operator instances to malfunction.
 
 **WARNING:** When performing a namespace-scoped installation of NATS Operator, you must make sure that all other namespace-scoped installations that may exist in the Kubernetes cluster share the same version.
