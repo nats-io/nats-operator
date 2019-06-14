@@ -42,6 +42,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/debug"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	stringutil "github.com/nats-io/nats-operator/pkg/util/strings"
+	"github.com/nats-io/nats-operator/pkg/util/versionCheck"
 )
 
 var (
@@ -354,8 +355,8 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 // It does this by trying to make the "gnatsd" process enter the "lame duck" mode before actually attempting to delete the pod.
 // This is done in a best-effort basis, since the NATS version running in the pod may not support this mode.
 // For that reason, we just log any errors without actually failing and proceed to the actual deletion of the pod.
-func (c *Cluster) tryGracefulPodDeletion(pod *v1.Pod) error {
-	if err := c.enterLameDuckModeAndWaitTermination(pod); err != nil {
+func (c *Cluster) tryGracefulPodDeletion(pod *v1.Pod, version string) error {
+	if err := c.enterLameDuckModeAndWaitTermination(pod, version); err != nil {
 		c.logger.Warn(err)
 	}
 	return c.deletePod(pod)
@@ -522,13 +523,14 @@ func (c *Cluster) isDebugLoggerEnabled() bool {
 // enterLameDuckModeAndWaitTermination execs into the "nats" container of the specified pod and attempts to send the "ldm" signal to the "gnatsd" process.
 // In case this succeeds, the funcion blocks until the "nats" container reaches the "Terminated" state (indicating that the "lame duck" mode has been entered and NATS is ready to shutdown) or until a timeout is reached.
 // Otherwise, it returns an error which should be handled by the caller.
-func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
-	// Try to place NATS in "lame duck" mode by sending the "gnatsd" process the "ldm" signal.
+func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod, version string) error {
+	// Try to place NATS in "lame duck" mode by sending the process the "ldm" signal.
 	// We wait for at most "podExecTimeout" for the "exec" command to return a result.
 	ctx, fn := context.WithTimeout(context.Background(), podExecTimeout)
 	defer fn()
+
 	args := []string{
-		constants.NatsBinaryPath,
+		versionCheck.ServerBinaryPath(version),
 		"-sl",
 		fmt.Sprintf("ldm=%s", constants.PidFilePath),
 	}
