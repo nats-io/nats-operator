@@ -32,15 +32,13 @@ import (
 func TestCreateServerWithGateways(t *testing.T) {
 	var (
 		size    = 1
-		image   = "synadia/nats-server"
-		version = "edge-v2.0.0-RC12"
+		version = "2.0.0"
 		nc      *natsv1alpha2.NatsCluster
 		err     error
 	)
 	nc, err = f.CreateCluster(f.Namespace, "", size, version,
 		func(cluster *natsv1alpha2.NatsCluster) {
 			cluster.Name = "test-nats-gw"
-			cluster.Spec.ServerImage = image
 
 			cluster.Spec.ServerConfig = &natsv1alpha2.ServerConfig{
 				Debug: true,
@@ -138,7 +136,7 @@ func TestCreateServerWithGatewayAndLeafnodes(t *testing.T) {
 	var (
 		size    = 1
 		image   = "synadia/nats-server"
-		version = "edge-v2.0.0-RC12"
+		version = "2.0.0"
 		nc      *natsv1alpha2.NatsCluster
 		err     error
 

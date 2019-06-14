@@ -45,6 +45,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
+	"github.com/nats-io/nats-operator/pkg/util/versionCheck"
 )
 
 const (
@@ -920,7 +921,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	// Rely on the shared configuration map for configuring the cluster.
 	retries := strconv.Itoa(constants.ConnectRetries)
 	cmd := []string{
-		constants.NatsBinaryPath,
+		versionCheck.ServerBinaryPath(cs.Version),
 		"-c",
 		constants.ConfigFilePath,
 		"-P",

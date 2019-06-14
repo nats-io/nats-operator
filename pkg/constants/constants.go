@@ -16,7 +16,7 @@ package constants
 
 const (
 	// DefaultNatsVersion is the nats server version to use.
-	DefaultNatsVersion = "1.4.0"
+	DefaultNatsVersion = "2.0.0"
 
 	// ClientPort is the port for the clients.
 	ClientPort = 4222
@@ -58,7 +58,7 @@ const (
 	PidFileVolumeName = "pid"
 
 	// PidFileName is the pid file name.
-	PidFileName = "gnatsd.pid"
+	PidFileName = "nats.pid"
 
 	// PidFileMountPath is the absolute path to the directory where NATS
 	// will be leaving its pid file.
@@ -128,8 +128,6 @@ const (
 	DefaultBootconfigImage         = "connecteverything/nats-boot-config"
 	DefaultBootconfigImageTag      = "0.5.2"
 
-	// NatsBinaryPath is the path to the NATS binary inside the main container.
-	NatsBinaryPath = "/gnatsd"
 	// NatsContainerName is the name of the main container.
 	NatsContainerName = "nats"
 

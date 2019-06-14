@@ -42,10 +42,8 @@ func TestLameDuckModeWhenScalingDown(t *testing.T) {
 	var (
 		initialSize = 3
 		finalSize   = 1
-		// TODO Replace with an adequate stable tag once there is one.
-		version = "5d86964"
-		// TODO Remove once the "nats" image has an adequate stable tag.
-		serverImage = "natsop2018/gnatsd"
+		serverImage = "synadia/nats-server"
+		version     = "2.0.0"
 	)
 
 	var (
