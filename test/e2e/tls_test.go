@@ -144,8 +144,7 @@ func TestCreateClusterWithVerifyAndMap(t *testing.T) {
 		// The NatsCluster resource must be called "nats" in
 		// order for the pre-provisioned certificates to work.
 		natsCluster.Name = "nats-verify"
-		natsCluster.Spec.ServerImage = "wallyqs/nats-server"
-		natsCluster.Spec.Version = "edge-2.0.0-RC5"
+		natsCluster.Spec.Version = "2.0.0"
 
 		// Enable TLS using pre-provisioned certificates.
 		natsCluster.Spec.TLS = &natsv1alpha2.TLSConfig{
