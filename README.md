@@ -52,11 +52,7 @@ $ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0
 This will, by default, install NATS Operator in the `default` namespace and observe `NatsCluster` resources created in the `default` namespace, alone.
 In order to install in a different namespace, you must first create said namespace and edit the manifests above in order to specify its name wherever necessary.
 
-**WARNING:** To perform multiple namespace-scoped installations of NATS Operator, you must manually edit the `nats-operator-bindin
-
-
-
-g` cluster role binding in `deploy/00-prereqs.yaml` file in order to add all the required service accounts.
+**WARNING:** To perform multiple namespace-scoped installations of NATS Operator, you must manually edit the `nats-operator-binding` cluster role binding in `deploy/00-prereqs.yaml` file in order to add all the required service accounts.
 Failing to do so may cause all NATS Operator instances to malfunction.
 
 **WARNING:** When performing a namespace-scoped installation of NATS Operator, you must make sure that all other namespace-scoped installations that may exist in the Kubernetes cluster share the same version.
