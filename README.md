@@ -26,7 +26,7 @@ metadata:
   name: example-nats-cluster
 spec:
   size: 3
-  version: "1.4.0"
+  version: "2.0.0"
 ```
 
 NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the any necessary operations on the associated NATS clusters in order to align their current status with the desired one.
@@ -45,8 +45,8 @@ The operation mode must be chosen when installing NATS Operator and cannot be ch
 To perform a namespace-scoped installation of NATS Operator in the Kubernetes cluster pointed at by the current context, you may run:
 
 ```console
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.6.0/00-prereqs.yaml
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.6.0/10-deployment.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/00-prereqs.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/10-deployment.yaml
 ``` 
 
 This will, by default, install NATS Operator in the `default` namespace and observe `NatsCluster` resources created in the `default` namespace, alone.
@@ -94,8 +94,8 @@ spec:
 Once you have done this, you may install NATS Operator by running:
 
 ```console
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/00-prereqs.yaml
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/10-deployment.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/00-prereqs.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/10-deployment.yaml
 ``` 
 
 **WARNING:** When performing a cluster-scoped installation of NATS Operator, you must make sure that there are no other deployments of NATS Operator in the Kubernetes cluster.
