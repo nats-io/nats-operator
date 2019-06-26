@@ -234,7 +234,7 @@ func (c *Cluster) checkServices() error {
 	)
 
 	// Check whether the client service already exists.
-	if _, err := c.config.ServiceLister.Services(c.cluster.Namespace).Get(kubernetesutil.ClientServiceName(c.cluster.Name)); err != nil {
+	if _, err := c.config.ServiceLister.Services(c.cluster.Namespace).Get(kubernetesutil.ServiceName(c.cluster.Name)); err != nil {
 		if kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			// The client service does not exist, so we must create it.
 			mustCreateClientService = true
@@ -246,7 +246,7 @@ func (c *Cluster) checkServices() error {
 
 	// Create the client service if required.
 	if mustCreateClientService {
-		if err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
+		if err := kubernetesutil.CreateService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
 			return err
 		}
 	}

@@ -39,16 +39,6 @@ import (
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(clusterName, version string, serverImage string, enableClientsHostPort bool, gatewayPort int, leafnodePort int) v1.Container {
 	container := v1.Container{
-		Env: []v1.EnvVar{
-			{
-				Name:  "SVC",
-				Value: ManagementServiceName(clusterName),
-			},
-			{
-				Name:  "EXTRA",
-				Value: fmt.Sprintf("--http_port=%d", constants.MonitoringPort),
-			},
-		},
 		Name:  constants.NatsContainerName,
 		Image: MakeNATSImage(version, serverImage),
 	}

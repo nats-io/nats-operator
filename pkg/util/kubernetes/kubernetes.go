@@ -96,29 +96,23 @@ func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, n
 	return err
 }
 
-// ClientServiceName returns the name of the client service based on the specified cluster name.
-func ClientServiceName(clusterName string) string {
+// ServiceName returns the name of the service based on the specified cluster name.
+func ServiceName(clusterName string) string {
 	return clusterName
-}
-
-func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
-	ports := []v1.ServicePort{{
-		Name:       "client",
-		Port:       constants.ClientPort,
-		TargetPort: intstr.FromInt(constants.ClientPort),
-		Protocol:   v1.ProtocolTCP,
-	}}
-	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false)
 }
 
 func ManagementServiceName(clusterName string) string {
 	return clusterName + "-mgmt"
 }
 
-// CreateMgmtService creates an headless service for NATS management purposes.
-func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
-	ports := []v1.ServicePort{
+func servicePorts() []v1.ServicePort {
+	return []v1.ServicePort{
+		{
+			Name:       "client",
+			Port:       constants.ClientPort,
+			TargetPort: intstr.FromInt(constants.ClientPort),
+			Protocol:   v1.ProtocolTCP,
+		},
 		{
 			Name:       "cluster",
 			Port:       constants.ClusterPort,
@@ -138,9 +132,22 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Protocol:   v1.ProtocolTCP,
 		},
 	}
+}
+
+// CreateService creates an headless service for NATS.
+func CreateService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
+	ports := servicePorts()
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
-	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
+	return createService(kubecli, clusterName, clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
+}
+
+// CreateMgmtService creates an headless service for NATS management purposes.
+func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
+	ports := servicePorts()
+	selectors := LabelsForCluster(clusterName)
+	selectors[LabelClusterVersionKey] = clusterVersion
+	return createService(kubecli, clusterName+"-mgmt", clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
 }
 
 // addTLSConfig fills in the TLS configuration to be used in the config map.
@@ -435,32 +442,7 @@ func ConfigSecret(clusterName string) string {
 
 // CreateConfigSecret creates the secret that contains the configuration file for a given NATS cluster..
 func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
-	sconfig := &natsconf.ServerConfig{
-		Port:     int(constants.ClientPort),
-		HTTPPort: int(constants.MonitoringPort),
-		Cluster: &natsconf.ClusterConfig{
-			Port: int(constants.ClusterPort),
-		},
-	}
-
-	if cluster.ExtraRoutes != nil {
-		routes := make([]string, 0)
-		for _, extraCluster := range cluster.ExtraRoutes {
-			switch {
-			case extraCluster.Route != "":
-				// If route is explicit just include as is.
-				routes = append(routes, extraCluster.Route)
-			case extraCluster.Cluster != "":
-				route := fmt.Sprintf("nats://%s:%d",
-					ManagementServiceName(extraCluster.Cluster),
-					constants.ClusterPort)
-				routes = append(routes, route)
-			}
-		}
-		sconfig.Cluster.Routes = routes
-	}
-
-	addConfig(sconfig, cluster)
+	sconfig := addConfig(clusterName, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
@@ -505,51 +487,8 @@ func UpdateConfigSecret(
 	cluster v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
-	// List all available pods then generate the routes
-	// for the NATS cluster.
-	routes := make([]string, 0)
-	podList, err := kubecli.Pods(ns).List(ClusterListOpt(clusterName))
-	if err != nil {
-		return err
-	}
-	for _, pod := range podList.Items {
-		// Skip pods that have failed
-		switch pod.Status.Phase {
-		case "Failed":
-			continue
-		}
-
-		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
-			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
-		routes = append(routes, route)
-	}
-
-	if cluster.ExtraRoutes != nil {
-		for _, extraCluster := range cluster.ExtraRoutes {
-			switch {
-			case extraCluster.Route != "":
-				// If route is explicit just include as is.
-				routes = append(routes, extraCluster.Route)
-			case extraCluster.Cluster != "":
-				route := fmt.Sprintf("nats://%s:%d",
-					ManagementServiceName(extraCluster.Cluster),
-					constants.ClusterPort)
-				routes = append(routes, route)
-			}
-		}
-	}
-
-	sconfig := &natsconf.ServerConfig{
-		Port:     int(constants.ClientPort),
-		HTTPPort: int(constants.MonitoringPort),
-		Cluster: &natsconf.ClusterConfig{
-			Port:   int(constants.ClusterPort),
-			Routes: routes,
-		},
-	}
-
-	addConfig(sconfig, cluster)
-	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
+	sconfig := addConfig(clusterName, cluster)
+	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
 		return err
 	}
@@ -579,7 +518,34 @@ func UpdateConfigSecret(
 	return err
 }
 
-func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+func addConfig(clusterName string, cluster v1alpha2.ClusterSpec) *natsconf.ServerConfig {
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port: int(constants.ClusterPort),
+		},
+	}
+
+	// Can rely on the headless service to discover rest of cluster.
+	routes := make([]string, 0)
+	headlessRoute := fmt.Sprintf("nats://%s:%d", clusterName, constants.ClusterPort)
+	routes = append(routes, headlessRoute)
+
+	if cluster.ExtraRoutes != nil {
+		for _, extraCluster := range cluster.ExtraRoutes {
+			switch {
+			case extraCluster.Route != "":
+				// If route is explicit just include as is.
+				routes = append(routes, extraCluster.Route)
+			case extraCluster.Cluster != "":
+				route := fmt.Sprintf("nats://%s:%d", extraCluster.Cluster, constants.ClusterPort)
+				routes = append(routes, route)
+			}
+		}
+	}
+	sconfig.Cluster.Routes = routes
+
 	if cluster.ServerConfig != nil {
 		sconfig.Debug = cluster.ServerConfig.Debug
 		sconfig.Trace = cluster.ServerConfig.Trace
@@ -606,6 +572,8 @@ func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
 	}
 	addTLSConfig(sconfig, cluster)
 	addOperatorConfig(sconfig, cluster)
+
+	return sconfig
 }
 
 func newNatsConfigMapVolume(clusterName string) v1.Volume {
@@ -916,7 +884,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	// Grab the A record that will correspond to the current pod
 	// so we can use it as the cluster advertise host.
 	// This helps with avoiding route connection errors in TLS-enabled clusters.
-	advertiseHost := fmt.Sprintf("%s.%s.%s.svc", name, ManagementServiceName(clusterName), namespace)
+	advertiseHost := fmt.Sprintf("%s.%s.%s.svc", name, ServiceName(clusterName), namespace)
 
 	// Rely on the shared configuration map for configuring the cluster.
 	retries := strconv.Itoa(constants.ConnectRetries)
@@ -956,7 +924,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 
 	// Required overrides.
 	pod.Spec.Hostname = name
-	pod.Spec.Subdomain = ManagementServiceName(clusterName)
+	pod.Spec.Subdomain = ServiceName(clusterName)
 
 	// Set default restart policy
 	if pod.Spec.RestartPolicy == "" {
