@@ -31,7 +31,7 @@ import (
 func TestCreateClusterWithTLSConfig(t *testing.T) {
 	var (
 		size    = 3
-		version = "1.3.0"
+		version = "1.4.0"
 	)
 
 	var (

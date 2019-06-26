@@ -24,16 +24,15 @@ import (
 )
 
 // TestUpgradeCluster creates a NatsCluster resource with version
-// 1.3.0 and waits for the full mesh to be formed.  Then, it updates
-// the ".spec.version" field of the NatsCluster resource to 1.4.0 and
+// waits for the full mesh to be formed.  Then, it updates
+// the ".spec.version" field of the NatsCluster resource to and
 // waits for the upgrade to be performed.
 func TestUpgradeCluster(t *testing.T) {
 	var (
-		initialVersion = "1.3.0"
-		finalVersion   = "1.4.0"
+		initialVersion = "1.4.0"
+		finalVersion   = "1.4.1"
 		size           = 2
 	)
-
 	var (
 		natsCluster *natsv1alpha2.NatsCluster
 		err         error

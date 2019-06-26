@@ -85,9 +85,9 @@ func (c *Cluster) upgradeTerminatedPod(pod *v1.Pod) error {
 	return nil
 }
 
-func (c *Cluster) maybeUpgradeMgmtService() error {
+func (c *Cluster) maybeUpgradeService() error {
 	ns := c.cluster.Namespace
-	sn := kubernetesutil.ManagementServiceName(c.cluster.Name)
+	sn := kubernetesutil.ServiceName(c.cluster.Name)
 
 	svc, err := c.config.KubeCli.Services(ns).Get(sn, metav1.GetOptions{})
 	if err != nil {

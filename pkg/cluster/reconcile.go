@@ -93,7 +93,7 @@ func (c *Cluster) reconcileVersion() error {
 		// Iterate over pods, upgrading them as necessary.
 		for _, pod := range pods {
 			if kubernetesutil.GetNATSVersion(pod) != c.cluster.Spec.Version {
-				c.maybeUpgradeMgmtService()
+				c.maybeUpgradeService()
 				return c.upgradePod(pod, desiredVersion)
 			}
 		}

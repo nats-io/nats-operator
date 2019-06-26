@@ -101,6 +101,12 @@ func ServiceName(clusterName string) string {
 	return clusterName
 }
 
+// ClientServiceName returns the name of the service based on the specified cluster name.
+func ClientServiceName(clusterName string) string {
+	return clusterName
+}
+
+// ManagementServiceName returns the name of the service based on the specified cluster name.
 func ManagementServiceName(clusterName string) string {
 	return clusterName + "-mgmt"
 }

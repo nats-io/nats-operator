@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ import (
 func TestCreateCluster(t *testing.T) {
 	var (
 		size    = 3
-		version = "1.3.0"
+		version = "1.4.0"
 	)
 
 	var (
@@ -98,7 +99,7 @@ func TestPauseControl(t *testing.T) {
 	var (
 		initialSize = 3
 		finalSize   = 5
-		version     = "1.3.0"
+		version     = "2.0.0"
 	)
 
 	var (
@@ -160,7 +161,7 @@ func TestPauseControl(t *testing.T) {
 func TestCreateClusterWithHostPort(t *testing.T) {
 	var (
 		size    = 1
-		version = "1.3.0"
+		version = "1.4.0"
 	)
 
 	var (
@@ -378,7 +379,7 @@ func TestCreateServerWithCustomConfig(t *testing.T) {
 func TestCreateAndDeleteClusterDependencies(t *testing.T) {
 	var (
 		size        = 1
-		version     = "1.4.0"
+		version     = "2.0.0"
 		natsCluster *natsv1alpha2.NatsCluster
 		err         error
 	)
@@ -399,6 +400,7 @@ func TestCreateAndDeleteClusterDependencies(t *testing.T) {
 
 		// Wait for a single pod to be created.
 		pods, err := f.PodsForNatsCluster(natsCluster)
+		fmt.Println("FOUND! ", pods)
 		if err != nil {
 			return false, err
 		}
@@ -408,6 +410,7 @@ func TestCreateAndDeleteClusterDependencies(t *testing.T) {
 
 		// Confirm that there is a service for the NatsCluster.
 		svcs, err := f.ServicesForNatsCluster(natsCluster)
+		fmt.Println("FOUND: ", svcs)
 		if err != nil {
 			return false, err
 		}

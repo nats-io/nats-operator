@@ -33,7 +33,7 @@ import (
 func TestConfigContainsFullMesh(t *testing.T) {
 	var (
 		size    = 3
-		version = "1.3.0"
+		version = "1.4.0"
 	)
 
 	var (
@@ -75,7 +75,7 @@ func TestConfigContainsFullMesh(t *testing.T) {
 func TestExistingSecretIsReplaced(t *testing.T) {
 	var (
 		size    = 3
-		version = "1.3.0"
+		version = "1.4.0"
 	)
 
 	var (

@@ -32,16 +32,15 @@ import (
 	"github.com/nats-io/nats-operator/test/e2e/framework"
 )
 
-// TestConfigReloadOnResize creates a NatsCluster resource with size 1 and then scales it up to 3 members.
-// It then waits for a log message on the very first pod indicating that the configuration has been reloaded (since its configuration secret has been updated).
-func TestConfigReloadOnResize(t *testing.T) {
+// TestClusterResize creates a NatsCluster resource with size 1 and then scales it up to 3 members.
+func TestClusterResize(t *testing.T) {
 	// Skip the test if "ShareProcessNamespace" is not enabled.
 	f.Require(t, framework.ShareProcessNamespace)
 
 	var (
 		initialSize = 1
 		finalSize   = 3
-		version     = "1.3.0"
+		version     = "2.0.0"
 	)
 
 	var (
@@ -85,13 +84,6 @@ func TestConfigReloadOnResize(t *testing.T) {
 	if err = f.WaitUntilFullMeshWithVersion(ctx2, natsCluster, finalSize, version); err != nil {
 		t.Fatal(err)
 	}
-
-	// Wait for the "Reloaded: cluster routes" log message to appear in the logs for the very first pod.
-	ctx3, fn := context.WithTimeout(context.Background(), waitTimeout)
-	defer fn()
-	if err = f.WaitUntilPodLogLineMatches(ctx3, natsCluster, 1, "Reloaded: cluster routes"); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // TestConfigReloadOnClientAuthSecretChange creates a secret containing authentication data for a NATS cluster.
@@ -131,7 +123,7 @@ func TestConfigReloadOnClientAuthFileChange(t *testing.T) {
 		natsCluster.Spec.Pod = &natsv1alpha2.PodPolicy{
 			// Enable configuration reloading.
 			EnableConfigReload:      true,
-			ReloaderImage:           "wallyqs/nats-server-config-reloader",
+			ReloaderImage:           "connecteverything/nats-server-config-reloader",
 			ReloaderImageTag:        "0.4.5-v1alpha2",
 			ReloaderImagePullPolicy: "Always",
 			VolumeMounts: []v1.VolumeMount{
@@ -173,7 +165,7 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 		password1 = "pass-1"
 		password2 = "pass-2"
 		size      = 1
-		version   = "1.4.0"
+		version   = "2.0.0"
 	)
 
 	var (
@@ -326,7 +318,7 @@ func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
 		clusterName = "test-nats-nsr"
 		size        = 1
 		subject     = "hello.world"
-		version     = "1.3.0"
+		version     = "1.4.0"
 	)
 
 	var (

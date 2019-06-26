@@ -29,7 +29,7 @@ func TestResizeClusterFrom3To5(t *testing.T) {
 	var (
 		initialSize = 3
 		finalSize   = 5
-		version     = "1.3.0"
+		version     = "2.0.0"
 	)
 
 	var (
@@ -75,7 +75,7 @@ func TestResizeClusterFrom5To3(t *testing.T) {
 	var (
 		initialSize = 5
 		finalSize   = 3
-		version     = "1.3.0"
+		version     = "2.0.0"
 	)
 
 	var (

@@ -30,7 +30,9 @@ import (
 // It is the caller's responsibility to close the connection when it is no longer needed.
 func (f *Framework) ConnectToNatsClusterWithUsernamePassword(natsCluster *natsv1alpha2.NatsCluster, username, password string) (*nats.Conn, error) {
 	// Connect to the NATS cluster represented by the specified NatsCluster resource using the specified credentials.
-	c, err := nats.Connect(fmt.Sprintf("nats://%s.%s:%d", kubernetes.ClientServiceName(natsCluster.Name), natsCluster.Namespace, constants.ClientPort), nats.UserInfo(username, password))
+	endpoint := fmt.Sprintf("nats://%s:%d", kubernetes.ServiceName(natsCluster.Name), constants.ClientPort)
+	fmt.Println("----", endpoint)
+	c, err := nats.Connect(endpoint, nats.UserInfo(username, password))
 	if err != nil {
 		return nil, err
 	}

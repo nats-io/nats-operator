@@ -39,7 +39,7 @@ cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname="nats-mgmt,*.nats-mgmt,*.nats-mgmt.${NAMESPACE},*.nats-mgmt.${NAMESPACE}.svc,*.nats-mgmt.${NAMESPACE}.svc.cluster.local" \
+  -hostname="nats,*.nats,*.nats.${NAMESPACE},*.nats.${NAMESPACE}.svc,*.nats.${NAMESPACE}.svc.cluster.local,nats-mgmt,*.nats-mgmt,*.nats-mgmt.${NAMESPACE},*.nats-mgmt.${NAMESPACE}.svc,*.nats-mgmt.${NAMESPACE}.svc.cluster.local" \
   -profile=nats \
   route-csr.json | cfssljson -bare route
 

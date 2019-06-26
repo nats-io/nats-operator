@@ -130,6 +130,8 @@ func (f *Framework) NatsClusterHasExpectedRouteCount(natsCluster *natsv1alpha2.N
 	if err != nil {
 		return false, err
 	}
+	fmt.Println("TOTAL PODS: ", len(pods))
+
 	// Make sure that every pod has routes to every other pod.
 	for _, pod := range pods {
 		r, err := f.RouteCountForPod(pod)
@@ -267,15 +269,9 @@ func (f *Framework) WaitUntilExpectedRoutesInConfig(ctx context.Context, natsClu
 		// List pods belonging to the NATS cluster, and make
 		// sure that every route is listed in the
 		// configuration.
-		pods, err := f.PodsForNatsCluster(natsCluster)
-		if err != nil {
+		route := fmt.Sprintf("nats://%s:%d", kubernetesutil.ServiceName(natsCluster.Name), constants.ClusterPort)
+		if !slice.ContainsString(confObj.Cluster.Routes, route, nil) {
 			return false, nil
-		}
-		for _, pod := range pods {
-			route := fmt.Sprintf("nats://%s.%s.%s.svc:%d", pod.Name, kubernetesutil.ManagementServiceName(natsCluster.Name), natsCluster.Namespace, constants.ClusterPort)
-			if !slice.ContainsString(confObj.Cluster.Routes, route, nil) {
-				return false, nil
-			}
 		}
 
 		// We've found routes to all pods in the configuration!
