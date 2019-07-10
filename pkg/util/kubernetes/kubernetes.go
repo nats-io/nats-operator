@@ -960,7 +960,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 
 	// Set default restart policy
 	if pod.Spec.RestartPolicy == "" {
-		pod.Spec.RestartPolicy = v1.RestartPolicyNever
+		pod.Spec.RestartPolicy = v1.RestartPolicyAlways
 	}
 
 	if advertiseExternalIP {
