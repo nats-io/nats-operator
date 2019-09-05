@@ -50,6 +50,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/features"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/nats-io/nats-operator/version"
 )
 
@@ -159,6 +160,7 @@ func main() {
 	}
 
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
+	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(listenAddr, nil)
 
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
