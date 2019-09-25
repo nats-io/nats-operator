@@ -103,7 +103,7 @@ their default values.
 | `readinessProbe.successThreshold`            | Minimum consecutive successes for the probe to be considered successful after having failed. | `1`                                             |
 | `cluster.create`                             | Create and deploy a NATS Cluster togheter with the operator                                  | `true`                                          |
 | `cluster.name`                               | Name of NATS Clust 																																					| `nats-cluster` 																	|
-| `cluster.namespadce`                         | Namepsace to deploy the NATS Cluster in, only possible if `clusterScoped` is set to `true`   | ``                                         |
+| `cluster.namespace`                          | Namespace to deploy the NATS Cluster in, only possible if `clusterScoped` is set to `true`   | ``                                         |
 | `cluster.version`                            | Version of NATS Cluster                                                                      | `1.4.1`                                         |
 | `cluster.size`                               | Number of NATS Cluster nodes                                                                 | `3`                                             |
 | `cluster.auth.enabled`                       | Switch to enable/disable client authentication                                               | `true`                                          |
