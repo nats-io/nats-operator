@@ -244,6 +244,33 @@ func TestConfMarshal(t *testing.T) {
 
 			err: nil,
 		},
+		{
+			input: &ServerConfig{
+				Authorization: &AuthorizationConfig{
+					Users: []*User{
+						{
+							NKey: "foo",
+						},
+						{
+							NKey: "bar",
+						},
+					},
+				},
+			},
+			output: `{
+  "logtime": false,
+  "authorization": {
+    "users": [
+      {
+        "nkey": "foo"
+      },
+      {
+        "nkey": "bar"
+      }
+    ]
+  }
+}`,
+		},
 	}
 
 	for _, tt := range tests {
