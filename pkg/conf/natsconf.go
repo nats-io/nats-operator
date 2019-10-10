@@ -89,6 +89,7 @@ type AuthorizationConfig struct {
 type User struct {
 	User        string       `json:"username,omitempty"`
 	Password    string       `json:"password,omitempty"`
+	NKey        string       `json:"nkey,omitempty"`
 	Permissions *Permissions `json:"permissions,omitempty"`
 }
 
