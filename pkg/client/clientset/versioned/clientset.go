@@ -26,8 +26,6 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	NatsV1alpha2() natsv1alpha2.NatsV1alpha2Interface
-	// Deprecated: please explicitly pick a version if possible.
-	Nats() natsv1alpha2.NatsV1alpha2Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -39,12 +37,6 @@ type Clientset struct {
 
 // NatsV1alpha2 retrieves the NatsV1alpha2Client
 func (c *Clientset) NatsV1alpha2() natsv1alpha2.NatsV1alpha2Interface {
-	return c.natsV1alpha2
-}
-
-// Deprecated: Nats retrieves the default version of NatsClient.
-// Please explicitly pick a version.
-func (c *Clientset) Nats() natsv1alpha2.NatsV1alpha2Interface {
 	return c.natsV1alpha2
 }
 

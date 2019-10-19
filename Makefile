@@ -14,22 +14,6 @@ build.operator: gen
 		-installsuffix cgo \
 		-o build/nats-operator ./cmd/operator/main.go
 
-# dep fetches required dependencies.
-.PHONY: dep
-dep: KUBERNETES_VERSION := 1.13.6
-dep: KUBERNETES_CODE_GENERATOR_PKG := k8s.io/code-generator
-dep: KUBERNETES_APIMACHINERY_PKG := k8s.io/apimachinery
-dep:
-	@dep ensure -v
-	@go get -d $(KUBERNETES_CODE_GENERATOR_PKG)/...
-	@cd $(GOPATH)/src/$(KUBERNETES_CODE_GENERATOR_PKG) && \
-		git fetch origin && \
-		git checkout -f kubernetes-$(KUBERNETES_VERSION) --quiet
-	@go get -d $(KUBERNETES_APIMACHINERY_PKG)/...
-	@cd $(GOPATH)/src/$(KUBERNETES_APIMACHINERY_PKG) && \
-		git fetch origin && \
-		git checkout -f kubernetes-$(KUBERNETES_VERSION) --quiet
-
 # e2e runs the end-to-end test suite.
 .PHONY: e2e
 e2e: FEATURE_GATE_CLUSTER_SCOPED ?= false
@@ -51,6 +35,5 @@ run:
 	@FEATURE_GATE_CLUSTER_SCOPED=$(FEATURE_GATE_CLUSTER_SCOPED) MODE=$(MODE) NAMESPACE=$(NAMESPACE) PROFILE=$(PROFILE) TARGET=$(TARGET) $(PWD)/hack/skaffold.sh
 
 # gen executes the code generation step.
-.PHONY: gen
-gen: dep
+gen:
 	@./hack/codegen.sh

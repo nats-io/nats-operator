@@ -25,7 +25,7 @@ import (
 	"time"
 
 	authenticationv1 "k8s.io/api/authentication/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,7 +42,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	natsclient "github.com/nats-io/nats-operator/pkg/client/clientset/versioned"
 	natsalphav2client "github.com/nats-io/nats-operator/pkg/client/clientset/versioned/typed/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/conf"
+	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/nats-io/nats-operator/pkg/util/versionCheck"
