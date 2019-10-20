@@ -56,15 +56,13 @@ var (
 	wait bool
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.StringVar(&featureGates, "feature-gates", "", "comma-separated list of \"key=value\" pairs used to toggle advanced features")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "path to the kubeconfig file to use (e.g. $HOME/.kube/config)")
 	flag.StringVar(&namespace, "namespace", "default", "name of the kubernetes namespace to use")
 	flag.BoolVar(&wait, "wait", false, "instead of running the e2e test suite, connect to the kubernetes cluster and wait for the e2e job to complete")
 	flag.Parse()
-}
 
-func TestMain(m *testing.M) {
 	// Build the feature map based on the value of "--feature-gates".
 	featureMap, err := features.ParseFeatureMap(featureGates)
 	if err != nil {
