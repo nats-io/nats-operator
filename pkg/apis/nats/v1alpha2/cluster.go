@@ -325,6 +325,9 @@ type PodPolicy struct {
 	// ReloaderImagePullPolicy is the pull policy for the reloader image.
 	ReloaderImagePullPolicy string `json:"reloaderImagePullPolicy,omitempty"`
 
+	// ReloaderResources is the reesource requirements for the reloader container
+	ReloaderResources v1.ResourceRequirements `json:"reloaderResources,omitempty"`
+
 	// EnableMetrics attaches a sidecar to each NATS Server
 	// that will export prometheus metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`

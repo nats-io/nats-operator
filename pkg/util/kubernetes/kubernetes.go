@@ -991,7 +991,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			authFilePath = cs.Auth.ClientsAuthFile
 		}
 
-		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy, authFilePath)
+		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy, authFilePath, cs.Pod.ReloaderResources)
 		reloaderContainer.VolumeMounts = volumeMounts
 		containers = append(containers, reloaderContainer)
 	}
