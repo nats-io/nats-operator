@@ -25,7 +25,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
-	nats "github.com/nats-io/go-nats"
+	nats "github.com/nats-io/nats.go"
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/util/kubernetes"

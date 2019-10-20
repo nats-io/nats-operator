@@ -239,7 +239,7 @@ func (in *NatsCluster) DeepCopyObject() runtime.Object {
 func (in *NatsClusterList) DeepCopyInto(out *NatsClusterList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]NatsCluster, len(*in))
@@ -299,7 +299,7 @@ func (in *NatsServiceRole) DeepCopyObject() runtime.Object {
 func (in *NatsServiceRoleList) DeepCopyInto(out *NatsServiceRoleList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]NatsServiceRole, len(*in))
