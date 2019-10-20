@@ -100,7 +100,7 @@ func natsPodContainer(clusterName, version string, serverImage string, enableCli
 }
 
 // natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.
-func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string) v1.Container {
+func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string, r v1.ResourceRequirements) v1.Container {
 	container := v1.Container{
 		Name:            "reloader",
 		Image:           fmt.Sprintf("%s:%s", image, tag),
@@ -112,6 +112,7 @@ func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string) v1.Co
 			"-pid",
 			constants.PidFilePath,
 		},
+		Resources: r,
 	}
 	if authFilePath != "" {
 		// The volume is mounted as a subdirectory under the NATS config.
