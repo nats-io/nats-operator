@@ -804,7 +804,24 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		leafnodePort = cs.LeafNodeConfig.Port
 	}
 
-	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage,
+	// Initialize the pod spec with a template in case it is present.
+	spec := &v1.PodSpec{}
+	if cs.PodTemplate != nil {
+		spec = cs.PodTemplate.Spec.DeepCopy()
+		if spec.Containers != nil && len(spec.Containers) > 0 {
+			containers = spec.Containers
+		}
+	}
+
+	// First container has to be the NATS container
+	var container v1.Container
+	if len(spec.Containers) > 0 {
+		container = spec.Containers[0]
+	} else {
+		container = v1.Container{}
+	}
+
+	container = natsPodContainer(container, clusterName, cs.Version, cs.ServerImage,
 		enableClientsHostPort, gatewayPort, leafnodePort)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
@@ -936,7 +953,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	}
 
 	container.Command = cmd
-	containers = append(containers, container)
+
+	// If there were containers defined already, then replace the NATS container.
+	if len(containers) > 0 {
+		containers[0] = container
+	} else {
+		containers = append(containers, container)
+	}
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -944,13 +967,6 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			Labels:      labels,
 			Annotations: annotations,
 		},
-	}
-
-	spec := &v1.PodSpec{}
-
-	// Initialize the pod spec with a template in case it is present.
-	if cs.PodTemplate != nil {
-		spec = cs.PodTemplate.Spec.DeepCopy()
 	}
 	pod.Spec = *spec
 
@@ -1019,7 +1035,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		containers = append(containers, metricsContainer)
 	}
 
-	pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	// pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	pod.Spec.Containers = containers
 	pod.Spec.Volumes = append(pod.Spec.Volumes, volumes...)
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
