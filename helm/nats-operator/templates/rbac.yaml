@@ -17,6 +17,11 @@ rules:
   - natsclusters
   - natsserviceroles
   verbs: ["*"]
+# Allowed actions on Pods
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["create", "watch", "get", "patch", "update", "delete", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
