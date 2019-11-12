@@ -6,6 +6,18 @@ metadata:
 spec:
   size: 3
   version: "2.1.0"
+
+  pod:
+    # Must use host port to be able to connect to external ip
+    enableClientsHostPort: true
+    advertiseExternalIP: true
+
+  ############################
+  #                          #
+  # StatefulSets definition  #
+  #                          #
+  ############################
+
   useStatefulSets: true
   volumeClaimTemplates:
   - metadata:
@@ -29,6 +41,36 @@ spec:
           secretName: nats-sts
       - name: pid
         emptyDir: {}
+      - name: advertiseconfig
+        emptyDir: {}
+
+      #########################################################
+      #                                                       #
+      # Initializer container required to be able to lookup   #
+      # the external ip on which this node is running.        #
+      #                                                       #
+      #########################################################
+      serviceAccountName: "nats-server"
+      initContainers:
+      - name: bootconfig
+        command:
+        - nats-pod-bootconfig
+        - -f
+        - /etc/nats-config/advertise/client_advertise.conf
+        - -gf
+        - /etc/nats-config/advertise/gateway_advertise.conf
+        env:
+        - name: KUBERNETES_NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        image: connecteverything/nats-boot-config:0.5.2
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /etc/nats-config/advertise
+          name: advertiseconfig
+          subPath: advertise
 
       #################
       #               #
@@ -46,6 +88,9 @@ spec:
         - containerPort: 7422
           name: leafnodes
           hostPort: 7422
+        - containerPort: 7522
+          name: gateways
+          hostPort: 7522
         - containerPort: 6222
           name: cluster
         - containerPort: 8222
@@ -82,6 +127,9 @@ spec:
             mountPath: /data
           - name: pid
             mountPath: /var/run/nats
+          - mountPath: /etc/nats-config/advertise
+            name: advertiseconfig
+            subPath: advertise
 
         # Liveness/Readiness probes against the monitoring
         #
