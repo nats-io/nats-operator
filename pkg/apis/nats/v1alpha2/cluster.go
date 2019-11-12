@@ -137,6 +137,12 @@ type ClusterSpec struct {
 
 	// OperatorConfig is the operator configuration from a server.
 	OperatorConfig *OperatorConfig `json:"operatorConfig,omitempty"`
+
+	// UseStatefulSets replaces the controller logic with StatefulSets instead.
+	UseStatefulSets bool `json:"useStatefulSets,omitempty"`
+
+	// VolumeClaimTemplates are the persistent volume claims.
+	VolumeClaimTemplates []v1.PersistentVolumeClaim `json:"volumeClaimTemplates,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.

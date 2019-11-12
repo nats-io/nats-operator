@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -426,6 +427,211 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	}
 
 	return retPod, nil
+}
+
+func CreateStatefulSet(kubecli kubernetes.Interface, clusterName, ns string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
+	var (
+		enableClientsHostPort bool
+		annotations           = map[string]string{}
+		containers            = make([]v1.Container, 0)
+		volumes               = make([]v1.Volume, 0)
+		volumeMounts          = make([]v1.VolumeMount, 0)
+		labelsz               = map[string]string{
+			LabelAppKey:            "nats",
+			LabelClusterNameKey:    clusterName,
+			LabelClusterVersionKey: cs.Version,
+		}
+	)
+
+	// ConfigMap: Volume declaration for the Pod and Container.
+	volume := newNatsConfigMapVolume(clusterName)
+	volumes = append(volumes, volume)
+	volumeMount := newNatsConfigMapVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
+
+	// Extra mount to share the pid file from server
+	volume = newNatsPidFileVolume()
+	volumes = append(volumes, volume)
+	volumeMount = newNatsPidFileVolumeMount()
+	volumeMounts = append(volumeMounts, volumeMount)
+
+	if cs.Pod != nil {
+		// User supplied volumes and mounts
+		volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
+		enableClientsHostPort = cs.Pod.EnableClientsHostPort
+	}
+
+	var gatewayPort int
+	if cs.GatewayConfig != nil {
+		gatewayPort = cs.GatewayConfig.Port
+	}
+	var leafnodePort int
+	if cs.LeafNodeConfig != nil {
+		leafnodePort = cs.LeafNodeConfig.Port
+	}
+
+	// Initialize the pod spec with a template in case it is present.
+	template := v1.PodTemplateSpec{}
+	spec := template.Spec
+	if cs.PodTemplate != nil {
+		spec = *cs.PodTemplate.Spec.DeepCopy()
+		if spec.Containers != nil && len(spec.Containers) > 0 {
+			containers = spec.Containers
+		}
+	}
+	if spec.Containers != nil && len(spec.Containers) > 0 {
+		containers = spec.Containers
+	}
+
+	// First container has to be the NATS container
+	var container v1.Container
+	if len(spec.Containers) > 0 {
+		container = spec.Containers[0]
+	} else {
+		container = v1.Container{}
+	}
+
+	container = natsPodContainer(container, clusterName, cs.Version, cs.ServerImage,
+		enableClientsHostPort, gatewayPort, leafnodePort)
+	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
+
+	// In case TLS was enabled as part of the NATS cluster
+	// configuration then should include the configuration here.
+	if cs.TLS != nil {
+		if cs.TLS.ServerSecret != "" {
+			volume = newNatsServerSecretVolume(cs.TLS.ServerSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsServerSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+
+		if cs.TLS.RoutesSecret != "" {
+			volume = newNatsRoutesSecretVolume(cs.TLS.RoutesSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsRoutesSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+		if cs.TLS.GatewaySecret != "" {
+			volume = newNatsGatewaySecretVolume(cs.TLS.GatewaySecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsGatewaySecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+		if cs.TLS.LeafnodeSecret != "" {
+			volume = newNatsLeafnodeSecretVolume(cs.TLS.LeafnodeSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsLeafnodeSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+	}
+
+	if cs.OperatorConfig != nil {
+		volume = newNatsOperatorJWTSecretVolume(cs.OperatorConfig.Secret)
+		volumes = append(volumes, volume)
+
+		volumeMount := newNatsOperatorJWTSecretVolumeMount()
+		volumeMounts = append(volumeMounts, volumeMount)
+	}
+
+	// Configure initializer container to resolve the external ip
+	// from the pod.
+	var (
+		advertiseExternalIP bool = cs.Pod != nil && cs.Pod.AdvertiseExternalIP
+		bootconfig          v1.Container
+	)
+	if advertiseExternalIP {
+		var (
+			bootconfigImage    = constants.DefaultBootconfigImage
+			bootconfigImageTag = constants.DefaultBootconfigImageTag
+		)
+		if cs.Pod.BootConfigContainerImage != "" {
+			bootconfigImage = cs.Pod.BootConfigContainerImage
+		}
+		if cs.Pod.BootConfigContainerImageTag != "" {
+			bootconfigImageTag = cs.Pod.BootConfigContainerImageTag
+		}
+		image := fmt.Sprintf("%s:%s", bootconfigImage, bootconfigImageTag)
+		bootconfig = v1.Container{
+			Name:  "bootconfig",
+			Image: image,
+		}
+		bootconfig.Env = []v1.EnvVar{
+			{
+				Name: "KUBERNETES_NODE_NAME",
+				ValueFrom: &v1.EnvVarSource{
+					FieldRef: &v1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+		}
+
+		// Add the empty directory mount for the pod, nats
+		// container and init container
+		mount := v1.VolumeMount{
+			Name:      "advertiseconfig",
+			MountPath: "/etc/nats-config/advertise",
+			SubPath:   "advertise",
+		}
+		bootconfig.VolumeMounts = []v1.VolumeMount{mount}
+		volumeMounts = append(volumeMounts, mount)
+
+		volume := v1.Volume{
+			Name: "advertiseconfig",
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}
+		volumes = append(volumes, volume)
+
+		bootconfig.Command = []string{
+			"nats-pod-bootconfig",
+			"-f", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigFilePath),
+			"-gf", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigGatewayFilePath),
+		}
+	}
+	container.VolumeMounts = volumeMounts
+
+	if cs.Pod != nil {
+		container = containerWithRequirements(container, cs.Pod.Resources)
+	}
+
+	// Creating the statefulset that replaces the custom controller logic.
+	ometa := metav1.ObjectMeta{
+		Name:        clusterName,
+		Labels:      labelsz,
+		Annotations: annotations,
+	}
+	template.ObjectMeta = ometa
+	template.Spec = spec
+	template.Spec.Containers = containers
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: ometa,
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labelsz,
+			},
+			Template: template,
+		},
+	}
+	sts.Spec.VolumeClaimTemplates = cs.VolumeClaimTemplates
+
+	var clusterSize int32 = int32(cs.Size)
+	sts.Spec.Replicas = &clusterSize
+	sts.Spec.ServiceName = ManagementServiceName(clusterName)
+	addOwnerRefToObject(sts.GetObjectMeta(), owner)
+
+	// If the error is exists, then create.
+	_, err := kubecli.AppsV1().StatefulSets(ns).Create(sts)
+	if apierrors.IsAlreadyExists(err) {
+		_, err = kubecli.AppsV1().StatefulSets(ns).Update(sts)
+		return err
+	}
+	return nil
 }
 
 // ConfigSecret returns the name of the secret that contains the configuration for the NATS cluster with the specified name.
@@ -929,7 +1135,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
 	}
-
+	// ------------------------------
 	// Grab the A record that will correspond to the current pod
 	// so we can use it as the cluster advertise host.
 	// This helps with avoiding route connection errors in TLS-enabled clusters.

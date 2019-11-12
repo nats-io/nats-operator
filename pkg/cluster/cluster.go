@@ -134,33 +134,46 @@ func (c *Cluster) Reconcile() error {
 		}
 	}
 
-	// Poll pods in order to understand which are pending and which must be deleted.
-	_, waiting, deletable, err := c.pollPods()
-	if err != nil {
-		reconcileFailed.WithLabelValues("failed to poll pods").Inc()
-		return fmt.Errorf("failed to poll pods: %v", err)
-	}
+	if !c.cluster.Spec.UseStatefulSets {
+		// Poll pods in order to understand which are pending and which must be deleted.
+		_, waiting, deletable, err := c.pollPods()
+		if err != nil {
+			reconcileFailed.WithLabelValues("failed to poll pods").Inc()
+			return fmt.Errorf("failed to poll pods: %v", err)
+		}
 
-	// Delete all pods in terminal phases.
-	for _, pod := range deletable {
-		c.logger.Warnf("deleting pod %q in terminal phase %q", kubernetesutil.ResourceKey(pod), pod.Status.Phase)
-		if err := c.deletePod(pod); err != nil {
-			c.logger.Errorf("failed to delete pod %q: %v", kubernetesutil.ResourceKey(pod), err)
+		// Delete all pods in terminal phases.
+		for _, pod := range deletable {
+			c.logger.Warnf("deleting pod %q in terminal phase %q", kubernetesutil.ResourceKey(pod), pod.Status.Phase)
+			if err := c.deletePod(pod); err != nil {
+				c.logger.Errorf("failed to delete pod %q: %v", kubernetesutil.ResourceKey(pod), err)
+				return err
+			}
+		}
+
+		// If there are pods in "waiting" state, exit cleanly and wait for the next reconcile iteration (which will happen as soon as these pods become running/succeeded/failed).
+		// This should not happen often in practice, as createPod waits for pods to be running before returning, but it is still a good safety measure.
+		if len(waiting) > 0 {
+			c.logger.Infof("skipping reconciliation as there are %d waiting pods (%v)", len(waiting), kubernetesutil.GetPodNames(waiting))
+			return nil
+		}
+		// Reconcile the size and version of the cluster.
+		if err := c.checkPods(); err != nil {
+			reconcileFailed.WithLabelValues("failed to reconcile pods").Inc()
+			return fmt.Errorf("failed to reconcile pods: %v", err)
+		}
+	} else {
+		// Create the statefulset if not present
+		// 
+		// TODO: Here!
+		//
+		// Set it to use the name of the service
+		//
+		// Apply or create the statefulset with the correct template definition.
+		// Pass one: Just create the statefulset with the 
+		if err := kubernetesutil.CreateStatefulSet(c.config.KubeClient, c.cluster.Name, c.cluster.Namespace, c.cluster.Spec, c.cluster.AsOwner()); err != nil {
 			return err
 		}
-	}
-
-	// If there are pods in "waiting" state, exit cleanly and wait for the next reconcile iteration (which will happen as soon as these pods become running/succeeded/failed).
-	// This should not happen often in practice, as createPod waits for pods to be running before returning, but it is still a good safety measure.
-	if len(waiting) > 0 {
-		c.logger.Infof("skipping reconciliation as there are %d waiting pods (%v)", len(waiting), kubernetesutil.GetPodNames(waiting))
-		return nil
-	}
-
-	// Reconcile the size and version of the cluster.
-	if err := c.checkPods(); err != nil {
-		reconcileFailed.WithLabelValues("failed to reconcile pods").Inc()
-		return fmt.Errorf("failed to reconcile pods: %v", err)
 	}
 
 	// Mark the cluster as ready.
