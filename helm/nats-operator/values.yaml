@@ -62,13 +62,12 @@ podAnnotations: {}
 ##
 podLabels: {}
 
-## Update strategy, can be set to RollingUpdate or OnDelete by default.
-## https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
+## Update strategy, can be "Recreate" or "RollingUpdate". Default is RollingUpdate.
 
-updateStrategy: OnDelete
-## Partition update strategy
-## https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions
-# rollingUpdatePartition:
+updateStrategy: RollingUpdate
+# rollingUpdateMaxSurge: 25%
+# rollingUpdateMaxUnavailable: "25% 
+
 
 ## Configure resource requests and limits
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
