@@ -26,11 +26,12 @@ spec:
         {{ .Values.podAnnotations }}
       {{- end }}
     spec:
-      updateStrategy:
+      strategy:
         type: {{ .Values.updateStrategy }}
         {{- if .Values.rollingUpdatePartition }}
         rollingUpdate:
-          partition: {{ .Values.rollingUpdatePartition }}
+          maxSurge: {{ .Values.rollingUpdateMaxSurge }}
+          maxUnavailable: {{ .Values.rollingUpdateMaxUnavailable }}
         {{- end }}
       {{- if .Values.rbacEnabled }}
       serviceAccountName: nats-operator
