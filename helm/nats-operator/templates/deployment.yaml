@@ -28,7 +28,7 @@ spec:
     spec:
       strategy:
         type: {{ .Values.updateStrategy }}
-        {{- if .Values.rollingUpdatePartition }}
+        {{- if eq .Values.updateStrategy "RollingUpdate" }}
         rollingUpdate:
           maxSurge: {{ .Values.rollingUpdateMaxSurge }}
           maxUnavailable: {{ .Values.rollingUpdateMaxUnavailable }}
