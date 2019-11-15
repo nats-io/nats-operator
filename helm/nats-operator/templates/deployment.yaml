@@ -9,6 +9,13 @@ metadata:
     heritage: {{ .Release.Service }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.updateStrategy }}
+    {{- if eq .Values.updateStrategy "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.rollingUpdateMaxSurge }}
+      maxUnavailable: {{ .Values.rollingUpdateMaxUnavailable }}
+        {{- end }}
   selector:
     matchLabels:
       app: {{ template "nats.name" . }}
@@ -26,13 +33,6 @@ spec:
         {{ .Values.podAnnotations }}
       {{- end }}
     spec:
-      strategy:
-        type: {{ .Values.updateStrategy }}
-        {{- if eq .Values.updateStrategy "RollingUpdate" }}
-        rollingUpdate:
-          maxSurge: {{ .Values.rollingUpdateMaxSurge }}
-          maxUnavailable: {{ .Values.rollingUpdateMaxUnavailable }}
-        {{- end }}
       {{- if .Values.rbacEnabled }}
       serviceAccountName: nats-operator
       {{- end }}
