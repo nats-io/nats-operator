@@ -8,9 +8,12 @@ go_import_path: github.com/nats-io/nats-operator
 env:
 - KUBERNETES_CONFIG_FILE=$HOME/.kube/config CHANGE_MINIKUBE_NONE_USER=true CLUSTER_SCOPED_E2E_NAMESPACE=nats-io NAMESPACE_SCOPED_E2E_NAMESPACE=nats-operator-e2e
 
-install:
+berfore_install:
 - go get -u github.com/cloudflare/cfssl/cmd/cfssl
 - go get -u github.com/cloudflare/cfssl/cmd/cfssljson
+
+install:
+  # skip
 
 before_script:
 - go version
