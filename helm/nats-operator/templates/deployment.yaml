@@ -9,6 +9,12 @@ metadata:
     heritage: {{ .Release.Service }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.updateStrategy }}
+    {{- if .Values.rollingUpdatePartition }}
+    rollingUpdate:
+      partition: {{ .Values.rollingUpdatePartition }}
+    {{- end }}
   selector:
     matchLabels:
       app: {{ template "nats.name" . }}
@@ -26,12 +32,6 @@ spec:
         {{ .Values.podAnnotations }}
       {{- end }}
     spec:
-      updateStrategy:
-        type: {{ .Values.updateStrategy }}
-        {{- if .Values.rollingUpdatePartition }}
-        rollingUpdate:
-          partition: {{ .Values.rollingUpdatePartition }}
-        {{- end }}
       {{- if .Values.rbacEnabled }}
       serviceAccountName: nats-operator
       {{- end }}
