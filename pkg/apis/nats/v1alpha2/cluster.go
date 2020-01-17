@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -280,6 +280,12 @@ type TLSConfig struct {
 
 	// Verify toggles verifying TLS certs for clients.
 	Verify bool `json:"verify,omitempty"`
+
+	// CipherSuites
+	CipherSuites []string `json:"cipherSuites,omitempty"`
+
+	// CurvePreferences
+	CurvePreferences []string `json:"curvePreferences,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.

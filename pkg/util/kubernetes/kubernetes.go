@@ -168,6 +168,10 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 
 		// Verifying clients cert is disabled by default.
 		sconfig.TLS.Verify = cs.TLS.Verify
+
+		// Customize cipher suites and curve preferences.
+		sconfig.TLS.CipherSuites = cs.TLS.CipherSuites
+		sconfig.TLS.CurvePreferences = cs.TLS.CurvePreferences
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
