@@ -1,0 +1,27 @@
+---
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-ciphers"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+
+  tls:
+    # Certificates to secure the NATS client connections
+    serverSecret: "nats-server-tls"
+
+    # Name of the CA in serverSecret
+    serverSecretCAFileName: "ca.crt"
+
+    # Name of the key in serverSecret
+    serverSecretKeyFileName: "tls.key"
+
+    # Name of the certificate in serverSecret
+    serverSecretCertFileName: "tls.crt"
+
+    cipherSuites:
+      - ASDF
+
+    curvePreferences:
+      - FOO
