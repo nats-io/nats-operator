@@ -6,6 +6,8 @@
 
 NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
 
+You can find more info about running NATS on Kubernetes in the [docs](https://docs.nats.io/nats-on-kubernetes/nats-kubernetes) as well as a minimal setup using `StatefulSets` only without using the operator to get started [here](https://docs.nats.io/nats-on-kubernetes/minimal-setup).
+
 [k8s-home]: http://kubernetes.io
 
 ## Requirements
