@@ -2,6 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "nats.fullname" . }}
+{{- if and .Values.clusterScoped .Values.cluster.namespace }}
+  namespace: {{ .Values.cluster.namespace }}
+{{- end }}
+
   labels:
     app: {{ template "nats.name" . }}
     chart: {{ template "nats.chart" . }}
@@ -26,12 +30,6 @@ spec:
         {{ .Values.podAnnotations }}
       {{- end }}
     spec:
-      updateStrategy:
-        type: {{ .Values.updateStrategy }}
-        {{- if .Values.rollingUpdatePartition }}
-        rollingUpdate:
-          partition: {{ .Values.rollingUpdatePartition }}
-        {{- end }}
       {{- if .Values.rbacEnabled }}
       serviceAccountName: nats-operator
       {{- end }}
