@@ -4,9 +4,7 @@
 [![Build Status](https://travis-ci.org/nats-io/nats-operator.svg?branch=master)](https://travis-ci.org/nats-io/nats-operator)
 [![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.6.0)](https://github.com/nats-io/nats-operator/releases/tag/v0.6.0)
 
-NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
-
-You can find more info about running NATS on Kubernetes in the [docs](https://docs.nats.io/nats-on-kubernetes/nats-kubernetes) as well as a minimal setup using `StatefulSets` only without using the operator to get started [here](https://docs.nats.io/nats-on-kubernetes/minimal-setup).
+NATS Operator manages NATS clusters atop [Kubernetes][k8s-home] using [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).  If looking to run NATS on K8S without the operator you can also find [Helm charts in the nats-io/k8s repo](https://github.com/nats-io/k8s#helm-charts-for-nats). You can also find more info about running NATS on Kubernetes in the [docs](https://docs.nats.io/nats-on-kubernetes/nats-kubernetes) as well as a minimal setup using `StatefulSets` only without using the operator to get started [here](https://docs.nats.io/nats-on-kubernetes/minimal-setup).
 
 [k8s-home]: http://kubernetes.io
 
