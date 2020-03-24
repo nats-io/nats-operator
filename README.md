@@ -246,6 +246,8 @@ spec:
     name: selfsigning
     kind: ClusterIssuer
   commonName: nats-ca
+  usages: 
+    - cert sign # workaround for odd cert-manager behavior
   organization:
   - Your organization
   isCA: true
@@ -274,6 +276,10 @@ spec:
   secretName: nats-server-tls
   duration: 2160h # 90 days
   renewBefore: 240h # 10 days
+  usages:
+  - signing
+  - key encipherment
+  - server auth
   issuerRef:
     name: nats-ca
     kind: Issuer
@@ -295,6 +301,11 @@ spec:
   secretName: nats-routes-tls
   duration: 2160h # 90 days
   renewBefore: 240h # 10 days
+  usages:
+  - signing
+  - key encipherment
+  - server auth
+  - client auth # included because routes mutually verify each other
   issuerRef:
     name: nats-ca
     kind: Issuer
