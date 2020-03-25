@@ -463,6 +463,9 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		}
 		sconfig.Cluster.Routes = routes
 	}
+	if cluster.UseServerName {
+		sconfig.ServerName = "$SERVER_NAME"
+	}
 
 	addConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
@@ -472,6 +475,9 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+	if cluster.UseServerName {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
 	}
 
 	// FIXME: Quoted "include" causes include to be ignored.
@@ -551,6 +557,9 @@ func UpdateConfigSecret(
 			Routes: routes,
 		},
 	}
+	if cluster.UseServerName {
+		sconfig.ServerName = "$SERVER_NAME"
+	}
 
 	addConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
@@ -564,6 +573,11 @@ func UpdateConfigSecret(
 
 	// FIXME: Quoted "include" causes include to be ignored.
 	rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), -1)
+
+	// Replace server name so that it is unquoted and evaled as an env var.
+	if cluster.UseServerName {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
+	}
 
 	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
 	if err != nil {
