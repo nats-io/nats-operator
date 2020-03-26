@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
@@ -326,6 +327,26 @@ func TestCreateServerWithCustomConfig(t *testing.T) {
 				WriteDeadline:    "10s",
 				DisableLogtime:   true,
 			}
+			natsCluster.Spec.UseServerName = true
+			natsCluster.Spec.PodTemplate = v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "nats",
+							Env: []v1.EnvVar{
+								{
+									Name: "MY_NAME",
+									Value: "bar"
+								},
+								{
+									Name: "SERVER_NAME",
+									Value: "foo-$(MY_NAME)"
+								},
+							}
+						}
+					}
+				},
+			},
 		})
 	if err != nil {
 		t.Fatal(err)
