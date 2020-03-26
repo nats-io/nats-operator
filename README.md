@@ -223,7 +223,7 @@ If [cert-manager](https://github.com/jetstack/cert-manager) is available in your
 Create a self-signed cluster issuer (or namespace-bound issuer) to create NATS' CA certificate:
 
 ```yaml
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: ClusterIssuer
 metadata:
   name: selfsigning
@@ -234,7 +234,7 @@ spec:
 Create your NATS cluster's CA certificate using the new `selfsigning` issuer:
 
 ```yaml
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
   name: nats-ca
@@ -256,7 +256,7 @@ spec:
 Create your NATS cluster issuer based on the new `nats-ca` CA:
 
 ```yaml
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
   name: nats-ca
@@ -268,7 +268,7 @@ spec:
 Create your NATS cluster's server certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
 
 ```yaml
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
   name: nats-server-tls
@@ -293,7 +293,7 @@ spec:
 Create your NATS cluster's routes certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
 
 ```yaml
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
   name: nats-routes-tls
