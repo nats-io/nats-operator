@@ -100,6 +100,10 @@ type ClusterSpec struct {
 	// ServerConfig is the extra configuration for the NATS server.
 	ServerConfig *ServerConfig `json:"natsConfig,omitempty"`
 
+	// UseServerName uses the environment variable to set a server
+	// name for each one of the pods.
+	UseServerName bool `json:"useServerName,omitempty"`
+
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
 

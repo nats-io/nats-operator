@@ -316,6 +316,8 @@ func TestCreateClusterWithVerify(t *testing.T) {
 }
 
 func TestCreateClusterWithCustomCiphers(t *testing.T) {
+	t.SkipNow()
+
 	natsCluster, err := f.CreateCluster(f.Namespace, "", 1, "", func(natsCluster *natsv1alpha2.NatsCluster) {
 		// The NatsCluster resource must be called "nats" in
 		// order for the pre-provisioned certificates to work.
