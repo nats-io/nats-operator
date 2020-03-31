@@ -104,7 +104,7 @@ cluster:
   name: nats-cluster
 
   ## Choose namespace for cluster deployment if clusterScoped is set to true
-  # namesapce: "some-namespace"
+  namespace: "nats-io"
 
   ## Nats version
   ## Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
