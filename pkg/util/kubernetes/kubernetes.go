@@ -463,6 +463,9 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 		}
 		sconfig.Cluster.Routes = routes
 	}
+	if cluster.UseServerName {
+		sconfig.ServerName = "$SERVER_NAME"
+	}
 
 	addConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
@@ -472,6 +475,9 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
+	}
+	if cluster.UseServerName {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
 	}
 
 	// FIXME: Quoted "include" causes include to be ignored.
@@ -551,6 +557,9 @@ func UpdateConfigSecret(
 			Routes: routes,
 		},
 	}
+	if cluster.UseServerName {
+		sconfig.ServerName = "$SERVER_NAME"
+	}
 
 	addConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
@@ -564,6 +573,11 @@ func UpdateConfigSecret(
 
 	// FIXME: Quoted "include" causes include to be ignored.
 	rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), -1)
+
+	// Replace server name so that it is unquoted and evaled as an env var.
+	if cluster.UseServerName {
+		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
+	}
 
 	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
 	if err != nil {
@@ -808,7 +822,24 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		leafnodePort = cs.LeafNodeConfig.Port
 	}
 
-	container := natsPodContainer(clusterName, cs.Version, cs.ServerImage,
+	// Initialize the pod spec with a template in case it is present.
+	spec := &v1.PodSpec{}
+	if cs.PodTemplate != nil {
+		spec = cs.PodTemplate.Spec.DeepCopy()
+		if spec.Containers != nil && len(spec.Containers) > 0 {
+			containers = spec.Containers
+		}
+	}
+
+	// First container has to be the NATS container
+	var container v1.Container
+	if len(spec.Containers) > 0 {
+		container = spec.Containers[0]
+	} else {
+		container = v1.Container{}
+	}
+
+	container = natsPodContainer(container, clusterName, cs.Version, cs.ServerImage,
 		enableClientsHostPort, gatewayPort, leafnodePort)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
@@ -940,7 +971,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	}
 
 	container.Command = cmd
-	containers = append(containers, container)
+
+	// If there were containers defined already, then replace the NATS container.
+	if len(containers) > 0 {
+		containers[0] = container
+	} else {
+		containers = append(containers, container)
+	}
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -948,13 +985,6 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			Labels:      labels,
 			Annotations: annotations,
 		},
-	}
-
-	spec := &v1.PodSpec{}
-
-	// Initialize the pod spec with a template in case it is present.
-	if cs.PodTemplate != nil {
-		spec = cs.PodTemplate.Spec.DeepCopy()
 	}
 	pod.Spec = *spec
 
@@ -1023,7 +1053,8 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		containers = append(containers, metricsContainer)
 	}
 
-	pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	// pod.Spec.Containers = append(pod.Spec.Containers, containers...)
+	pod.Spec.Containers = containers
 	pod.Spec.Volumes = append(pod.Spec.Volumes, volumes...)
 
 	applyPodPolicy(clusterName, pod, cs.Pod)
