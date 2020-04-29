@@ -8,4 +8,4 @@ Maintainership is on a per project basis.
   - Paulo Pires [@pires](https://github.com/pires)
 
 ### Maintainers
-  - Maciej Maczuga <maczug@awesome-ind.com> [@gifanonim](https://github.com/gifanonim)
+  - Maciej Maczuga ([Awesome Industries](https://awesome-ind.com)) <maczug@awesome-ind.com> [@gifanonim](https://github.com/gifanonim)
