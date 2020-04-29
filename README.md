@@ -576,13 +576,13 @@ spec:
 To build the `nats-operator` Docker image:
 
 ```sh
-$ docker build -f docker/operator/Dockerfile . <image:tag>
+$ docker build -f docker/operator/Dockerfile . -t <image:tag>
 ```
 
 To build the `nats-server-config-reloader`:
 
 ```sh
-$ docker build -f docker/reloader/Dockerfile . <image:tag>
+$ docker build -f docker/reloader/Dockerfile . -t <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.
