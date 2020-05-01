@@ -410,7 +410,7 @@ nats-user-example-nats-bound-token         Opaque        1         43m
 
 Please note that `NatsServiceRole` must be created in the same namespace as 
 `NatsCluster` is running, but `bound-token` will be created for `ServiceAccount` 
-reusorces that can be placed in various namespaces.
+resources that can be placed in various namespaces.
 
 An example of mounting the secret in a `Pod` can be found below:
 
