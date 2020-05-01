@@ -236,94 +236,103 @@ func addAuthConfig(
 			return err
 		}
 
-		for _, role := range roles.Items {
-			// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
-			sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
-			if err != nil {
-				// TODO: Collect created secrets when the service account no
-				// longer exists, currently only deleted when the NatsServiceRole
-				// is deleted since it is the owner of the object.
+		namespaces, err := kubecli.Namespaces().List(metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
 
-				// Skip since cannot map unless valid service account is found.
-				continue
-			}
+		for _, nsObj := range namespaces.Items {
+			ns = nsObj.Name
 
-			// TODO: Add support for expiration of the issued tokens.
-			tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Name, clusterName)
-			cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
-			if err == nil {
-				// We always get everything and apply, in case there is a diff
-				// then the reloader will apply them.
-				user := &natsconf.User{
-					User:     role.Name,
-					Password: string(cs.Data["token"]),
-					Permissions: &natsconf.Permissions{
-						Publish:   role.Spec.Permissions.Publish,
-						Subscribe: role.Spec.Permissions.Subscribe,
+			for _, role := range roles.Items {
+				// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
+
+				sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
+				if err != nil {
+					// TODO: Collect created secrets when the service account no
+					// longer exists, currently only deleted when the NatsServiceRole
+					// is deleted since it is the owner of the object.
+
+					// Skip since cannot map unless valid service account is found.
+					continue
+				}
+
+				// TODO: Add support for expiration of the issued tokens.
+				tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Name, clusterName)
+				cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
+				if err == nil {
+					// We always get everything and apply, in case there is a diff
+					// then the reloader will apply them.
+					user := &natsconf.User{
+						User:     role.Name,
+						Password: string(cs.Data["token"]),
+						Permissions: &natsconf.Permissions{
+							Publish:   role.Spec.Permissions.Publish,
+							Subscribe: role.Spec.Permissions.Subscribe,
+						},
+					}
+					users = append(users, user)
+					continue
+				}
+
+				// Create the secret, then make a service token request, and finally
+				// update the secret with the token mapped to the service account.
+				tokenSecret := &v1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   tokenSecretName,
+						Labels: LabelsForCluster(clusterName),
 					},
 				}
-				users = append(users, user)
-				continue
-			}
 
-			// Create the secret, then make a service token request, and finally
-			// update the secret with the token mapped to the service account.
-			tokenSecret := &v1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   tokenSecretName,
-					Labels: LabelsForCluster(clusterName),
-				},
-			}
-
-			// When the role that was mapped is deleted, then also delete the secret.
-			addOwnerRefToObject(tokenSecret.GetObjectMeta(), role.AsOwner())
-			tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
-			if err != nil {
-				return err
-			}
-
-			// Issue token with audience set for the NATS cluster in this namespace only,
-			// this will prevent the token from being usable against the API Server.
-			ar := &authenticationv1.TokenRequest{
-				Spec: authenticationv1.TokenRequestSpec{
-					Audiences: []string{fmt.Sprintf("nats://%s.%s.svc", clusterName, ns)},
-
-					// Service Token will be valid for as long as the created secret exists.
-					BoundObjectRef: &authenticationv1.BoundObjectReference{
-						Kind:       "Secret",
-						APIVersion: "v1",
-						Name:       tokenSecret.Name,
-						UID:        tokenSecret.UID,
-					},
-				},
-			}
-			tr, err := kubecli.ServiceAccounts(ns).CreateToken(sa.Name, ar)
-			if err != nil {
-				return err
-			}
-
-			if err == nil {
-				// Update secret with issued token, then save the user in the NATS Config.
-				token := tr.Status.Token
-				tokenSecret.Data = map[string][]byte{
-					"token": []byte(token),
-				}
-				tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
+				// When the role that was mapped is deleted, then also delete the secret.
+				addOwnerRefToObject(tokenSecret.GetObjectMeta(), role.AsOwner())
+				tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
 				if err != nil {
 					return err
 				}
-				user := &natsconf.User{
-					User:     role.Name,
-					Password: string(token),
-					Permissions: &natsconf.Permissions{
-						Publish:   role.Spec.Permissions.Publish,
-						Subscribe: role.Spec.Permissions.Subscribe,
+
+				// Issue token with audience set for the NATS cluster in this namespace only,
+				// this will prevent the token from being usable against the API Server.
+				ar := &authenticationv1.TokenRequest{
+					Spec: authenticationv1.TokenRequestSpec{
+						Audiences: []string{fmt.Sprintf("nats://%s.%s.svc", clusterName, ns)},
+
+						// Service Token will be valid for as long as the created secret exists.
+						BoundObjectRef: &authenticationv1.BoundObjectReference{
+							Kind:       "Secret",
+							APIVersion: "v1",
+							Name:       tokenSecret.Name,
+							UID:        tokenSecret.UID,
+						},
 					},
 				}
-				users = append(users, user)
+				tr, err := kubecli.ServiceAccounts(ns).CreateToken(sa.Name, ar)
+				if err != nil {
+					return err
+				}
+
+				if err == nil {
+					// Update secret with issued token, then save the user in the NATS Config.
+					token := tr.Status.Token
+					tokenSecret.Data = map[string][]byte{
+						"token": []byte(token),
+					}
+					tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
+					if err != nil {
+						return err
+					}
+					user := &natsconf.User{
+						User:     role.Name,
+						Password: string(token),
+						Permissions: &natsconf.Permissions{
+							Publish:   role.Spec.Permissions.Publish,
+							Subscribe: role.Spec.Permissions.Subscribe,
+						},
+					}
+					users = append(users, user)
+				}
 			}
 		}
-
 		// Expand authorization rules from the service account tokens.
 		sconfig.Authorization = &natsconf.AuthorizationConfig{
 			Users: users,

@@ -408,6 +408,10 @@ nats-admin-user-example-nats-bound-token   Opaque        1         43m
 nats-user-example-nats-bound-token         Opaque        1         43m
 ```
 
+Please note that `NatsServiceRole` must be created in the same namespace as 
+`NatsCluster` is running, but `bound-token` will be created for `ServiceAccount` 
+resources that can be placed in various namespaces.
+
 An example of mounting the secret in a `Pod` can be found below:
 
 ```yaml
@@ -576,13 +580,13 @@ spec:
 To build the `nats-operator` Docker image:
 
 ```sh
-$ docker build -f docker/operator/Dockerfile . <image:tag>
+$ docker build -f docker/operator/Dockerfile . -t <image:tag>
 ```
 
 To build the `nats-server-config-reloader`:
 
 ```sh
-$ docker build -f docker/reloader/Dockerfile . <image:tag>
+$ docker build -f docker/reloader/Dockerfile . -t <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.
