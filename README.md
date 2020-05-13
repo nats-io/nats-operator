@@ -327,10 +327,12 @@ To try this feature using `minikube` v0.30.0+, you can configure it to start as 
 
 ```console
 $ minikube start \
-  --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
-  --extra-config=apiserver.service-account-issuer=api \
-  --extra-config=apiserver.service-account-api-audiences=api \
-  --kubernetes-version=v1.12.4
+    --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/sa.key \
+    --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub \
+    --extra-config=apiserver.service-account-issuer=api \
+    --extra-config=apiserver.service-account-api-audiences=api,spire-server \
+    --extra-config=apiserver.authorization-mode=Node,RBAC \
+    --extra-config=kubelet.authentication-token-webhook=true
 ```
 
 Please note that availability of this feature across Kubernetes offerings may vary widely.
