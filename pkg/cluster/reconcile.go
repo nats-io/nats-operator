@@ -45,7 +45,7 @@ func (c *Cluster) reconcileSize() error {
 		// Remove extra pods as required in order to meet the desired size.
 		// As we remove each pod, we must update the config secret so that routes are re-computed.
 		for idx := currentSize - 1; idx >= desiredSize; idx-- {
-			if err := c.tryGracefulPodDeletion(pods[idx], c.cluster.Spec.Version); err != nil {
+			if err := c.tryGracefulPodDeletion(pods[idx]); err != nil {
 				return err
 			}
 			if err := c.updateConfigSecret(); err != nil {
@@ -94,7 +94,7 @@ func (c *Cluster) reconcileVersion() error {
 		for _, pod := range pods {
 			if kubernetesutil.GetNATSVersion(pod) != c.cluster.Spec.Version {
 				c.maybeUpgradeMgmtService()
-				return c.upgradePod(pod, desiredVersion)
+				return c.upgradePod(pod)
 			}
 		}
 	}
