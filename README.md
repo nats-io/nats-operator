@@ -327,10 +327,12 @@ To try this feature using `minikube` v0.30.0+, you can configure it to start as 
 
 ```console
 $ minikube start \
-  --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
-  --extra-config=apiserver.service-account-issuer=api \
-  --extra-config=apiserver.service-account-api-audiences=api \
-  --kubernetes-version=v1.12.4
+    --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/sa.key \
+    --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub \
+    --extra-config=apiserver.service-account-issuer=api \
+    --extra-config=apiserver.service-account-api-audiences=api,spire-server \
+    --extra-config=apiserver.authorization-mode=Node,RBAC \
+    --extra-config=kubelet.authentication-token-webhook=true
 ```
 
 Please note that availability of this feature across Kubernetes offerings may vary widely.
@@ -407,6 +409,10 @@ NAME                                       TYPE          DATA      AGE
 nats-admin-user-example-nats-bound-token   Opaque        1         43m
 nats-user-example-nats-bound-token         Opaque        1         43m
 ```
+
+Please note that `NatsServiceRole` must be created in the same namespace as 
+`NatsCluster` is running, but `bound-token` will be created for `ServiceAccount` 
+resources that can be placed in various namespaces.
 
 An example of mounting the secret in a `Pod` can be found below:
 
@@ -576,13 +582,13 @@ spec:
 To build the `nats-operator` Docker image:
 
 ```sh
-$ docker build -f docker/operator/Dockerfile . <image:tag>
+$ docker build -f docker/operator/Dockerfile . -t <image:tag>
 ```
 
 To build the `nats-server-config-reloader`:
 
 ```sh
-$ docker build -f docker/reloader/Dockerfile . <image:tag>
+$ docker build -f docker/reloader/Dockerfile . -t <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.
