@@ -20,7 +20,7 @@ import (
 
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -29,8 +29,8 @@ import (
 // In order to do that, we first try to make NATS enter the "lame duck" mode.
 // If we succeed, we adopt a special upgrade procedure since the pod (or at least its "nats" container) will have been terminated and can't be upgraded directly.
 // If we fail, we stick to the usual method of upgrading the container's "image" field to the desired version.
-func (c *Cluster) upgradePod(pod *v1.Pod, version string) error {
-	if err := c.enterLameDuckModeAndWaitTermination(pod, version); err != nil {
+func (c *Cluster) upgradePod(pod *v1.Pod) error {
+	if err := c.enterLameDuckModeAndWaitTermination(pod); err != nil {
 		c.logger.Warn(err)
 		return c.upgradeRunningPod(pod)
 	}

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -99,6 +99,10 @@ type ClusterSpec struct {
 
 	// ServerConfig is the extra configuration for the NATS server.
 	ServerConfig *ServerConfig `json:"natsConfig,omitempty"`
+
+	// UseServerName uses the environment variable to set a server
+	// name for each one of the pods.
+	UseServerName bool `json:"useServerName,omitempty"`
 
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
@@ -280,6 +284,12 @@ type TLSConfig struct {
 
 	// Verify toggles verifying TLS certs for clients.
 	Verify bool `json:"verify,omitempty"`
+
+	// CipherSuites
+	CipherSuites []string `json:"cipherSuites,omitempty"`
+
+	// CurvePreferences
+	CurvePreferences []string `json:"curvePreferences,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.

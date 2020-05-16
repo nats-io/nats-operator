@@ -9,6 +9,7 @@ import (
 type ServerConfig struct {
 	Host             string                `json:"host,omitempty"`
 	Port             int                   `json:"port,omitempty"`
+	ServerName       string                `json:"server_name,omitempty"`
 	HTTPPort         int                   `json:"http_port,omitempty"`
 	HTTPSPort        int                   `json:"https_port,omitempty"`
 	Cluster          *ClusterConfig        `json:"cluster,omitempty"`
