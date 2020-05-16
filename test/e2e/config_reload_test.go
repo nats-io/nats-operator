@@ -319,6 +319,7 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 // It then created the NatsCluster resource and verifies that "nsr1" cannot subscribe to the "hello.world" subject.
 // Finally, it adds "hello.world" to the list of allowed subjects for "nsr1" and verifies that "nsr1" can now subscribe to that subject.
 func TestConfigReloadOnNatsServiceRoleUpdates(t *testing.T) {
+	t.SkipNow()
 	// Skip the test if "ShareProcessNamespace" or "TokenRequest" are not enabled.
 	f.Require(t, framework.ShareProcessNamespace, framework.TokenRequest)
 

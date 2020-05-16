@@ -9,6 +9,9 @@ rbacEnabled: true
 ## * The Release namespace must be "nats-io"
 clusterScoped: false
 
+## Set default Replica Coint for the Operator
+replicaCount: 1
+
 image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
   registry: docker.io
@@ -62,6 +65,12 @@ podAnnotations: {}
 ##
 podLabels: {}
 
+## Update strategy, can be "Recreate" or "RollingUpdate". Default is RollingUpdate.
+
+updateStrategy: RollingUpdate
+# rollingUpdateMaxSurge: 25%
+# rollingUpdateMaxUnavailable: "25% 
+
 ## Configure resource requests and limits
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ##
@@ -97,7 +106,7 @@ cluster:
   name: nats-cluster
 
   ## Choose namespace for cluster deployment if clusterScoped is set to true
-  # namesapce: "some-namespace"
+  namespace: "nats-io"
 
   ## Nats version
   ## Image tags are listed here: https://hub.docker.com/_/nats?tab=tags
