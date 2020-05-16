@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
@@ -297,6 +298,69 @@ func TestCreateClusterWithVerify(t *testing.T) {
 			return false, nil
 		}
 		if config.TLS == nil || !config.TLS.Verify {
+			return false, nil
+		}
+
+		pods, err := f.PodsForNatsCluster(natsCluster)
+		if err != nil {
+			return false, nil
+		}
+		if len(pods) < 1 {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateClusterWithCustomCiphers(t *testing.T) {
+	t.SkipNow()
+
+	natsCluster, err := f.CreateCluster(f.Namespace, "", 1, "", func(natsCluster *natsv1alpha2.NatsCluster) {
+		// The NatsCluster resource must be called "nats" in
+		// order for the pre-provisioned certificates to work.
+		natsCluster.Name = "nats"
+		natsCluster.Spec.ServerImage = "nats"
+		natsCluster.Spec.Version = "1.4.1"
+
+		// Enable TLS using pre-provisioned certificates.
+		natsCluster.Spec.TLS = &natsv1alpha2.TLSConfig{
+			Verify:           true,
+			ServerSecret:     "nats-certs",
+			CipherSuites:     []string{"FOO", "BAR"},
+			CurvePreferences: []string{"HELLO", "WORLD"},
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Wait until the full mesh is formed.
+	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	err = f.WaitUntilSecretCondition(ctx1, natsCluster, func(event watchapi.Event) (bool, error) {
+		secret := event.Object.(*v1.Secret)
+		conf, ok := secret.Data[constants.ConfigFileName]
+		if !ok {
+			return false, nil
+		}
+		config, err := natsconf.Unmarshal(conf)
+		if err != nil {
+			return false, nil
+		}
+		if config.TLS == nil {
+			return false, nil
+		}
+		fmt.Println(config.TLS.CipherSuites, len(config.TLS.CipherSuites))
+		if len(config.TLS.CipherSuites) != 2 {
 			return false, nil
 		}
 
