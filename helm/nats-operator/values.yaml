@@ -71,17 +71,16 @@ updateStrategy: RollingUpdate
 # rollingUpdateMaxSurge: 25%
 # rollingUpdateMaxUnavailable: "25% 
 
-
 ## Configure resource requests and limits
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ##
 resources: {}
 # limits:
-#   cpu: 500m
-#   memory: 512Mi
-# requests:
 #   cpu: 100m
-#   memory: 256Mi
+#   memory: 64Mi
+# requests:
+#   cpu: 10m
+#   memory: 64Mi
 
 ## Configure extra options for liveness and readiness probes
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
@@ -115,6 +114,14 @@ cluster:
 
   ## Cluster Size
   size: 3
+
+  resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 256Mi
 
   ## Client Authentication
   ## ref: https://github.com/nats-io/gnatsd#authentication
@@ -157,6 +164,13 @@ cluster:
     repository: "connecteverything/nats-server-config-reloader"
     tag: "0.2.2-v1alpha2"
     pullPolicy: "IfNotPresent"
+    resources: {}
+    # limits:
+    #   cpu: 50m
+    #   memory: 32Mi
+    # requests:
+    #   cpu: 10m
+    #   memory: 32Mi
 
   ## Prometheus Metrics Exporter
   ##

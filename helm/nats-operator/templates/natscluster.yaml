@@ -12,11 +12,18 @@ spec:
   version: {{ .Values.cluster.version }}
 
   pod:
+    {{- if .Values.cluster.resources }}
+    resources:
+      {{ .Values.cluster.resources | toYaml | nindent 6 }}
+    {{- end }}
     enableConfigReload: {{ .Values.cluster.configReload.enabled }}
     reloaderImage: {{ .Values.cluster.configReload.repository }}
     reloaderImageTag: {{ .Values.cluster.configReload.tag }}
     reloaderImagePullPolicy: {{ .Values.cluster.configReload.pullPolicy }}
-
+    {{- if .Values.cluster.configReload.resources }}
+    reloaderResources:
+      {{ .Values.cluster.configReload.resources | toYaml | nindent 6 }}
+    {{- end }}
     enableMetrics: {{ .Values.cluster.metrics.enabled }}
     metricsImage: {{ .Values.cluster.metrics.repository }}
     metricsImageTag: {{ .Values.cluster.metrics.tag }}
