@@ -9,6 +9,9 @@ rbacEnabled: true
 ## * The Release namespace must be "nats-io"
 clusterScoped: false
 
+## Set default Replica Coint for the Operator
+replicaCount: 1
+
 image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
   registry: docker.io
