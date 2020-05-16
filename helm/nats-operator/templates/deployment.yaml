@@ -122,7 +122,7 @@ spec:
                   app: "{{ template "nats.name" . }}"
                   release: "{{ .Release.Name }}"
       {{- end }}
-      {{- if .Values.pullSecrets }}
+      {{- if .Values.image.pullSecrets }}
       imagePullSecrets:
-        {{ .Values.pullSecrets}}
+        {{ .Values.image.pullSecrets}}
       {{- end }}
