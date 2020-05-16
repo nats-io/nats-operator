@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -42,6 +42,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/debug"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	stringutil "github.com/nats-io/nats-operator/pkg/util/strings"
+	"github.com/nats-io/nats-operator/pkg/util/versionCheck"
 )
 
 var (
@@ -523,12 +524,15 @@ func (c *Cluster) isDebugLoggerEnabled() bool {
 // In case this succeeds, the funcion blocks until the "nats" container reaches the "Terminated" state (indicating that the "lame duck" mode has been entered and NATS is ready to shutdown) or until a timeout is reached.
 // Otherwise, it returns an error which should be handled by the caller.
 func (c *Cluster) enterLameDuckModeAndWaitTermination(pod *v1.Pod) error {
-	// Try to place NATS in "lame duck" mode by sending the "gnatsd" process the "ldm" signal.
+	// Try to place NATS in "lame duck" mode by sending the process the "ldm" signal.
 	// We wait for at most "podExecTimeout" for the "exec" command to return a result.
 	ctx, fn := context.WithTimeout(context.Background(), podExecTimeout)
 	defer fn()
+
+	version := kubernetesutil.GetNATSVersion(pod)
+
 	args := []string{
-		constants.NatsBinaryPath,
+		versionCheck.ServerBinaryPath(version),
 		"-sl",
 		fmt.Sprintf("ldm=%s", constants.PidFilePath),
 	}

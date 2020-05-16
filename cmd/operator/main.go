@@ -29,7 +29,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -51,6 +51,7 @@ import (
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/probe"
 	"github.com/nats-io/nats-operator/version"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -159,12 +160,14 @@ func main() {
 	}
 
 	http.HandleFunc(probe.HTTPReadyzEndpoint, probe.ReadyzHandler)
+	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(listenAddr, nil)
 
 	rl, err := resourcelock.New(resourcelock.EndpointsResourceLock,
 		namespace,
 		"nats-operator",
 		kubeClient.CoreV1(),
+		kubeClient.CoordinationV1(),
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: createRecorder(kubeClient.CoreV1(), name, namespace),

@@ -2,9 +2,9 @@
 
 [![License Apache 2.0](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Build Status](https://travis-ci.org/nats-io/nats-operator.svg?branch=master)](https://travis-ci.org/nats-io/nats-operator)
-[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.4.4)](https://github.com/nats-io/nats-operator/releases/tag/v0.4.4)
+[![Version](https://d25lcipzij17d.cloudfront.net/badge.svg?id=go&type=5&v=0.6.0)](https://github.com/nats-io/nats-operator/releases/tag/v0.6.0)
 
-NATS Operator manages NATS clusters atop [Kubernetes][k8s-home], automating their creation and administration.
+NATS Operator manages NATS clusters atop [Kubernetes][k8s-home] using [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).  If looking to run NATS on K8S without the operator you can also find [Helm charts in the nats-io/k8s repo](https://github.com/nats-io/k8s#helm-charts-for-nats). You can also find more info about running NATS on Kubernetes in the [docs](https://docs.nats.io/nats-on-kubernetes/nats-kubernetes) as well as a minimal setup using `StatefulSets` only without using the operator to get started [here](https://docs.nats.io/nats-on-kubernetes/minimal-setup).
 
 [k8s-home]: http://kubernetes.io
 
@@ -26,7 +26,7 @@ metadata:
   name: example-nats-cluster
 spec:
   size: 3
-  version: "1.4.0"
+  version: "2.0.0"
 ```
 
 NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the any necessary operations on the associated NATS clusters in order to align their current status with the desired one.
@@ -45,8 +45,8 @@ The operation mode must be chosen when installing NATS Operator and cannot be ch
 To perform a namespace-scoped installation of NATS Operator in the Kubernetes cluster pointed at by the current context, you may run:
 
 ```console
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.4.4/00-prereqs.yaml
-$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/download/v0.4.4/10-deployment.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/00-prereqs.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/10-deployment.yaml
 ``` 
 
 This will, by default, install NATS Operator in the `default` namespace and observe `NatsCluster` resources created in the `default` namespace, alone.
@@ -94,8 +94,8 @@ spec:
 Once you have done this, you may install NATS Operator by running:
 
 ```console
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/00-prereqs.yaml
-$ kubectl apply -f https://raw.githubusercontent.com/nats-io/nats-operator/master/deploy/10-deployment.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/00-prereqs.yaml
+$ kubectl apply -f https://github.com/nats-io/nats-operator/releases/latest/download/10-deployment.yaml
 ``` 
 
 **WARNING:** When performing a cluster-scoped installation of NATS Operator, you must make sure that there are no other deployments of NATS Operator in the Kubernetes cluster.
@@ -168,19 +168,152 @@ In order for TLS to be properly established between the nodes, it is
 necessary to create a wildcard certificate that matches the subdomain
 created for the service from the clients and the one for the routes.
 
-The `routesSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
+By default, the `routesSecret` has to provide the files: `ca.pem`, `route-key.pem`, `route.pem`,
 for the CA, server private and public key respectively.
 
 ```
 $ kubectl create secret generic nats-routes-tls --from-file=ca.pem --from-file=route-key.pem --from-file=route.pem
 ```
 
-Similarly, the `serverSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
+Similarly, by default the `serverSecret` has to provide the files: `ca.pem`, `server-key.pem`, and `server.pem`
 for the CA, server private key and public key used to secure the connection
 with the clients.
 
 ```
 $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
+```
+
+NATS also supports kubernetes.io/tls secrets (like the ones managed by cert-manager) and any secrets containing a CA, private and public keys with arbitrary names.
+It is possible to overwrite the default names as follows:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  # Number of nodes in the cluster
+  size: 3
+  version: "1.3.0"
+
+  tls:
+    # Certificates to secure the NATS client connections:
+    serverSecret: "nats-clients-tls"
+    # Name of the CA in serverSecret
+    serverSecretCAFileName: "ca.crt"
+    # Name of the key in serverSecret
+    serverSecretKeyFileName: "tls.key"
+    # Name of the certificate in serverSecret
+    serverSecretCertFileName: "tls.crt"
+
+    # Certificates to secure the routes.
+    routesSecret: "nats-routes-tls"
+    # Name of the CA in routesSecret
+    routesSecretCAFileName: "ca.crt"
+    # Name of the key in routesSecret
+    routesSecretKeyFileName: "tls.key"
+    # Name of the certificate in routesSecret
+    routesSecretCertFileName: "tls.crt"
+```
+
+### Cert-Manager
+
+If [cert-manager](https://github.com/jetstack/cert-manager) is available in your cluster, you can easily generate TLS certificates for NATS as follows:
+
+Create a self-signed cluster issuer (or namespace-bound issuer) to create NATS' CA certificate:
+
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: ClusterIssuer
+metadata:
+  name: selfsigning
+spec:
+  selfSigned: {}
+```
+
+Create your NATS cluster's CA certificate using the new `selfsigning` issuer:
+
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: nats-ca
+spec:
+  secretName: nats-ca
+  duration: 8736h # 1 year
+  renewBefore: 240h # 10 days
+  issuerRef:
+    name: selfsigning
+    kind: ClusterIssuer
+  commonName: nats-ca
+  usages: 
+    - cert sign # workaround for odd cert-manager behavior
+  organization:
+  - Your organization
+  isCA: true
+```
+
+Create your NATS cluster issuer based on the new `nats-ca` CA:
+
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: nats-ca
+spec:
+  ca:
+    secretName: nats-ca
+```
+
+Create your NATS cluster's server certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
+
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: nats-server-tls
+spec:
+  secretName: nats-server-tls
+  duration: 2160h # 90 days
+  renewBefore: 240h # 10 days
+  usages:
+  - signing
+  - key encipherment
+  - server auth
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  organization:
+  - Your organization
+  commonName: nats.nats-io.svc.cluster.local
+  dnsNames:
+  - nats.nats-io.svc
+```
+
+Create your NATS cluster's routes certificate (assuming NATS is running in the `nats-io` namespace, otherwise, set the `commonName` and `dnsNames` fields appropriately):
+
+```yaml
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: nats-routes-tls
+spec:
+  secretName: nats-routes-tls
+  duration: 2160h # 90 days
+  renewBefore: 240h # 10 days
+  usages:
+  - signing
+  - key encipherment
+  - server auth
+  - client auth # included because routes mutually verify each other
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  organization:
+  - Your organization
+  commonName: "*.nats-mgmt.nats-io.svc.cluster.local"
+  dnsNames:
+  - "*.nats-mgmt.nats-io.svc"
 ```
 
 ### Authorization
@@ -194,10 +327,12 @@ To try this feature using `minikube` v0.30.0+, you can configure it to start as 
 
 ```console
 $ minikube start \
-  --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key \
-  --extra-config=apiserver.service-account-issuer=api \
-  --extra-config=apiserver.service-account-api-audiences=api \
-  --kubernetes-version=v1.12.4
+    --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/sa.key \
+    --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub \
+    --extra-config=apiserver.service-account-issuer=api \
+    --extra-config=apiserver.service-account-api-audiences=api,spire-server \
+    --extra-config=apiserver.authorization-mode=Node,RBAC \
+    --extra-config=kubelet.authentication-token-webhook=true
 ```
 
 Please note that availability of this feature across Kubernetes offerings may vary widely.
@@ -274,6 +409,10 @@ NAME                                       TYPE          DATA      AGE
 nats-admin-user-example-nats-bound-token   Opaque        1         43m
 nats-user-example-nats-bound-token         Opaque        1         43m
 ```
+
+Please note that `NatsServiceRole` must be created in the same namespace as 
+`NatsCluster` is running, but `bound-token` will be created for `ServiceAccount` 
+resources that can be placed in various namespaces.
 
 An example of mounting the secret in a `Pod` can be found below:
 
@@ -401,6 +540,41 @@ spec:
     clientsAuthTimeout: 5
 ```
 
+## Connecting operated NATS clusters to external NATS clusters
+
+By using the `extraRoutes` field on the spec you can make the operated
+NATS cluster create routes against clusters outside of Kubernetes:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats"
+spec:
+  size: 3
+  version: "1.4.1"
+
+  extraRoutes:
+    - route: "nats://nats-a.example.com:6222"
+    - route: "nats://nats-b.example.com:6222"
+    - route: "nats://nats-c.example.com:6222"
+```
+
+It is also possible to connect to another operated NATS cluster as follows:
+
+```yaml
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-v2-2"
+spec:
+  size: 3
+  version: "1.4.1"
+
+  extraRoutes:
+    - cluster: "nats-v2-1"
+```
+
 ## Development
 
 ### Building the Docker Image
@@ -408,13 +582,13 @@ spec:
 To build the `nats-operator` Docker image:
 
 ```sh
-$ docker build -f docker/operator/Dockerfile . <image:tag>
+$ docker build -f docker/operator/Dockerfile . -t <image:tag>
 ```
 
 To build the `nats-server-config-reloader`:
 
 ```sh
-$ docker build -f docker/reloader/Dockerfile . <image:tag>
+$ docker build -f docker/reloader/Dockerfile . -t <image:tag>
 ```
 
 You'll need Docker `17.06.0-ce` or higher.

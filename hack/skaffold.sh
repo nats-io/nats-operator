@@ -79,5 +79,8 @@ esac
 # Make sure the target namespace exists.
 kubectl get namespace "${NAMESPACE}" > /dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
 
+# Label the minikube node with an external ip
+kubectl label nodes minikube nats.io/node-external-ip=127.0.0.1 --overwrite
+
 # Run skaffold.
 skaffold "${MODE}" -f "${TMP_DIR}/skaffold.yml" -n "${NAMESPACE}" -p "${PROFILE}"

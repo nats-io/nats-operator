@@ -7,24 +7,30 @@ import (
 )
 
 type ServerConfig struct {
-	Host             string               `json:"host,omitempty"`
-	Port             int                  `json:"port,omitempty"`
-	HTTPPort         int                  `json:"http_port,omitempty"`
-	HTTPSPort        int                  `json:"https_port,omitempty"`
-	Cluster          *ClusterConfig       `json:"cluster,omitempty"`
-	TLS              *TLSConfig           `json:"tls,omitempty"`
-	Debug            bool                 `json:"debug,omitempty"`
-	Trace            bool                 `json:"trace,omitempty"`
-	Logtime          bool                 `json:"logtime"`
-	WriteDeadline    string               `json:"write_deadline,omitempty"`
-	MaxConnections   int                  `json:"max_connections,omitempty"`
-	MaxControlLine   int                  `json:"max_control_line,omitempty"`
-	MaxPayload       int                  `json:"max_payload,omitempty"`
-	MaxPending       int                  `json:"max_pending,omitempty"`
-	MaxSubscriptions int                  `json:"max_subscriptions,omitempty"`
-	Authorization    *AuthorizationConfig `json:"authorization,omitempty"`
-	LameDuckDuration string               `json:"lame_duck_duration,omitempty"`
-	Include          string               `json:"include,omitempty"`
+	Host             string                `json:"host,omitempty"`
+	Port             int                   `json:"port,omitempty"`
+	ServerName       string                `json:"server_name,omitempty"`
+	HTTPPort         int                   `json:"http_port,omitempty"`
+	HTTPSPort        int                   `json:"https_port,omitempty"`
+	Cluster          *ClusterConfig        `json:"cluster,omitempty"`
+	TLS              *TLSConfig            `json:"tls,omitempty"`
+	Debug            bool                  `json:"debug,omitempty"`
+	Trace            bool                  `json:"trace,omitempty"`
+	Logtime          bool                  `json:"logtime"`
+	WriteDeadline    string                `json:"write_deadline,omitempty"`
+	MaxConnections   int                   `json:"max_connections,omitempty"`
+	MaxControlLine   int                   `json:"max_control_line,omitempty"`
+	MaxPayload       int                   `json:"max_payload,omitempty"`
+	MaxPending       int                   `json:"max_pending,omitempty"`
+	MaxSubscriptions int                   `json:"max_subscriptions,omitempty"`
+	Authorization    *AuthorizationConfig  `json:"authorization,omitempty"`
+	LameDuckDuration string                `json:"lame_duck_duration,omitempty"`
+	Include          string                `json:"include,omitempty"`
+	Gateway          *GatewayConfig        `json:"gateway,omitempty"`
+	LeafNode         *LeafNodeServerConfig `json:"leaf,omitempty"`
+	JWT              string                `json:"operator,omitempty"`
+	SystemAccount    string                `json:"system_account,omitempty"`
+	Resolver         string                `json:"resolver,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -32,6 +38,32 @@ type ClusterConfig struct {
 	Routes        []string             `json:"routes,omitempty"`
 	TLS           *TLSConfig           `json:"tls,omitempty"`
 	Authorization *AuthorizationConfig `json:"authorization,omitempty"`
+}
+
+type GatewayConfig struct {
+	Name           string               `json:"name,omitempty"`
+	Host           string               `json:"addr,omitempty"`
+	Port           int                  `json:"port,omitempty"`
+	TLS            *TLSConfig           `json:"tls,omitempty"`
+	TLSTimeout     float64              `json:"tls_timeout,omitempty"`
+	Advertise      string               `json:"advertise,omitempty"`
+	ConnectRetries int                  `json:"connect_retries,omitempty"`
+	Gateways       []*RemoteGatewayOpts `json:"gateways,omitempty"`
+	Include        string               `json:"include,omitempty"`
+	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
+}
+
+type LeafNodeServerConfig struct {
+	Port       int        `json:"port,omitempty"`
+	TLS        *TLSConfig `json:"tls,omitempty"`
+	TLSTimeout float64    `json:"tls_timeout,omitempty"`
+	Advertise  string     `json:"advertise,omitempty"`
+	Include    string     `json:"include,omitempty"`
+}
+
+type RemoteGatewayOpts struct {
+	Name string `json:"name"`
+	URL  string `json:"url,omitempty"`
 }
 
 type TLSConfig struct {
@@ -52,11 +84,13 @@ type AuthorizationConfig struct {
 	Timeout            int          `json:"timeout,omitempty"`
 	Users              []*User      `json:"users,omitempty"`
 	DefaultPermissions *Permissions `json:"default_permissions,omitempty"`
+	Include            string       `json:"include,omitempty"`
 }
 
 type User struct {
 	User        string       `json:"username,omitempty"`
 	Password    string       `json:"password,omitempty"`
+	NKey        string       `json:"nkey,omitempty"`
 	Permissions *Permissions `json:"permissions,omitempty"`
 }
 

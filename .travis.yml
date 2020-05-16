@@ -2,17 +2,15 @@ dist: xenial
 
 language: go
 go:
-- "1.10.x"
+- "1.13.3"
 go_import_path: github.com/nats-io/nats-operator
 
 env:
 - KUBERNETES_CONFIG_FILE=$HOME/.kube/config CHANGE_MINIKUBE_NONE_USER=true CLUSTER_SCOPED_E2E_NAMESPACE=nats-io NAMESPACE_SCOPED_E2E_NAMESPACE=nats-operator-e2e
 
 install:
-- go get -u github.com/golang/dep/cmd/dep
-- go get -u github.com/cloudflare/cfssl/cmd/cfssl
-- go get -u github.com/cloudflare/cfssl/cmd/cfssljson
-- cd $GOPATH/src/github.com/nats-io/nats-operator && dep ensure
+- GO111MODULE=off go get -u github.com/cloudflare/cfssl/cmd/cfssl
+- GO111MODULE=off go get -u github.com/cloudflare/cfssl/cmd/cfssljson
 
 before_script:
 - go version
@@ -25,6 +23,7 @@ before_script:
 
 script:
 - kubectl cluster-info
+- go mod download
 - cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e FEATURE_GATE_CLUSTER_SCOPED=false NAMESPACE=${NAMESPACE_SCOPED_E2E_NAMESPACE}
 - kubectl delete namespace ${NAMESPACE_SCOPED_E2E_NAMESPACE}
 - cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e FEATURE_GATE_CLUSTER_SCOPED=true NAMESPACE=${CLUSTER_SCOPED_E2E_NAMESPACE}

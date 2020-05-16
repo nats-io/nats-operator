@@ -17,7 +17,7 @@ package framework
 import (
 	"fmt"
 
-	"github.com/nats-io/go-nats"
+	"github.com/nats-io/nats.go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"

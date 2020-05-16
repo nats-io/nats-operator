@@ -18,8 +18,9 @@ NATS monitoring service can be accessed via port 8222 on the following DNS name 
 
 To access the Monitoring svc from outside the cluster, follow the steps below:
 
-1. Get the hostname indicated on the Ingress Rule and associate it to your cluster external IP:
+1. Get the name of a pod from the cluster that was deployed, then use port-forward to connect top it. For example:
 
-    kubectl port-forward svc/nats-cluster-mgmt 8222
+    kubectl get pods -l nats_cluster=nats-cluster
+    kubectl port-forward nats-cluster-1 8222
 
 2. Open a browser and access the NATS monitoring browsing to the Monitoring URL

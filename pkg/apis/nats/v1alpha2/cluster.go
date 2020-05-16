@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -100,6 +100,10 @@ type ClusterSpec struct {
 	// ServerConfig is the extra configuration for the NATS server.
 	ServerConfig *ServerConfig `json:"natsConfig,omitempty"`
 
+	// UseServerName uses the environment variable to set a server
+	// name for each one of the pods.
+	UseServerName bool `json:"useServerName,omitempty"`
+
 	// Paused is to pause the control of the operator for the cluster.
 	Paused bool `json:"paused,omitempty"`
 
@@ -128,6 +132,15 @@ type ClusterSpec struct {
 
 	// ExtraRoutes is a list of extra routes to which the cluster will connect.
 	ExtraRoutes []*ExtraRoute `json:"extraRoutes,omitempty"`
+
+	// GatewayConfig is the configuration for the gateways.
+	GatewayConfig *GatewayConfig `json:"gatewayConfig,omitempty"`
+
+	// LeafNodeConfig is the configuration for the leafnode.
+	LeafNodeConfig *LeafNodeConfig `json:"leafnodeConfig,omitempty"`
+
+	// OperatorConfig is the operator configuration from a server.
+	OperatorConfig *OperatorConfig `json:"operatorConfig,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.
@@ -143,6 +156,13 @@ type ServerConfig struct {
 	DisableLogtime   bool   `json:"disableLogtime,omitempty"`
 }
 
+// OperatorConfig is the operator configuration from a server.
+type OperatorConfig struct {
+	Secret        string `json:"secret,omitempty"`
+	SystemAccount string `json:"systemAccount,omitempty"`
+	Resolver      string `json:"resolver,omitempty"`
+}
+
 // ExtraRoute is a route that is not originally part of the NatsCluster
 // but that it will try to connect to.
 type ExtraRoute struct {
@@ -153,15 +173,95 @@ type ExtraRoute struct {
 	Route string `json:"route,omitempty"`
 }
 
+// GatewayConfig is the configuration for the gateway.
+type GatewayConfig struct {
+	// Name is the name of the gateway cluster.
+	Name string `json:"name,omitempty"`
+
+	// Port is the port that will bound from this host
+	// for external access.
+	Port int `json:"hostPort,omitempty"`
+
+	// Gateways is the list of remote gateways to which
+	// this cluster will be connecting.
+	Gateways []*RemoteGatewayOpts `json:"gateways,omitempty"`
+}
+
+// RemoteGatewayOpts is the configuration for a remote gateway entry.
+type RemoteGatewayOpts struct {
+	// Name is the name of the remote gateway.
+	Name string `json:"name"`
+
+	// URL is the endpoint of the remote gateway.
+	URL string `json:"url,omitempty"`
+}
+
+// LeafNodeConfig is the configuration for leafnodes.
+type LeafNodeConfig struct {
+	Port int `json:"hostPort,omitempty"`
+}
+
 // TLSConfig is the optional TLS configuration for the cluster.
 type TLSConfig struct {
 	// ServerSecret is the secret containing the certificates
 	// to secure the port to which the clients connect.
 	ServerSecret string `json:"serverSecret,omitempty"`
 
+	// ServerSecretCAFileName is the name of the CA in ServerSecret
+	// (default: ca.pem)
+	ServerSecretCAFileName string `json:"serverSecretCAFileName,omitempty"`
+
+	// ServerSecretKeyFileName is the name of the key in ServerSecret
+	// (default: server-key.pem)
+	ServerSecretKeyFileName string `json:"serverSecretKeyFileName,omitempty"`
+
+	// ServerSecretCertFileName is the name of the certificate in ServerSecret
+	// (default: server.pem)
+	ServerSecretCertFileName string `json:"serverSecretCertFileName,omitempty"`
+
 	// RoutesSecret is the secret containing the certificates
 	// to secure the port to which cluster routes connect.
 	RoutesSecret string `json:"routesSecret,omitempty"`
+
+	// RoutesSecretCAFileName is the name of the CA in RoutesSecret
+	// (default: ca.pem)
+	RoutesSecretCAFileName string `json:"routesSecretCAFileName,omitempty"`
+
+	// RoutesSecretKeyFileName is the name of the key in RoutesSecret
+	// (default: route-key.pem)
+	RoutesSecretKeyFileName string `json:"routesSecretKeyFileName,omitempty"`
+
+	// RoutesSecretCertFileName is the name of the certificate in RoutesSecret
+	// (default: route.pem)
+	RoutesSecretCertFileName string `json:"routesSecretCertFileName,omitempty"`
+
+	// GatewaySecret is the secret containing the certificates
+	// to secure the port to which gateway routes connect.
+	GatewaySecret string `json:"gatewaySecret,omitempty"`
+
+	// GatewaySecretCAFileName is the name of the CA in GatewaySecret
+	// (default: ca.pem)
+	GatewaySecretCAFileName string `json:"gatewaySecretCAFileName,omitempty"`
+
+	// GatewaySecretKeyFileName is the name of the key in GatewaySecret
+	GatewaySecretKeyFileName string `json:"gatewaySecretKeyFileName,omitempty"`
+
+	// GatewaySecretCertFileName is the name of the certificate in GatewaySecret
+	GatewaySecretCertFileName string `json:"gatewaySecretCertFileName,omitempty"`
+
+	// LeafnodeSecret is the secret containing the certificates
+	// to secure the port to which leafnode routes connect.
+	LeafnodeSecret string `json:"leafnodeSecret,omitempty"`
+
+	// LeafnodeSecretCAFileName is the name of the CA in LeafnodeSecret
+	// (default: ca.pem)
+	LeafnodeSecretCAFileName string `json:"leafnodeSecretCAFileName,omitempty"`
+
+	// LeafnodeSecretKeyFileName is the name of the key in LeafnodeSecret
+	LeafnodeSecretKeyFileName string `json:"leafnodeSecretKeyFileName,omitempty"`
+
+	// LeafnodeSecretCertFileName is the name of the certificate in LeafnodeSecret
+	LeafnodeSecretCertFileName string `json:"leafnodeSecretCertFileName,omitempty"`
 
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`
@@ -173,6 +273,23 @@ type TLSConfig struct {
 	// RoutesTLSTimeout is the time in seconds that the NATS server will
 	// allow to routes to finish the TLS handshake.
 	RoutesTLSTimeout float64 `json:"routesTLSTimeout,omitempty"`
+
+	// GatewaysTLSTimeout is the time in seconds that the NATS server will
+	// allow to routes to finish the TLS handshake.
+	GatewaysTLSTimeout float64 `json:"gatewaysTLSTimeout,omitempty"`
+
+	// LeafnodesTLSTimeout is the time in seconds that the NATS server will
+	// allow to routes to finish the TLS handshake.
+	LeafnodesTLSTimeout float64 `json:"leafnodesTLSTimeout,omitempty"`
+
+	// Verify toggles verifying TLS certs for clients.
+	Verify bool `json:"verify,omitempty"`
+
+	// CipherSuites
+	CipherSuites []string `json:"cipherSuites,omitempty"`
+
+	// CurvePreferences
+	CurvePreferences []string `json:"curvePreferences,omitempty"`
 }
 
 // PodPolicy defines the policy to create pod for the NATS container.
@@ -217,6 +334,9 @@ type PodPolicy struct {
 
 	// ReloaderImagePullPolicy is the pull policy for the reloader image.
 	ReloaderImagePullPolicy string `json:"reloaderImagePullPolicy,omitempty"`
+
+	// ReloaderResources is the reesource requirements for the reloader container
+	ReloaderResources v1.ResourceRequirements `json:"reloaderResources,omitempty"`
 
 	// EnableMetrics attaches a sidecar to each NATS Server
 	// that will export prometheus metrics.
@@ -263,6 +383,10 @@ type AuthConfig struct {
 	// configuration in JSON.
 	ClientsAuthSecret string `json:"clientsAuthSecret,omitempty"`
 
+	// ClientsAuthFile is the path that nats-operator should read
+	// auth secrets from on disk.
+	ClientsAuthFile string `json:"clientsAuthFile,omitempty"`
+
 	// ClientsAuthTimeout is the time in seconds that the NATS server will
 	// allow to clients to send their auth credentials.
 	ClientsAuthTimeout int `json:"clientsAuthTimeout,omitempty"`
@@ -293,6 +417,45 @@ func (c *ClusterSpec) Cleanup() {
 	}
 
 	c.Version = strings.TrimLeft(c.Version, "v")
+
+	if c.TLS != nil {
+		if len(c.TLS.ServerSecretCAFileName) == 0 {
+			c.TLS.ServerSecretCAFileName = constants.DefaultServerCAFileName
+		}
+		if len(c.TLS.ServerSecretCertFileName) == 0 {
+			c.TLS.ServerSecretCertFileName = constants.DefaultServerCertFileName
+		}
+		if len(c.TLS.ServerSecretKeyFileName) == 0 {
+			c.TLS.ServerSecretKeyFileName = constants.DefaultServerKeyFileName
+		}
+		if len(c.TLS.RoutesSecretCAFileName) == 0 {
+			c.TLS.RoutesSecretCAFileName = constants.DefaultRoutesCAFileName
+		}
+		if len(c.TLS.RoutesSecretCertFileName) == 0 {
+			c.TLS.RoutesSecretCertFileName = constants.DefaultRoutesCertFileName
+		}
+		if len(c.TLS.RoutesSecretKeyFileName) == 0 {
+			c.TLS.RoutesSecretKeyFileName = constants.DefaultRoutesKeyFileName
+		}
+		if len(c.TLS.GatewaySecretCAFileName) == 0 {
+			c.TLS.GatewaySecretCAFileName = constants.DefaultGatewayCAFileName
+		}
+		if len(c.TLS.GatewaySecretCertFileName) == 0 {
+			c.TLS.GatewaySecretCertFileName = constants.DefaultGatewayCertFileName
+		}
+		if len(c.TLS.GatewaySecretKeyFileName) == 0 {
+			c.TLS.GatewaySecretKeyFileName = constants.DefaultGatewayKeyFileName
+		}
+		if len(c.TLS.LeafnodeSecretCAFileName) == 0 {
+			c.TLS.LeafnodeSecretCAFileName = constants.DefaultLeafnodeCAFileName
+		}
+		if len(c.TLS.LeafnodeSecretCertFileName) == 0 {
+			c.TLS.LeafnodeSecretCertFileName = constants.DefaultLeafnodeCertFileName
+		}
+		if len(c.TLS.LeafnodeSecretKeyFileName) == 0 {
+			c.TLS.LeafnodeSecretKeyFileName = constants.DefaultLeafnodeKeyFileName
+		}
+	}
 }
 
 type ClusterPhase string

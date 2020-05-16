@@ -117,7 +117,7 @@ func (c *FakeNatsServiceRoles) DeleteCollection(options *v1.DeleteOptions, listO
 // Patch applies the patch and returns the patched natsServiceRole.
 func (c *FakeNatsServiceRoles) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha2.NatsServiceRole, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(natsservicerolesResource, c.ns, name, data, subresources...), &v1alpha2.NatsServiceRole{})
+		Invokes(testing.NewPatchSubresourceAction(natsservicerolesResource, c.ns, name, pt, data, subresources...), &v1alpha2.NatsServiceRole{})
 
 	if obj == nil {
 		return nil, err

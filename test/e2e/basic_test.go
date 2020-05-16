@@ -60,6 +60,37 @@ func TestCreateCluster(t *testing.T) {
 	}
 }
 
+// TestCreateClusterV2 creates a NatsCluster resource and waits for the full mesh to be formed.
+func TestCreateClusterV2(t *testing.T) {
+	var (
+		size    = 3
+		version = "2.0.0"
+	)
+
+	var (
+		natsCluster *natsv1alpha2.NatsCluster
+		err         error
+	)
+
+	// Create a NatsCluster resource with three members.
+	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
+		t.Fatal(err)
+	}
+	// Make sure we cleanup the NatsCluster resource after we're done testing.
+	defer func() {
+		if err = f.DeleteCluster(natsCluster); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Wait until the full mesh is formed.
+	ctx, fn := context.WithTimeout(context.Background(), waitTimeout)
+	defer fn()
+	if err = f.WaitUntilFullMeshWithVersion(ctx, natsCluster, size, version); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestPauseControl creates a NatsCluster resource and waits for the full mesh to be formed.
 // Then, it pauses control of the NatsCluster resource and scales it up to five nodes, expecting the operation to NOT be performed.
 // Finally, it resumes control of the NatsCluster resource and waits for the full five-node mesh to be formed.
