@@ -92,11 +92,11 @@ spec:
       {{- end }}
       {{- if .Values.nodeSelector }}
       nodeSelector:
-        {{ .Values.nodeSelector }}
+{{ toYaml .Values.nodeSelector | indent 8 }}
       {{- end }}
       {{- if .Values.tolerations }}
       tolerations:
-        {{ .Values.tolerations }}
+{{ toYaml .Values.tolerations | indent 8 }}
       {{- end }}
       {{- if .Values.schedulerName }}
       schedulerName: "{{ .Values.schedulerName}}"
