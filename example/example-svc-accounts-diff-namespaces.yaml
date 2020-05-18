@@ -1,52 +1,72 @@
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nats-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-app-ns
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-admin-app-ns
+---
 apiVersion: nats.io/v1alpha2
 kind: NatsCluster
 metadata:
-  name: example-nats
+  name: nats-cluster
+  namespace: nats-system
 spec:
   size: 3
-  version: "1.2.0"
+  version: "2.1.7"
   pod:
     enableConfigReload: true
   auth:
     enableServiceAccounts: true
 
-# The ServiceAccount and NatsServiceRole definitions
-# are required to have the same name in the namespace.
+# In cluster scope mode, the token secret will be created at the same namespace
+# where the ServiceAccount is created.
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nats-admin-user
+  namespace: my-admin-app-ns
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nats-user
+  namespace: my-app-ns
+
+# In cluster scope mode, the NatsServiceRole definitions have to be created
+# in the same namespace as the nats cluster.
 ---
 apiVersion: nats.io/v1alpha2
 kind: NatsServiceRole
 metadata:
   name: nats-user
-  namespace: nats-io
+  namespace: nats-system
 
   # Specifies which NATS cluster will be mapping this account,
   # (have to create a service role with permission per cluster).
   labels:
-    nats_cluster: example-nats
+    nats_cluster: nats-cluster
 spec:
   permissions:
     publish: ["foo.*", "foo.bar.quux"]
     subscribe: ["foo.bar", "greetings", "hello.world"]
-
 ---
 apiVersion: nats.io/v1alpha2
 kind: NatsServiceRole
 metadata:
   name: nats-admin-user
-  namespace: nats-io
+  namespace: nats-system
   labels:
-    nats_cluster: example-nats
+    nats_cluster: nats-cluster
 spec:
   permissions:
     publish: [">"]
@@ -57,15 +77,14 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nats-user-pod
-  labels:
-    nats_cluster: example-nats
+  namespace: my-app-ns
 spec:
   volumes:
     - name: "token"
       projected:
         sources:
         - secret:
-            name: "nats-user-example-nats-bound-token"
+            name: "nats-user-nats-cluster-bound-token"
             items:
               - key: token
                 path: "token"
@@ -88,15 +107,14 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nats-admin-user-pod
-  labels:
-    nats_cluster: example-nats
+  namespace: my-admin-app-ns
 spec:
   volumes:
     - name: "token"
       projected:
         sources:
         - secret:
-            name: "nats-admin-user-example-nats-bound-token"
+            name: "nats-admin-user-nats-cluster-bound-token"
             items:
               - key: token
                 path: "token"
