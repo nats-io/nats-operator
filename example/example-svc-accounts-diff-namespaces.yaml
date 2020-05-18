@@ -3,9 +3,10 @@ apiVersion: nats.io/v1alpha2
 kind: NatsCluster
 metadata:
   name: example-nats
+  namespace: nats-io
 spec:
   size: 3
-  version: "1.2.0"
+  version: "2.1.7"
   pod:
     enableConfigReload: true
   auth:
@@ -18,11 +19,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nats-admin-user
+  namespace: my-ns
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: nats-user
+  namespace: my-ns
 ---
 apiVersion: nats.io/v1alpha2
 kind: NatsServiceRole
@@ -57,8 +60,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nats-user-pod
-  labels:
-    nats_cluster: example-nats
+  namespace: my-ns
 spec:
   volumes:
     - name: "token"
@@ -88,8 +90,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: nats-admin-user-pod
-  labels:
-    nats_cluster: example-nats
+  namespace: my-ns
 spec:
   volumes:
     - name: "token"
