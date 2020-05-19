@@ -388,10 +388,6 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		Include:       filepath.Join(".", constants.BootConfigGatewayFilePath),
 	}
 
-	if cluster.GatewayConfig.RejectUnknown {
-		sconfig.Gateway.RejectUnknown = cluster.GatewayConfig.RejectUnknown
-	}
-
 	// Add the same for leaf nodes if present
 	if cluster.LeafNodeConfig != nil {
 		sconfig.LeafNode = &natsconf.LeafNodeServerConfig{

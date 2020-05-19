@@ -52,7 +52,6 @@ type GatewayConfig struct {
 	RejectUnknown  bool                 `json:"reject_unknown,omitempty"`
 	Include        string               `json:"include,omitempty"`
 	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
-	RejectUnknown  bool                 `json:"reject_unknown,omitempty"`
 }
 
 type LeafNodeServerConfig struct {
