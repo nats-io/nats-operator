@@ -51,6 +51,7 @@ type GatewayConfig struct {
 	Gateways       []*RemoteGatewayOpts `json:"gateways,omitempty"`
 	Include        string               `json:"include,omitempty"`
 	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
+	RejectUnknown  bool                 `json:"reject_unknown,omitempty"`
 }
 
 type LeafNodeServerConfig struct {
