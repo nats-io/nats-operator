@@ -380,10 +380,11 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		gateways = append(gateways, sgw)
 	}
 	sconfig.Gateway = &natsconf.GatewayConfig{
-		Name:     cluster.GatewayConfig.Name,
-		Port:     cluster.GatewayConfig.Port,
-		Gateways: gateways,
-		Include:  filepath.Join(".", constants.BootConfigGatewayFilePath),
+		Name:          cluster.GatewayConfig.Name,
+		Port:          cluster.GatewayConfig.Port,
+		Gateways:      gateways,
+		RejectUnknown: cluster.GatewayConfig.RejectUnknown,
+		Include:       filepath.Join(".", constants.BootConfigGatewayFilePath),
 	}
 
 	// Add the same for leaf nodes if present

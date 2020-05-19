@@ -182,6 +182,11 @@ type GatewayConfig struct {
 	// for external access.
 	Port int `json:"hostPort,omitempty"`
 
+	// RejectUnknown indicates to use an implicit authorization map for inbound
+	// connections, consisting of the names of our outbound gateway
+	// declarations.
+	RejectUnknown bool `json:"reject_unknown,omitempty"`
+
 	// Gateways is the list of remote gateways to which
 	// this cluster will be connecting.
 	Gateways []*RemoteGatewayOpts `json:"gateways,omitempty"`
