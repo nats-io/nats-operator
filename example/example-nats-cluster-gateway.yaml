@@ -1,0 +1,28 @@
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-dev"
+spec:
+  size: 1
+
+  natsConfig:
+    debug: true
+    trace: true
+
+  pod:
+    enableClientsHostPort: true
+    advertiseExternalIP: true
+
+  gatewayConfig:
+    name: "gw"
+    hostPort: 7522
+    rejectUnknown: true
+
+    gateways:
+      - name: remote-nats
+        url: "nats://external-nats-gateway:7522"
+
+  # Required to be able to lookup public ip address from a server.
+  template:
+    spec:
+      serviceAccountName: "nats-server"

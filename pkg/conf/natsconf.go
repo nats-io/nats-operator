@@ -49,6 +49,7 @@ type GatewayConfig struct {
 	Advertise      string               `json:"advertise,omitempty"`
 	ConnectRetries int                  `json:"connect_retries,omitempty"`
 	Gateways       []*RemoteGatewayOpts `json:"gateways,omitempty"`
+	RejectUnknown  bool                 `json:"reject_unknown,omitempty"`
 	Include        string               `json:"include,omitempty"`
 	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
 }
