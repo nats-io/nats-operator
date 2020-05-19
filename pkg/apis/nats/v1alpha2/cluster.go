@@ -190,6 +190,9 @@ type GatewayConfig struct {
 	// Gateways is the list of remote gateways to which
 	// this cluster will be connecting.
 	Gateways []*RemoteGatewayOpts `json:"gateways,omitempty"`
+
+	// RejectUnknown rejects unknown gateways.
+	RejectUnknown bool `json:"rejectUnknown,omitempty"`
 }
 
 // RemoteGatewayOpts is the configuration for a remote gateway entry.
