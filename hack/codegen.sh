@@ -6,15 +6,18 @@ set -o pipefail
 
 SCRIPT_ROOT=$(realpath $(dirname ${BASH_SOURCE})/..)
 
+# Make sure all the build tool dependencies exist in vendor
 if [ ! -d "${SCRIPT_ROOT}/vendor" ]; then
   go mod vendor
 fi
 
+# Create a FAKE_GOPATH and FAKE_REPOPATH, and symbolic link to real repo path
 FAKE_GOPATH="$(mktemp -d)"
 trap 'rm -rf ${FAKE_GOPATH}' EXIT
 FAKE_REPOPATH="${FAKE_GOPATH}/src/github.com/nats-io/nats-operator"
 mkdir -p "$(dirname "${FAKE_REPOPATH}")" && ln -s "${SCRIPT_ROOT}" "${FAKE_REPOPATH}"
 
+# Switch to GOPATH mode, it makes codegen faster
 export GOPATH="${FAKE_GOPATH}"
 export GO111MODULE="off"
 
