@@ -12,6 +12,9 @@ spec:
   version: {{ .Values.cluster.version }}
 
   pod:
+    {{- if .Values.cluster.annotations }}
+    annotations: {{ .Values.cluster.annotations | toYaml | nindent 6 }}
+    {{- end }}
     {{- if .Values.cluster.resources }}
     resources:
       {{ .Values.cluster.resources | toYaml | nindent 6 }}

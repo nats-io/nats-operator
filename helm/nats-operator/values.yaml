@@ -115,6 +115,9 @@ cluster:
   ## Cluster Size
   size: 3
 
+  ## Optional custom annotations to add to Pods in the cluster
+  annotations: {}
+
   resources: {}
   # limits:
   #   cpu: 500m
