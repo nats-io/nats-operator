@@ -106,6 +106,8 @@ their default values.
 | `cluster.namespace`                          | Namespace to deploy the NATS Cluster in, only possible if `clusterScoped` is set to `true`   | `nats-io`                                       |
 | `cluster.version`                            | Version of NATS Cluster                                                                      | `1.4.1`                                         |
 | `cluster.size`                               | Number of NATS Cluster nodes                                                                 | `3`                                             |
+| `cluster.annotations`                        | Optional custom annotations to add to Pods in the cluster                                    | `{}`                                            |
+| `cluster.resources`                          | Optional CPU/Memory resource requests/limits to set on Pods in the cluster                   | `{}`                                            |
 | `cluster.auth.enabled`                       | Switch to enable/disable client authentication                                               | `true`                                          |
 | `cluster.auth.enableServiceAccounts`         | Enable ServiceAccounts permissions                                                           | `false`                                         |
 | `cluster.auth.username`                      | Client authentication username                                                               | `true`                                          |
