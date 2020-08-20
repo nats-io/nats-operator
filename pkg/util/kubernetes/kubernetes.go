@@ -1031,12 +1031,37 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			imagePullPolicy = cs.Pod.ReloaderImagePullPolicy
 		}
 
-		authFilePath := ""
+		var reloadTarget []string
 		if cs.Auth != nil {
-			authFilePath = cs.Auth.ClientsAuthFile
+			if cs.Auth.ClientsAuthFile != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.ConfigMapMountPath, cs.Auth.ClientsAuthFile))
+			}
 		}
 
-		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy, authFilePath, cs.Pod.ReloaderResources)
+		if cs.TLS != nil {
+			if cs.TLS.ServerSecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretKeyFileName))
+			}
+			if cs.TLS.RoutesSecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretKeyFileName))
+			}
+			if cs.TLS.GatewaySecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName))
+			}
+			if cs.TLS.LeafnodeSecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName))
+			}
+		}
+
+		reloaderContainer := natsPodReloaderContainer(image, imageTag, imagePullPolicy, cs.Pod.ReloaderResources, reloadTarget...)
 		reloaderContainer.VolumeMounts = volumeMounts
 		containers = append(containers, reloaderContainer)
 	}

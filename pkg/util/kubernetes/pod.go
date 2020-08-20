@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -88,7 +87,7 @@ func natsPodContainer(container v1.Container, clusterName, version string, serve
 }
 
 // natsPodReloaderContainer returns a NATS server pod container spec for configuration reloader.
-func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string, r v1.ResourceRequirements) v1.Container {
+func natsPodReloaderContainer(image, tag, pullPolicy string, r v1.ResourceRequirements, reloadTarget ...string) v1.Container {
 	container := v1.Container{
 		Name:            "reloader",
 		Image:           fmt.Sprintf("%s:%s", image, tag),
@@ -102,11 +101,11 @@ func natsPodReloaderContainer(image, tag, pullPolicy, authFilePath string, r v1.
 		},
 		Resources: r,
 	}
-	if authFilePath != "" {
-		// The volume is mounted as a subdirectory under the NATS config.
-		af := filepath.Join(constants.ConfigMapMountPath, authFilePath)
-		container.Command = append(container.Command, "-config", af)
+
+	for _, v := range reloadTarget {
+		container.Command = append(container.Command, "-config", v)
 	}
+
 	return container
 }
 
