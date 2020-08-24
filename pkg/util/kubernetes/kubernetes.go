@@ -385,14 +385,18 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		Port:          cluster.GatewayConfig.Port,
 		Gateways:      gateways,
 		RejectUnknown: cluster.GatewayConfig.RejectUnknown,
-		Include:       filepath.Join(".", constants.BootConfigGatewayFilePath),
+	}
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.Gateway.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
 	}
 
 	// Add the same for leaf nodes if present
 	if cluster.LeafNodeConfig != nil {
 		sconfig.LeafNode = &natsconf.LeafNodeServerConfig{
-			Port:    cluster.LeafNodeConfig.Port,
-			Include: "./advertise/gateway_advertise.conf",
+			Port: cluster.LeafNodeConfig.Port,
+		}
+		if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+			sconfig.LeafNode.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
 		}
 	}
 	return
