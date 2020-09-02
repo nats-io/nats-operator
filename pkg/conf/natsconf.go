@@ -54,12 +54,19 @@ type GatewayConfig struct {
 	Authorization  *AuthorizationConfig `json:"authorization,omitempty"`
 }
 
+// LeafNodeRemote is the URL for remote NATS system.
+type LeafNodeRemote struct {
+	URL         string `json:"url,omitempty"`
+	Credentials string `json:"credentials,omitempty"`
+}
+
 type LeafNodeServerConfig struct {
-	Port       int        `json:"port,omitempty"`
-	TLS        *TLSConfig `json:"tls,omitempty"`
-	TLSTimeout float64    `json:"tls_timeout,omitempty"`
-	Advertise  string     `json:"advertise,omitempty"`
-	Include    string     `json:"include,omitempty"`
+	Port       int              `json:"port,omitempty"`
+	TLS        *TLSConfig       `json:"tls,omitempty"`
+	TLSTimeout float64          `json:"tls_timeout,omitempty"`
+	Advertise  string           `json:"advertise,omitempty"`
+	Include    string           `json:"include,omitempty"`
+	Remotes    []LeafNodeRemote `json:"remotes,omitempty"`
 }
 
 type RemoteGatewayOpts struct {

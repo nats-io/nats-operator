@@ -395,6 +395,13 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		sconfig.LeafNode = &natsconf.LeafNodeServerConfig{
 			Port: cluster.LeafNodeConfig.Port,
 		}
+		for _, r := range cluster.LeafNodeConfig.Remotes {
+			sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
+				URL: r.URL,
+				Credentials: r.Credentials,
+			})
+		}
+
 		if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
 			sconfig.LeafNode.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
 		}
