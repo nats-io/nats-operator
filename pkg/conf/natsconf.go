@@ -56,8 +56,8 @@ type GatewayConfig struct {
 
 // LeafNodeRemote is the URL for remote NATS system.
 type LeafNodeRemote struct {
-	URL         string `json:"url,omitempty"`
-	Credentials string `json:"credentials,omitempty"`
+	URLs        []string `json:"urls,omitempty"`
+	Credentials string   `json:"credentials,omitempty"`
 }
 
 type LeafNodeServerConfig struct {

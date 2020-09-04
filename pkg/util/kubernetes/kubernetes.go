@@ -396,8 +396,16 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 			Port: cluster.LeafNodeConfig.Port,
 		}
 		for _, r := range cluster.LeafNodeConfig.Remotes {
+			var urls []string
+			if r.URL != "" {
+				urls = append(urls, r.URL)
+			}
+			if len(r.URLs) > 0 {
+				urls = append(urls, r.URLs...)
+			}
+
 			sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
-				URL: r.URL,
+				URLs: urls,
 				Credentials: r.Credentials,
 			})
 		}

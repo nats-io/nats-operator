@@ -203,8 +203,9 @@ type RemoteGatewayOpts struct {
 
 // LeafNodeRemote is the URL for remote NATS system.
 type LeafNodeRemote struct {
-	URL         string `json:"url,omitempty"`
-	Credentials string `json:"credentials,omitempty"`
+	URL         string   `json:"url,omitempty"`
+	URLs        []string `json:"urls,omitempty"`
+	Credentials string   `json:"credentials,omitempty"`
 }
 
 // LeafNodeConfig is the configuration for leafnodes.
