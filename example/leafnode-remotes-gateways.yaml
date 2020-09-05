@@ -1,0 +1,49 @@
+# NOTE: Replace the 1.2.3.4 IPs with real IPs or a domain. Also include a real
+# base64 encoded credentials file.
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-credentials
+data:
+  user.ncreds: ...base64-encoded-credentials...
+
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
+metadata:
+  name: example-nats-cluster
+spec:
+  size: 3
+  version: "2.1.7"
+
+  natsConfig:
+    debug: true
+    trace: true
+
+  pod:
+    volumeMounts:
+    - name: user-credentials
+      mountPath: /etc/nats-creds
+      readOnl: true
+
+  leafnodeConfig:
+    remotes:
+    - url: nats://1.2.3.4:7422
+      credentials: /etc/nats-creds/user.ncreds
+
+  gatewayConfig:
+    name: gateway_b
+    hostPort: 7222
+    rejectUnknown: true
+    gateways:
+    - name: gateway_a
+      url: nats://guser:gpassword@1.2.3.4:7222
+
+  template:
+    spec:
+      volumes:
+      - name: user-credentials
+        secret:
+          secretName: user-credentials
