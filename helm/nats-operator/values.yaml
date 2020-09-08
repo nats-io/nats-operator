@@ -16,7 +16,7 @@ image:
 # connecteverything/nats-operator:0.2.3-v1alpha2
   registry: docker.io
   repository: connecteverything/nats-operator
-  tag: 0.6.0
+  tag: 0.7.4
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
   ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -181,7 +181,7 @@ cluster:
     enabled: false
     registry: "docker.io"
     repository: "synadia/prometheus-nats-exporter"
-    tag: "0.2.0"
+    tag: "0.6.2"
     pullPolicy: "IfNotPresent"
 
     # Prometheus Operator ServiceMonitor config
