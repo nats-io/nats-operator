@@ -13,7 +13,7 @@ clusterScoped: false
 replicaCount: 1
 
 image:
-# connecteverything/nats-operator:0.2.3-v1alpha2
+# connecteverything/nats-operator:0.7.4
   registry: docker.io
   repository: connecteverything/nats-operator
   tag: 0.7.4
