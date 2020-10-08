@@ -141,6 +141,9 @@ type ClusterSpec struct {
 
 	// OperatorConfig is the operator configuration from a server.
 	OperatorConfig *OperatorConfig `json:"operatorConfig,omitempty"`
+
+	// WebsocketConfig is the websocket configuration from a server.
+	WebsocketConfig *WebsocketConfig `json:"websocketConfig,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.
@@ -171,6 +174,13 @@ type ExtraRoute struct {
 
 	// Route is a network endpoint to which the cluster should connect.
 	Route string `json:"route,omitempty"`
+}
+
+// WebsocketConfig is the websocket configuration from a server.
+type WebsocketConfig struct {
+	Port             int    `json:"port,omitempty"`
+	HandshakeTimeout string `json:"handshakeTimeout,omitempty"`
+	Compression      bool   `json:"compression,omitempty"`
 }
 
 // GatewayConfig is the configuration for the gateway.
@@ -275,6 +285,12 @@ type TLSConfig struct {
 
 	// LeafnodeSecretCertFileName is the name of the certificate in LeafnodeSecret
 	LeafnodeSecretCertFileName string `json:"leafnodeSecretCertFileName,omitempty"`
+
+	WebsocketSecret             string  `json:"websocketSecret,omitempty"`
+	WebsocketSecretCAFileName   string  `json:"websocketSecretCAFileName,omitempty"`
+	WebsocketSecretKeyFileName  string  `json:"websocketSecretKeyFileName,omitempty"`
+	WebsocketSecretCertFileName string  `json:"websocketSecretCertFileName,omitempty"`
+	WebsocketTLSTimeout         float64 `json:"websocketTLSTimeout,omitempty"`
 
 	// EnableHttps makes the monitoring endpoint use https.
 	EnableHttps bool `json:"enableHttps,omitempty"`
@@ -467,6 +483,15 @@ func (c *ClusterSpec) Cleanup() {
 		}
 		if len(c.TLS.LeafnodeSecretKeyFileName) == 0 {
 			c.TLS.LeafnodeSecretKeyFileName = constants.DefaultLeafnodeKeyFileName
+		}
+		if len(c.TLS.WebsocketSecretCAFileName) == 0 {
+			c.TLS.WebsocketSecretCAFileName = constants.DefaultWebsocketCAFileName
+		}
+		if len(c.TLS.WebsocketSecretCertFileName) == 0 {
+			c.TLS.WebsocketSecretCertFileName = constants.DefaultWebsocketCertFileName
+		}
+		if len(c.TLS.WebsocketSecretKeyFileName) == 0 {
+			c.TLS.WebsocketSecretKeyFileName = constants.DefaultWebsocketKeyFileName
 		}
 	}
 }

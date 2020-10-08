@@ -107,6 +107,12 @@ const (
 	DefaultLeafnodeCertFileName = "server.pem"
 	DefaultLeafnodeKeyFileName  = "server-key.pem"
 
+	WebsocketCertsMountPath      = "/etc/nats-websocket-tls-certs"
+	DefaultWebsocketCAFileName   = "ca.pem"
+	DefaultWebsocketCertFileName = "server.pem"
+	DefaultWebsocketKeyFileName  = "server-key.pem"
+	WebsocketSecretVolumeName    = "websocket-tls-certs"
+
 	// OperatorJWTMountPath is the path where the JWT for the
 	// operator is located.
 	OperatorJWTMountPath = "/etc/nats-operator"

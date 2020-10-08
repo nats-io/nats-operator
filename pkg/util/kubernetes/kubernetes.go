@@ -101,13 +101,29 @@ func ClientServiceName(clusterName string) string {
 	return clusterName
 }
 
-func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
-	ports := []v1.ServicePort{{
-		Name:       "client",
-		Port:       constants.ClientPort,
-		TargetPort: intstr.FromInt(constants.ClientPort),
-		Protocol:   v1.ProtocolTCP,
-	}}
+func CreateClientService(
+	kubecli corev1client.CoreV1Interface,
+	clusterName, ns string,
+	owner metav1.OwnerReference,
+	websocketPort int,
+) error {
+	ports := []v1.ServicePort{
+		{
+			Name:       "client",
+			Port:       constants.ClientPort,
+			TargetPort: intstr.FromInt(constants.ClientPort),
+			Protocol:   v1.ProtocolTCP,
+		},
+	}
+	if websocketPort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "websocket",
+			Port:       int32(websocketPort),
+			TargetPort: intstr.FromInt(websocketPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+
 	selectors := LabelsForCluster(clusterName)
 	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false)
 }
@@ -117,7 +133,12 @@ func ManagementServiceName(clusterName string) string {
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
-func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
+func CreateMgmtService(
+	kubecli corev1client.CoreV1Interface,
+	clusterName, clusterVersion, ns string,
+	owner metav1.OwnerReference,
+	websocketPort int,
+) error {
 	ports := []v1.ServicePort{
 		{
 			Name:       "cluster",
@@ -138,6 +159,15 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Protocol:   v1.ProtocolTCP,
 		},
 	}
+	if websocketPort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "websocket",
+			Port:       int32(websocketPort),
+			TargetPort: intstr.FromInt(websocketPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
@@ -194,7 +224,6 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 		}
 	}
 	if cs.TLS.LeafnodeSecret != "" {
-		// Reuse the same settings as those for clients.
 		sconfig.LeafNode.TLS = &natsconf.TLSConfig{
 			CAFile:   filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName),
 			CertFile: filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName),
@@ -205,6 +234,19 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			sconfig.LeafNode.TLS.Timeout = timeout
 		}
 	}
+
+	if cs.TLS.WebsocketSecret != "" {
+		sconfig.Websocket.TLS = &natsconf.TLSConfig{
+			CAFile:   filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName),
+			CertFile: filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName),
+			KeyFile:  filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName),
+		}
+		timeout := cs.TLS.WebsocketTLSTimeout
+		if timeout > 0 {
+			sconfig.Websocket.TLS.Timeout = timeout
+		}
+	}
+
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
 		sconfig.TLS.VerifyAndMap = true
 	}
@@ -405,7 +447,7 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 			}
 
 			sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
-				URLs: urls,
+				URLs:        urls,
 				Credentials: r.Credentials,
 			})
 		}
@@ -415,6 +457,20 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 		}
 	}
 	return
+}
+
+func addWebsocketConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+	if cluster.WebsocketConfig == nil {
+		return
+	}
+
+	sconfig.Websocket = &natsconf.WebsocketConfig{
+		Listen:           fmt.Sprintf(":%d", cluster.WebsocketConfig.Port),
+		HandshakeTimeout: cluster.WebsocketConfig.HandshakeTimeout,
+		Compression:      cluster.WebsocketConfig.Compression,
+	}
+
+	// WebsocketConfig.TLS added in addTLSConfig later.
 }
 
 // addOperatorConfig fills in the operator configuration to be used in the config map.
@@ -652,6 +708,10 @@ func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
 	if cluster.GatewayConfig != nil {
 		addGatewayConfig(sconfig, cluster)
 	}
+	if cluster.WebsocketConfig != nil {
+		addWebsocketConfig(sconfig, cluster)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	addOperatorConfig(sconfig, cluster)
 }
@@ -788,6 +848,24 @@ func newNatsLeafnodeSecretVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsWebsocketSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: constants.WebsocketSecretVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsWebsocketSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.WebsocketSecretVolumeName,
+		MountPath: constants.WebsocketCertsMountPath,
+	}
+}
+
 func newNatsOperatorJWTSecretVolume(secretName string) v1.Volume {
 	return v1.Volume{
 		Name: constants.OperatorJWTVolumeName,
@@ -851,6 +929,10 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	if cs.LeafNodeConfig != nil {
 		leafnodePort = cs.LeafNodeConfig.Port
 	}
+	var websocketPort int
+	if cs.WebsocketConfig != nil {
+		websocketPort = cs.WebsocketConfig.Port
+	}
 
 	// Initialize the pod spec with a template in case it is present.
 	spec := &v1.PodSpec{}
@@ -869,8 +951,16 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		container = v1.Container{}
 	}
 
-	container = natsPodContainer(container, clusterName, cs.Version, cs.ServerImage,
-		enableClientsHostPort, gatewayPort, leafnodePort)
+	container = natsPodContainer(
+		container,
+		clusterName,
+		cs.Version,
+		cs.ServerImage,
+		enableClientsHostPort,
+		gatewayPort,
+		leafnodePort,
+		websocketPort,
+	)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
 	// In case TLS was enabled as part of the NATS cluster
@@ -903,6 +993,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			volumes = append(volumes, volume)
 
 			volumeMount := newNatsLeafnodeSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+		if cs.TLS.WebsocketSecret != "" {
+			volume = newNatsWebsocketSecretVolume(cs.TLS.WebsocketSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsWebsocketSecretVolumeMount()
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
@@ -1077,6 +1174,11 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName))
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName))
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName))
+			}
+			if cs.TLS.WebsocketSecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName))
 			}
 		}
 
