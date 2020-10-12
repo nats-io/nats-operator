@@ -28,6 +28,7 @@ type ServerConfig struct {
 	Include          string                `json:"include,omitempty"`
 	Gateway          *GatewayConfig        `json:"gateway,omitempty"`
 	LeafNode         *LeafNodeServerConfig `json:"leaf,omitempty"`
+	Websocket        *WebsocketConfig      `json:"websocket,omitempty"`
 	JWT              string                `json:"operator,omitempty"`
 	SystemAccount    string                `json:"system_account,omitempty"`
 	Resolver         string                `json:"resolver,omitempty"`
@@ -38,6 +39,13 @@ type ClusterConfig struct {
 	Routes        []string             `json:"routes,omitempty"`
 	TLS           *TLSConfig           `json:"tls,omitempty"`
 	Authorization *AuthorizationConfig `json:"authorization,omitempty"`
+}
+
+type WebsocketConfig struct {
+	Listen           string     `json:"listen"`
+	TLS              *TLSConfig `json:"tls,omitempty"`
+	HandshakeTimeout string     `json:"handshake_timeout,omitempty"`
+	Compression      bool       `json:"compression,omitempty"`
 }
 
 type GatewayConfig struct {
