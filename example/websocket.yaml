@@ -1,0 +1,21 @@
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
+metadata:
+  name: nats
+spec:
+  serverImage: synadia/nats-server
+  version: nightly-20201008
+
+  size: 3
+
+  websocketConfig:
+    port: 9222
+    handshakeTimeout: 5s
+    compression: true
+
+  tls:
+    # Certificates to secure the NATS client websocket connections.
+    websocketSecret: nats-client-ws-tls
+    websocketSecretCAFileName: ca.pem
+    websocketSecretCertFileName: server.pem
+    websocketSecretKeyFileName: server-key.pem
