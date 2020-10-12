@@ -33,13 +33,12 @@ require (
 	google.golang.org/appengine v1.6.5 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-
 	k8s.io/api v0.0.0
 	k8s.io/apiextensions-apiserver v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v0.0.0
 	k8s.io/code-generator v0.0.0
-	k8s.io/klog v0.4.0 // indirect
+	k8s.io/klog v0.4.0
 	k8s.io/kubernetes v1.15.2
 )
 

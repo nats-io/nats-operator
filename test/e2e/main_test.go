@@ -18,11 +18,14 @@ package e2e
 
 import (
 	"flag"
+	"log"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/klog"
 
 	"github.com/nats-io/nats-operator/pkg/features"
 	"github.com/nats-io/nats-operator/test/e2e/framework"
@@ -57,10 +60,14 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	log.Println("******** TEST STARTING ********")
+
 	flag.StringVar(&featureGates, "feature-gates", "", "comma-separated list of \"key=value\" pairs used to toggle advanced features")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "path to the kubeconfig file to use (e.g. $HOME/.kube/config)")
 	flag.StringVar(&namespace, "namespace", "default", "name of the kubernetes namespace to use")
 	flag.BoolVar(&wait, "wait", false, "instead of running the e2e test suite, connect to the kubernetes cluster and wait for the e2e job to complete")
+	klog.InitFlags(nil)
+	flag.Set("v", "10")
 	flag.Parse()
 
 	// Build the feature map based on the value of "--feature-gates".
@@ -68,10 +75,17 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		logrus.Fatalf("failed to build feature map: %v", err)
 	}
+
 	// Build an instance of the test framework.
 	f = framework.New(featureMap, kubeconfig, namespace)
 	if err := f.WaitForNatsOperator(); err != nil {
 		logrus.Fatalf("failed to wait for nats-operator: %v", err)
+	}
+
+	{
+		log.Println("kubectl get all --namespace=nats-operator-e2e")
+		out, err := exec.Command("kubectl", "get", "all", "--namespace=nats-operator-e2e").CombinedOutput()
+		log.Println("kubectl err:", err, "out:", string(out))
 	}
 
 	if wait {

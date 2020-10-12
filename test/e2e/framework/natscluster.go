@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"regexp"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,7 +36,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/slice"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/conf"
+	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
@@ -85,7 +86,13 @@ func (f *Framework) CreateCluster(namespace, prefix string, size int, version st
 		f(obj)
 	}
 	// Create the NatsCluster resource.
-	return f.NatsClient.NatsV1alpha2().NatsClusters(obj.Namespace).Create(obj)
+	log.Println("******** START CREATE CLUSTER ********")
+	nnc, err := f.NatsClient.NatsV1alpha2().NatsClusters(obj.Namespace).Create(obj)
+	log.Println("******** END CREATE CLUSTER ********")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create natscluster object: %w", err)
+	}
+	return nnc, nil
 }
 
 // DeleteCluster deletes the specified NatsCluster resource.
@@ -318,11 +325,16 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 	// the NatsCluster resource.
 	err := f.WaitUntilNatsClusterCondition(ctx, natsCluster, func(event watchapi.Event) (bool, error) {
 		nc := event.Object.(*natsv1alpha2.NatsCluster)
-		return nc.Status.Size == expectedSize && nc.Status.CurrentVersion == expectedVersion, nil
+		log.Printf("WaitUntilFullMeshWithVersion - f.WaitUntilNatsClusterCondition.nc: %#v\n", nc)
+		log.Printf("WaitUntilFullMeshWithVersion - f.WaitUntilNatsClusterCondition.expected: expsize=%#v expver=%#v\n", expectedSize, expectedVersion)
+
+		return nc.Status.Size == expectedSize &&
+			nc.Status.CurrentVersion == expectedVersion, nil
 	})
 	if err != nil {
 		return err
 	}
+
 	// Wait for all the pods to report the expected routes and
 	// version.
 	return retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
@@ -330,9 +342,11 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		// expected size.
 		m, err := f.NatsClusterHasExpectedRouteCount(natsCluster, expectedSize)
 		if err != nil {
+			log.Println("WaitUntilFullMeshWithVersion - RetryWithContext.NatsClusterHasExpectedRouteCount err:", err)
 			return false, nil
 		}
 		if !m {
+			log.Println("WaitUntilFullMeshWithVersion - RetryWithContext.notM")
 			return false, nil
 		}
 
@@ -340,11 +354,15 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		// the expected version.
 		v, err := f.NatsClusterHasExpectedVersion(natsCluster, expectedVersion)
 		if err != nil {
+			log.Println("WaitUntilFullMeshWithVersion - RetryWithContext.NatsClusterHasExpectedVersion err:", err)
 			return false, nil
 		}
 		if !v {
+			log.Println("WaitUntilFullMeshWithVersion - RetryWithContext.notV")
 			return false, nil
 		}
+
+		log.Println("WaitUntilFullMeshWithVersion - RetryWithContext.ok")
 		return true, nil
 	})
 }

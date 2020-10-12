@@ -22,10 +22,10 @@ import (
 	"time"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/conf"
+	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	watchapi "k8s.io/apimachinery/pkg/watch"
 )
 
@@ -43,8 +43,9 @@ func TestCreateCluster(t *testing.T) {
 
 	// Create a NatsCluster resource with three members.
 	if natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-", size, version); err != nil {
-		t.Fatal(err)
+		t.Fatal("failed to create cluster:", err)
 	}
+
 	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
 		if err = f.DeleteCluster(natsCluster); err != nil {
@@ -56,7 +57,7 @@ func TestCreateCluster(t *testing.T) {
 	ctx, fn := context.WithTimeout(context.Background(), waitTimeout)
 	defer fn()
 	if err = f.WaitUntilFullMeshWithVersion(ctx, natsCluster, size, version); err != nil {
-		t.Fatal(err)
+		t.Fatal("failed to wait for full mesh:", err)
 	}
 }
 

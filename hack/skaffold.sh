@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 # sed needs different args to -i depending on the flavor of the tool that is installed.
 sedi () {
@@ -83,4 +83,5 @@ kubectl get namespace "${NAMESPACE}" > /dev/null 2>&1 || kubectl create namespac
 kubectl label nodes minikube nats.io/node-external-ip=127.0.0.1 --overwrite
 
 # Run skaffold.
-skaffold "${MODE}" -f "${TMP_DIR}/skaffold.yml" -n "${NAMESPACE}" -p "${PROFILE}"
+cat "${TMP_DIR}/skaffold.yml"
+skaffold --verbosity info "${MODE}" -f "${TMP_DIR}/skaffold.yml" -n "${NAMESPACE}" -p "${PROFILE}"
