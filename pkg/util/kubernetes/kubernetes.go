@@ -224,7 +224,6 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 		}
 	}
 	if cs.TLS.LeafnodeSecret != "" {
-		// Reuse the same settings as those for clients.
 		sconfig.LeafNode.TLS = &natsconf.TLSConfig{
 			CAFile:   filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName),
 			CertFile: filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName),
@@ -435,7 +434,7 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 			}
 
 			sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
-				URLs: urls,
+				URLs:        urls,
 				Credentials: r.Credentials,
 			})
 		}
@@ -899,6 +898,10 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	if cs.LeafNodeConfig != nil {
 		leafnodePort = cs.LeafNodeConfig.Port
 	}
+	var websocketPort int
+	if cs.WebsocketConfig != nil {
+		websocketPort = cs.WebsocketConfig.Port
+	}
 
 	// Initialize the pod spec with a template in case it is present.
 	spec := &v1.PodSpec{}
@@ -917,8 +920,16 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		container = v1.Container{}
 	}
 
-	container = natsPodContainer(container, clusterName, cs.Version, cs.ServerImage,
-		enableClientsHostPort, gatewayPort, leafnodePort)
+	container = natsPodContainer(
+		container,
+		clusterName,
+		cs.Version,
+		cs.ServerImage,
+		enableClientsHostPort,
+		gatewayPort,
+		leafnodePort,
+		websocketPort,
+	)
 	container = containerWithLivenessProbe(container, natsLivenessProbe(cs))
 
 	// In case TLS was enabled as part of the NATS cluster

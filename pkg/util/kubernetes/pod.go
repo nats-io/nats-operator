@@ -36,7 +36,12 @@ import (
 )
 
 // natsPodContainer returns a NATS server pod container spec.
-func natsPodContainer(container v1.Container, clusterName, version string, serverImage string, enableClientsHostPort bool, gatewayPort int, leafnodePort int) v1.Container {
+func natsPodContainer(
+	container v1.Container,
+	clusterName, version, serverImage string,
+	enableClientsHostPort bool,
+	gatewayPort, leafnodePort, websocketPort int,
+) v1.Container {
 	container.Name = constants.NatsContainerName
 	container.Image = MakeNATSImage(version, serverImage)
 
@@ -81,6 +86,16 @@ func natsPodContainer(container v1.Container, clusterName, version string, serve
 		}
 		ports = append(ports, port)
 	}
+	if websocketPort > 0 {
+		port := v1.ContainerPort{
+			Name:          "websocket",
+			ContainerPort: int32(websocketPort),
+			Protocol:      v1.ProtocolTCP,
+			HostPort:      int32(websocketPort),
+		}
+		ports = append(ports, port)
+	}
+
 	container.Ports = ports
 
 	return container
