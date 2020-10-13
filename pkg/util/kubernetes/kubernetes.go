@@ -447,6 +447,20 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 	return
 }
 
+func addWebsocketConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+	if cluster.WebsocketConfig == nil {
+		return
+	}
+
+	sconfig.Websocket = &natsconf.WebsocketConfig{
+		Listen:           fmt.Sprintf(":%d", cluster.WebsocketConfig.Port),
+		HandshakeTimeout: cluster.WebsocketConfig.HandshakeTimeout,
+		Compression:      cluster.WebsocketConfig.Compression,
+	}
+
+	// WebsocketConfig.TLS added in addTLSConfig later.
+}
+
 // addOperatorConfig fills in the operator configuration to be used in the config map.
 func addOperatorConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	if cs.OperatorConfig == nil {
@@ -682,6 +696,10 @@ func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
 	if cluster.GatewayConfig != nil {
 		addGatewayConfig(sconfig, cluster)
 	}
+	if cluster.WebsocketConfig != nil {
+		addWebsocketConfig(sconfig, cluster)
+	}
+
 	addTLSConfig(sconfig, cluster)
 	addOperatorConfig(sconfig, cluster)
 }
