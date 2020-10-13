@@ -234,6 +234,20 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 			sconfig.LeafNode.TLS.Timeout = timeout
 		}
 	}
+
+	if cs.TLS.WebsocketSecret != "" {
+		// Reuse the same settings as those for clients.
+		sconfig.Websocket.TLS = &natsconf.TLSConfig{
+			CAFile:   filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName),
+			CertFile: filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName),
+			KeyFile:  filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName),
+		}
+		timeout := cs.TLS.WebsocketTLSTimeout
+		if timeout > 0 {
+			sconfig.Websocket.TLS.Timeout = timeout
+		}
+	}
+
 	if cs.Auth != nil && cs.Auth.TLSVerifyAndMap {
 		sconfig.TLS.VerifyAndMap = true
 	}
@@ -835,6 +849,24 @@ func newNatsLeafnodeSecretVolumeMount() v1.VolumeMount {
 	}
 }
 
+func newNatsWebsocketSecretVolume(secretName string) v1.Volume {
+	return v1.Volume{
+		Name: constants.WebsocketSecretVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: secretName,
+			},
+		},
+	}
+}
+
+func newNatsWebsocketSecretVolumeMount() v1.VolumeMount {
+	return v1.VolumeMount{
+		Name:      constants.WebsocketSecretVolumeName,
+		MountPath: constants.WebsocketCertsMountPath,
+	}
+}
+
 func newNatsOperatorJWTSecretVolume(secretName string) v1.Volume {
 	return v1.Volume{
 		Name: constants.OperatorJWTVolumeName,
@@ -962,6 +994,13 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			volumes = append(volumes, volume)
 
 			volumeMount := newNatsLeafnodeSecretVolumeMount()
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+		if cs.TLS.WebsocketSecret != "" {
+			volume = newNatsWebsocketSecretVolume(cs.TLS.WebsocketSecret)
+			volumes = append(volumes, volume)
+
+			volumeMount := newNatsWebsocketSecretVolumeMount()
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
@@ -1136,6 +1175,11 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName))
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName))
 				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName))
+			}
+			if cs.TLS.WebsocketSecret != "" {
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName))
+				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName))
 			}
 		}
 
