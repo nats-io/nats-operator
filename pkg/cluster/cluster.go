@@ -244,9 +244,21 @@ func (c *Cluster) checkServices() error {
 		}
 	}
 
+	var websocketPort int
+	if c.cluster.Spec.WebsocketConfig != nil {
+		websocketPort = c.cluster.Spec.WebsocketConfig.Port
+	}
+
 	// Create the client service if required.
 	if mustCreateClientService {
-		if err := kubernetesutil.CreateClientService(c.config.KubeCli, c.cluster.Name, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
+		err := kubernetesutil.CreateClientService(
+			c.config.KubeCli,
+			c.cluster.Name,
+			c.cluster.Namespace,
+			c.cluster.AsOwner(),
+			websocketPort,
+		)
+		if err != nil {
 			return err
 		}
 	}
@@ -264,7 +276,15 @@ func (c *Cluster) checkServices() error {
 
 	// Create the management service if required.
 	if mustCreateManagementService {
-		if err := kubernetesutil.CreateMgmtService(c.config.KubeCli, c.cluster.Name, c.cluster.Spec.Version, c.cluster.Namespace, c.cluster.AsOwner()); err != nil {
+		err := kubernetesutil.CreateMgmtService(
+			c.config.KubeCli,
+			c.cluster.Name,
+			c.cluster.Spec.Version,
+			c.cluster.Namespace,
+			c.cluster.AsOwner(),
+			websocketPort,
+		)
+		if err != nil {
 			return err
 		}
 	}
