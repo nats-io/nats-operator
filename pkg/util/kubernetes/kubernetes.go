@@ -101,13 +101,29 @@ func ClientServiceName(clusterName string) string {
 	return clusterName
 }
 
-func CreateClientService(kubecli corev1client.CoreV1Interface, clusterName, ns string, owner metav1.OwnerReference) error {
-	ports := []v1.ServicePort{{
-		Name:       "client",
-		Port:       constants.ClientPort,
-		TargetPort: intstr.FromInt(constants.ClientPort),
-		Protocol:   v1.ProtocolTCP,
-	}}
+func CreateClientService(
+	kubecli corev1client.CoreV1Interface,
+	clusterName, ns string,
+	owner metav1.OwnerReference,
+	websocketPort int,
+) error {
+	ports := []v1.ServicePort{
+		{
+			Name:       "client",
+			Port:       constants.ClientPort,
+			TargetPort: intstr.FromInt(constants.ClientPort),
+			Protocol:   v1.ProtocolTCP,
+		},
+	}
+	if websocketPort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "websocket",
+			Port:       int32(websocketPort),
+			TargetPort: intstr.FromInt(websocketPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+
 	selectors := LabelsForCluster(clusterName)
 	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false)
 }
@@ -117,7 +133,12 @@ func ManagementServiceName(clusterName string) string {
 }
 
 // CreateMgmtService creates an headless service for NATS management purposes.
-func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, clusterVersion, ns string, owner metav1.OwnerReference) error {
+func CreateMgmtService(
+	kubecli corev1client.CoreV1Interface,
+	clusterName, clusterVersion, ns string,
+	owner metav1.OwnerReference,
+	websocketPort int,
+) error {
 	ports := []v1.ServicePort{
 		{
 			Name:       "cluster",
@@ -138,6 +159,15 @@ func CreateMgmtService(kubecli corev1client.CoreV1Interface, clusterName, cluste
 			Protocol:   v1.ProtocolTCP,
 		},
 	}
+	if websocketPort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "websocket",
+			Port:       int32(websocketPort),
+			TargetPort: intstr.FromInt(websocketPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
 	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
