@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -49,10 +50,12 @@ func (r *Reloader) Run(ctx context.Context) error {
 	}
 
 	var (
-		proc     *os.Process
-		pid      int
-		attempts int
+		proc      *os.Process
+		pid       int
+		attempts  int
+		startTime time.Time
 	)
+	startTime = time.Now()
 	for {
 		pidfile, err := ioutil.ReadFile(r.PidFile)
 		if err != nil {
@@ -78,6 +81,12 @@ func (r *Reloader) Run(ctx context.Context) error {
 		}
 		time.Sleep(time.Duration(r.RetryWaitSecs) * time.Second)
 	}
+
+	if attempts > 0 {
+		log.Printf("found pid from pidfile %q after %v failed attempts (%v time after start)",
+			r.PidFile, attempts, time.Now().Sub(startTime))
+	}
+
 	r.pid = pid
 	r.proc = proc
 
@@ -120,6 +129,18 @@ func (r *Reloader) Run(ctx context.Context) error {
 		lastConfigAppliedCache[configFile] = digest
 	}
 
+	// If the two pids don't match then os.FindProcess() has done something
+	// rather hinkier than we expect, but log them both just in case on some
+	// future platform there's a weird namespace issue, as a difference will
+	// help with debugging.
+	log.Printf("Live, ready to kick pid %v (live, from %v spec) based on any of %v files",
+		r.proc.Pid, r.pid, len(lastConfigAppliedCache))
+
+	if len(lastConfigAppliedCache) == 0 {
+		log.Printf("Error: no watched config files cached; input spec was: %#v",
+			r.ConfigFiles)
+	}
+
 WaitForEvent:
 	for {
 		select {
@@ -129,6 +150,13 @@ WaitForEvent:
 			log.Printf("Event: %+v \n", event)
 			touchedInfo, err := os.Stat(event.Name)
 			if err != nil {
+				// Beware that this means that we won't reconfigure if a file
+				// is permanently removed.  We want to support transient
+				// disappearance, waiting for the new content, and have not set
+				// up any sort of longer-term timers to detect permanent
+				// deletion.
+				// If you really need this, then switch a file to be empty
+				// before removing if afterwards.
 				continue
 			}
 
@@ -160,6 +188,9 @@ WaitForEvent:
 				}
 				lastConfigAppliedCache[configFile] = digest
 
+				log.Printf("changed config; file=%q existing=%v total-files=%d",
+					configFile, ok, len(lastConfigAppliedCache))
+
 				// We only get an event for one file at a time, we can stop checking
 				// config files here and continue with our business.
 				break
@@ -179,10 +210,11 @@ WaitForEvent:
 			if err != nil {
 				log.Printf("Error during reload: %s\n", err)
 				if attempts > r.MaxRetries {
-					return fmt.Errorf("Too many errors attempting to signal server to reload")
+					return fmt.Errorf("Too many errors (%v) attempting to signal server to reload", attempts)
 				}
-				log.Println("Wait and retrying after some time...")
-				time.Sleep(time.Duration(r.RetryWaitSecs) * time.Second)
+				delay := retryJitter(time.Duration(r.RetryWaitSecs) * time.Second)
+				log.Printf("Wait and retrying after some time [%v] ...", delay)
+				time.Sleep(delay)
 				attempts++
 				continue TryReload
 			}
@@ -205,4 +237,13 @@ func NewReloader(config *Config) (*Reloader, error) {
 	return &Reloader{
 		Config: config,
 	}, nil
+}
+
+// retryJitter helps avoid trying things at synchronized times, thus improving
+// resiliency in aggregate.
+func retryJitter(base time.Duration) time.Duration {
+	b := float64(base)
+	// 10% +/-
+	offset := rand.Float64()*0.2 - 0.1
+	return time.Duration(b + offset)
 }
