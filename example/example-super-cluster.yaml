@@ -1,0 +1,64 @@
+---
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "nats-super-cluster"
+
+spec:
+  size: 3
+  version: "nightly"
+  serverImage: "synadia/nats-server"
+
+  natsConfig:
+    debug: true
+    trace: true
+
+  tls:
+    # TLS timeout for client connections
+    clientsTLSTimeout: 5
+
+    # TLS timeout for gateway connections
+    gatewaysTLSTimeout: 5
+
+    # Certificates to secure the NATS client connections:
+    serverSecret: "nats-server-tls"
+    serverSecretCAFileName: "ca.crt"
+    serverSecretKeyFileName: "tls.key"
+    serverSecretCertFileName: "tls.crt"
+
+    # Certificates to secure the routes.
+    gatewaySecret: "nats-gateways-tls"
+    gatewaySecretCAFileName: "ca.crt"
+    gatewaySecretKeyFileName: "tls.key"
+    gatewaySecretCertFileName: "tls.crt"
+
+    # Certificates to secure the leafnode.
+    leafnodeSecret: "nats-leafnodes-tls"
+    leafnodeSecretCAFileName: "ca.crt"
+    leafnodeSecretKeyFileName: "tls.key"
+    leafnodeSecretCertFileName: "tls.crt"
+
+  pod:
+    enableClientsHostPort: true
+    advertiseExternalIP: true
+
+  gatewayConfig:
+    name: example
+    hostPort: 32328
+
+    gateways:
+    - name: example
+      url: nats://example.com:32328
+
+  leafnodeConfig:
+    hostPort: 4224
+
+  operatorConfig:
+    secret: operator-jwt
+    systemAccount: "AASYS..."
+    resolver: URL(https://example.com/jwt/v1/accounts/)
+
+  template:
+    spec:
+      # Required to be able to lookup public ip address from a server.
+      serviceAccountName: "nats-server"
