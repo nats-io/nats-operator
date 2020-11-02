@@ -1069,7 +1069,11 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 			"-gf", filepath.Join(constants.ConfigMapMountPath, constants.BootConfigGatewayFilePath),
 		}
 	}
-	container.VolumeMounts = volumeMounts
+	if container.VolumeMounts == nil {
+		container.VolumeMounts = volumeMounts
+	} else {
+		container.VolumeMounts = append(container.VolumeMounts, volumeMounts...)
+	}
 
 	if cs.Pod != nil {
 		container = containerWithRequirements(container, cs.Pod.Resources)
