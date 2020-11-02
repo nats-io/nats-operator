@@ -205,9 +205,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 	if cs.TLS.RoutesSecret != "" {
 		sconfig.Cluster.TLS = &natsconf.TLSConfig{
-			CAFile:   filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCAFileName),
-			CertFile: filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCertFileName),
-			KeyFile:  filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretKeyFileName),
+			CAFile:   resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCAFileName),
+			CertFile: resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCertFileName),
+			KeyFile:  resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretKeyFileName),
 		}
 		if cs.TLS.RoutesTLSTimeout > 0 {
 			sconfig.Cluster.TLS.Timeout = cs.TLS.RoutesTLSTimeout
@@ -215,9 +215,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 	if cs.TLS.GatewaySecret != "" {
 		sconfig.Gateway.TLS = &natsconf.TLSConfig{
-			CAFile:   filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName),
-			CertFile: filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName),
-			KeyFile:  filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName),
+			CAFile:   resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName),
+			CertFile: resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName),
+			KeyFile:  resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName),
 		}
 		if cs.TLS.GatewaysTLSTimeout > 0 {
 			sconfig.Gateway.TLS.Timeout = cs.TLS.GatewaysTLSTimeout
@@ -225,9 +225,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 	if cs.TLS.LeafnodeSecret != "" {
 		sconfig.LeafNode.TLS = &natsconf.TLSConfig{
-			CAFile:   filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName),
-			CertFile: filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName),
-			KeyFile:  filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName),
+			CAFile:   resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName),
+			CertFile: resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName),
+			KeyFile:  resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName),
 		}
 		timeout := cs.TLS.LeafnodesTLSTimeout
 		if timeout > 0 {
@@ -237,9 +237,9 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 
 	if cs.TLS.WebsocketSecret != "" {
 		sconfig.Websocket.TLS = &natsconf.TLSConfig{
-			CAFile:   filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName),
-			CertFile: filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName),
-			KeyFile:  filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName),
+			CAFile:   resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName),
+			CertFile: resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName),
+			KeyFile:  resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName),
 		}
 		timeout := cs.TLS.WebsocketTLSTimeout
 		if timeout > 0 {
@@ -1150,35 +1150,35 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		var reloadTarget []string
 		if cs.Auth != nil {
 			if cs.Auth.ClientsAuthFile != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.ConfigMapMountPath, cs.Auth.ClientsAuthFile))
+				reloadTarget = append(reloadTarget, resolvePath(constants.ConfigMapMountPath, cs.Auth.ClientsAuthFile))
 			}
 		}
 
 		if cs.TLS != nil {
 			if cs.TLS.ServerSecret != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretCAFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretCertFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.ServerCertsMountPath, cs.TLS.ServerSecretKeyFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.ServerCertsMountPath, cs.TLS.ServerSecretCAFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.ServerCertsMountPath, cs.TLS.ServerSecretCertFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.ServerCertsMountPath, cs.TLS.ServerSecretKeyFileName))
 			}
 			if cs.TLS.RoutesSecret != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCAFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCertFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretKeyFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCAFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretCertFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.RoutesCertsMountPath, cs.TLS.RoutesSecretKeyFileName))
 			}
 			if cs.TLS.GatewaySecret != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCAFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretCertFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.GatewayCertsMountPath, cs.TLS.GatewaySecretKeyFileName))
 			}
 			if cs.TLS.LeafnodeSecret != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCAFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretCertFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.LeafnodeCertsMountPath, cs.TLS.LeafnodeSecretKeyFileName))
 			}
 			if cs.TLS.WebsocketSecret != "" {
-				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName))
-				reloadTarget = append(reloadTarget, filepath.Join(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCAFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretCertFileName))
+				reloadTarget = append(reloadTarget, resolvePath(constants.WebsocketCertsMountPath, cs.TLS.WebsocketSecretKeyFileName))
 			}
 		}
 
@@ -1333,4 +1333,13 @@ func ResourceKey(obj interface{}) string {
 		return "(unknown)"
 	}
 	return res
+}
+
+// resolvePath allows us to use a name for a file which might be an absolute path
+// instead; the directory first argument is thus only a _default_ container.
+func resolvePath(dirpath, fileOrPath string) string {
+	if filepath.IsAbs(fileOrPath) {
+		return fileOrPath
+	}
+	return filepath.Join(dirpath, fileOrPath)
 }

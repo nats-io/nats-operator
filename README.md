@@ -183,6 +183,13 @@ with the clients.
 $ kubectl create secret generic nats-clients-tls --from-file=ca.pem --from-file=server-key.pem --from-file=server.pem
 ```
 
+Consider though that you may wish to independently manage the certificate
+authorities for routes between clusters, to support the ability to roll
+between CAs or their intermediates.
+
+Any filename in the below can also be an absolute path, allowing you to mount
+a CA bundle in a place of your choosing.
+
 NATS also supports kubernetes.io/tls secrets (like the ones managed by cert-manager) and any secrets containing a CA, private and public keys with arbitrary names.
 It is possible to overwrite the default names as follows:
 
@@ -208,12 +215,25 @@ spec:
 
     # Certificates to secure the routes.
     routesSecret: "nats-routes-tls"
-    # Name of the CA in routesSecret
-    routesSecretCAFileName: "ca.crt"
+    # Name of the CA, but not from this secret
+    routesSecretCAFileName: "/etc/ca-bundle/routes-bundle.pem"
     # Name of the key in routesSecret
     routesSecretKeyFileName: "tls.key"
     # Name of the certificate in routesSecret
     routesSecretCertFileName: "tls.crt"
+
+  template:
+    spec:
+      containers:
+      - name: "nats"
+        volumeMounts:
+        - name: "ca-bundle"
+          mountPath: "/etc/ca-bundle"
+          readOnly: true
+      volumes:
+      - name: "ca-bundle"
+        configMap:
+          name: "our-ca-bundle"
 ```
 
 ### Cert-Manager
