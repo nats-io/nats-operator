@@ -71,7 +71,7 @@ This namespace must be created beforehand:
 $ kubectl create ns nats-io
 ```
 
-Then, you must manually edit the manifests in `deployment/` in order to reference the `nats-io` namespace and to enable the `ClusterScoped` feature gate in the NATS Operator deployment.
+Then, you must manually edit the manifests in `deploy/` in order to reference the `nats-io` namespace and to enable the `ClusterScoped` feature gate in the NATS Operator deployment.
 
 ```yaml
 apiVersion: apps/v1
