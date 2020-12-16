@@ -35,11 +35,19 @@ import (
 	"github.com/nats-io/nats-operator/pkg/constants"
 )
 
+// hostPorts defines which HostPorts that should be enabled
+type hostPorts struct {
+	clients    bool
+	gateways   bool
+	leafnodes  bool
+	websockets bool
+}
+
 // natsPodContainer returns a NATS server pod container spec.
 func natsPodContainer(
 	container v1.Container,
 	clusterName, version, serverImage string,
-	enableClientsHostPort bool,
+	hostPortsEnabled hostPorts,
 	gatewayPort, leafnodePort, websocketPort int,
 ) v1.Container {
 	container.Name = constants.NatsContainerName
@@ -63,7 +71,7 @@ func natsPodContainer(
 		ContainerPort: int32(constants.ClientPort),
 		Protocol:      v1.ProtocolTCP,
 	}
-	if enableClientsHostPort {
+	if hostPortsEnabled.clients {
 		port.HostPort = int32(constants.ClientPort)
 	}
 	ports = append(ports, port)
@@ -73,7 +81,9 @@ func natsPodContainer(
 			Name:          "gateway",
 			ContainerPort: int32(gatewayPort),
 			Protocol:      v1.ProtocolTCP,
-			HostPort:      int32(gatewayPort),
+		}
+		if hostPortsEnabled.gateways {
+			port.HostPort = int32(gatewayPort)
 		}
 		ports = append(ports, port)
 	}
@@ -82,7 +92,9 @@ func natsPodContainer(
 			Name:          "leaf",
 			ContainerPort: int32(leafnodePort),
 			Protocol:      v1.ProtocolTCP,
-			HostPort:      int32(leafnodePort),
+		}
+		if hostPortsEnabled.leafnodes {
+			port.HostPort = int32(leafnodePort)
 		}
 		ports = append(ports, port)
 	}
@@ -91,7 +103,9 @@ func natsPodContainer(
 			Name:          "websocket",
 			ContainerPort: int32(websocketPort),
 			Protocol:      v1.ProtocolTCP,
-			HostPort:      int32(websocketPort),
+		}
+		if hostPortsEnabled.websockets {
+			port.HostPort = int32(websocketPort)
 		}
 		ports = append(ports, port)
 	}

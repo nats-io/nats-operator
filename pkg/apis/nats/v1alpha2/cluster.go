@@ -384,6 +384,18 @@ type PodPolicy struct {
 	// also meaning that only a single NATS server can be running on that machine.
 	EnableClientsHostPort bool `json:"enableClientsHostPort,omitempty"`
 
+	// DisableGatewaysHostPort will disable bind a host port for the NATS container gateways port.
+	// Ignored if AdvertiseExternalIP is true.
+	DisableGatewaysHostPort bool `json:"disableGatewaysHostPort,omitempty"`
+
+	// DisableLeafnodesHostPort will disable bind a host port for the NATS container leafnodes port.
+	// Ignored if AdvertiseExternalIP is true.
+	DisableLeafnodesHostPort bool `json:"disableLeafnodesHostPort,omitempty"`
+
+	// DisableWebsocketsHostPort will disable bind a host port for the NATS container websockets port.
+	// Ignored if AdvertiseExternalIP is true.
+	DisableWebsocketsHostPort bool `json:"disableWebsocketsHostPort,omitempty"`
+
 	// AdvertiseExternalIP will configure the client advertise address for a pod
 	// to be the external IP of the pod where it is running.
 	AdvertiseExternalIP bool `json:"advertiseExternalIP,omitempty"`
