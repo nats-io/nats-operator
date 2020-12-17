@@ -177,6 +177,22 @@ func (c *Cluster) Reconcile() error {
 	return nil
 }
 
+func (c *Cluster) checkClusterAuthUpdate() error {
+	if c.cluster.Spec.Auth.ClusterAuthSecret != "" {
+		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
+		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
+		result, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(c.cluster.Spec.Auth.ClusterAuthSecret)
+		if err != nil {
+			return err
+		}
+		if c.cluster.GetClusterAuthSecretResourceVersion() != result.ResourceVersion {
+			c.cluster.SetClusterAuthSecretResourceVersion(result.ResourceVersion)
+			return c.updateConfigSecret()
+		}
+	}
+	return nil
+}
+
 func (c *Cluster) checkClientAuthUpdate() error {
 	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
 		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.

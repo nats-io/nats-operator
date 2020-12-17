@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	extsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -310,8 +310,9 @@ func (c *Controller) handleObject(obj interface{}) {
 		}
 		// Enqueue all NatsCluster resources which reference the current secret.
 		for _, cluster := range clusters {
-			if cluster.Spec.Auth != nil && cluster.Spec.Auth.ClientsAuthSecret == object.Name {
+			if cluster.Spec.Auth != nil && (cluster.Spec.Auth.ClientsAuthSecret == object.Name || cluster.Spec.Auth.ClusterAuthSecret == object.Name) {
 				c.enqueue(cluster)
+				return
 			}
 		}
 		return
