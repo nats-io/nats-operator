@@ -942,17 +942,18 @@ func addOwnerRefToObject(o metav1.Object, r metav1.OwnerReference) {
 // NewNatsPodSpec returns a NATS peer pod specification, based on the cluster specification.
 func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec, owner metav1.OwnerReference) *v1.Pod {
 	var (
-		enableClientsHostPort bool
-		annotations           = map[string]string{}
-		containers            = make([]v1.Container, 0)
-		volumes               = make([]v1.Volume, 0)
-		volumeMounts          = make([]v1.VolumeMount, 0)
-		labels                = map[string]string{
+		annotations  = map[string]string{}
+		containers   = make([]v1.Container, 0)
+		volumes      = make([]v1.Volume, 0)
+		volumeMounts = make([]v1.VolumeMount, 0)
+		labels       = map[string]string{
 			LabelAppKey:            "nats",
 			LabelClusterNameKey:    clusterName,
 			LabelClusterVersionKey: cs.Version,
 		}
 	)
+	// hostPortsEnabled with default values not breaking current behaviour
+	hostPortsEnabled := hostPorts{clients: false, gateways: true, leafnodes: true, websockets: true}
 
 	// ConfigMap: Volume declaration for the Pod and Container.
 	volume := newNatsConfigMapVolume(clusterName)
@@ -969,7 +970,19 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	if cs.Pod != nil {
 		// User supplied volumes and mounts
 		volumeMounts = append(volumeMounts, cs.Pod.VolumeMounts...)
-		enableClientsHostPort = cs.Pod.EnableClientsHostPort
+		hostPortsEnabled.clients = cs.Pod.EnableClientsHostPort
+		// Disabling HostPorts makes no sense when AdvertiseExternalIP is true
+		if !cs.Pod.AdvertiseExternalIP {
+			if cs.Pod.DisableGatewaysHostPort {
+				hostPortsEnabled.gateways = false
+			}
+			if cs.Pod.DisableLeafnodesHostPort {
+				hostPortsEnabled.leafnodes = false
+			}
+			if cs.Pod.DisableWebsocketsHostPort {
+				hostPortsEnabled.websockets = false
+			}
+		}
 	}
 
 	var gatewayPort int
@@ -1007,7 +1020,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 		clusterName,
 		cs.Version,
 		cs.ServerImage,
-		enableClientsHostPort,
+		hostPortsEnabled,
 		gatewayPort,
 		leafnodePort,
 		websocketPort,
