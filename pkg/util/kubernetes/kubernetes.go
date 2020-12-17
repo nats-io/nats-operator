@@ -252,6 +252,40 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 }
 
+func addClusterAuthConfig(
+	kubecli corev1client.CoreV1Interface,
+	ns string,
+	sconfig *natsconf.ServerConfig,
+	cs v1alpha2.ClusterSpec,
+) error {
+	if cs.Auth == nil {
+		return nil
+	}
+
+	if cs.Auth.ClusterAuthSecret != "" {
+		result, err := kubecli.Secrets(ns).Get(cs.Auth.ClusterAuthSecret, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		var clusterAuth *natsconf.AuthorizationConfig
+		for _, v := range result.Data {
+			err := json.Unmarshal(v, &clusterAuth)
+			if err != nil {
+				return err
+			}
+			if cs.Auth.ClusterAuthTimeout > 0 {
+				clusterAuth.Timeout = cs.Auth.ClusterAuthTimeout
+			}
+			sconfig.Cluster.Authorization = clusterAuth
+			break
+		}
+		return nil
+	}
+
+	return nil
+}
+
 func addAuthConfig(
 	kubecli corev1client.CoreV1Interface,
 	operatorcli natsalphav2client.NatsV1alpha2Interface,
@@ -558,6 +592,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	if err != nil {
 		return err
 	}
+	err = addClusterAuthConfig(kubecli, ns, sconfig, cluster)
+	if err != nil {
+		return err
+	}
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
@@ -601,6 +639,20 @@ func UpdateConfigSecret(
 	cluster v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
+	sconfig := &natsconf.ServerConfig{
+		Port:     int(constants.ClientPort),
+		HTTPPort: int(constants.MonitoringPort),
+		Cluster: &natsconf.ClusterConfig{
+			Port: int(constants.ClusterPort),
+		},
+	}
+
+	// We need to add cluster auth config before generating routes, since we need auth info there
+	err := addClusterAuthConfig(kubecli, ns, sconfig, cluster)
+	if err != nil {
+		return err
+	}
+
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
@@ -609,14 +661,20 @@ func UpdateConfigSecret(
 		return err
 	}
 	for _, pod := range podList.Items {
+		var route string
 		// Skip pods that have failed
 		switch pod.Status.Phase {
 		case "Failed":
 			continue
 		}
 
-		route := fmt.Sprintf("nats://%s.%s.%s.svc:%d",
-			pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
+		if sconfig.Cluster.Authorization != nil {
+			route = fmt.Sprintf("nats://%s:%s@%s.%s.%s.svc:%d",
+				sconfig.Cluster.Authorization.Username, sconfig.Cluster.Authorization.Password, pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
+		} else {
+			route = fmt.Sprintf("nats://%s.%s.%s.svc:%d",
+				pod.Name, ManagementServiceName(clusterName), ns, constants.ClusterPort)
+		}
 		routes = append(routes, route)
 	}
 
@@ -634,15 +692,8 @@ func UpdateConfigSecret(
 			}
 		}
 	}
+	sconfig.Cluster.Routes = routes
 
-	sconfig := &natsconf.ServerConfig{
-		Port:     int(constants.ClientPort),
-		HTTPPort: int(constants.MonitoringPort),
-		Cluster: &natsconf.ClusterConfig{
-			Port:   int(constants.ClusterPort),
-			Routes: routes,
-		},
-	}
 	if cluster.UseServerName {
 		sconfig.ServerName = "$SERVER_NAME"
 	}
