@@ -252,6 +252,40 @@ func addTLSConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) {
 	}
 }
 
+func addGatewayAuthConfig(
+	kubecli corev1client.CoreV1Interface,
+	ns string,
+	sconfig *natsconf.ServerConfig,
+	cs v1alpha2.ClusterSpec,
+) error {
+	if cs.Auth == nil || cs.GatewayConfig == nil {
+		return nil
+	}
+
+	if cs.Auth.GatewayAuthSecret != "" {
+		result, err := kubecli.Secrets(ns).Get(cs.Auth.GatewayAuthSecret, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		var gatewayAuth *natsconf.AuthorizationConfig
+		for _, v := range result.Data {
+			err := json.Unmarshal(v, &gatewayAuth)
+			if err != nil {
+				return err
+			}
+			if cs.Auth.GatewayAuthTimeout > 0 {
+				gatewayAuth.Timeout = cs.Auth.GatewayAuthTimeout
+			}
+			sconfig.Gateway.Authorization = gatewayAuth
+			break
+		}
+		return nil
+	}
+
+	return nil
+}
+
 func addClusterAuthConfig(
 	kubecli corev1client.CoreV1Interface,
 	ns string,
@@ -596,6 +630,10 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	if err != nil {
 		return err
 	}
+	err = addGatewayAuthConfig(kubecli, ns, sconfig, cluster)
+	if err != nil {
+		return err
+	}
 	rawConfig, err := natsconf.Marshal(sconfig)
 	if err != nil {
 		return err
@@ -700,6 +738,10 @@ func UpdateConfigSecret(
 
 	addConfig(sconfig, cluster)
 	err = addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
+	if err != nil {
+		return err
+	}
+	err = addGatewayAuthConfig(kubecli, ns, sconfig, cluster)
 	if err != nil {
 		return err
 	}

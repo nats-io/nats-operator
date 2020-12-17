@@ -128,7 +128,7 @@ func (c *Cluster) Reconcile() error {
 
 	// If the current NatsCluster resource has authentication configured, make sure that the configuration is in sync with the secrets.
 	if c.cluster.Spec.Auth != nil {
-		err := c.checkClientAuthUpdate()
+		err := c.checkAuthUpdate()
 		if err != nil {
 			return fmt.Errorf("failed to update auth data in config secret: %v", err)
 		}
@@ -177,23 +177,9 @@ func (c *Cluster) Reconcile() error {
 	return nil
 }
 
-func (c *Cluster) checkClusterAuthUpdate() error {
-	if c.cluster.Spec.Auth.ClusterAuthSecret != "" {
-		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
-		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
-		result, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(c.cluster.Spec.Auth.ClusterAuthSecret)
-		if err != nil {
-			return err
-		}
-		if c.cluster.GetClusterAuthSecretResourceVersion() != result.ResourceVersion {
-			c.cluster.SetClusterAuthSecretResourceVersion(result.ResourceVersion)
-			return c.updateConfigSecret()
-		}
-	}
-	return nil
-}
-
-func (c *Cluster) checkClientAuthUpdate() error {
+func (c *Cluster) checkAuthUpdate() error {
+	// needUpdate set to true if any secrets for auth is updated
+	var needUpdate bool
 	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
 		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
 		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
@@ -203,7 +189,7 @@ func (c *Cluster) checkClientAuthUpdate() error {
 		}
 		if c.cluster.GetClientAuthSecretResourceVersion() != result.ResourceVersion {
 			c.cluster.SetClientAuthSecretResourceVersion(result.ResourceVersion)
-			return c.updateConfigSecret()
+			needUpdate = true
 		}
 	} else if c.cluster.Spec.Auth.EnableServiceAccounts {
 		// Get the hash of the comma-separated list of NatsServiceRole UIDs associated with the current NATS cluster.
@@ -234,8 +220,38 @@ func (c *Cluster) checkClientAuthUpdate() error {
 		// Update the configuration if the hashes differ.
 		if currentHash != desiredHash {
 			c.cluster.SetNatsServiceRolesHash(desiredHash)
-			return c.updateConfigSecret()
+			needUpdate = true
 		}
+	}
+
+	if c.cluster.Spec.Auth.ClusterAuthSecret != "" {
+		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
+		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
+		result, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(c.cluster.Spec.Auth.ClusterAuthSecret)
+		if err != nil {
+			return err
+		}
+		if c.cluster.GetClusterAuthSecretResourceVersion() != result.ResourceVersion {
+			c.cluster.SetClusterAuthSecretResourceVersion(result.ResourceVersion)
+			needUpdate = true
+		}
+	}
+
+	if c.cluster.Spec.Auth.GatewayAuthSecret != "" {
+		// Look for updates in the secret used for auth and trigger a config reload in case there are new updates.
+		// The resource version of the secret is stored in an annotation in the NatsCluster resource.
+		result, err := c.config.SecretLister.Secrets(c.cluster.Namespace).Get(c.cluster.Spec.Auth.GatewayAuthSecret)
+		if err != nil {
+			return err
+		}
+		if c.cluster.GetGatewayAuthSecretResourceVersion() != result.ResourceVersion {
+			c.cluster.SetGatewayAuthSecretResourceVersion(result.ResourceVersion)
+			needUpdate = true
+		}
+	}
+
+	if needUpdate {
+		return c.updateConfigSecret()
 	}
 	return nil
 }

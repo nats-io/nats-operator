@@ -41,6 +41,12 @@ const (
 	// the NATS cluster.
 	clusterAuthSecretResourceVersionAnnotationKey = "nats.io/clas"
 
+	// gatewayAuthSecretResourceVersionAnnotationKey is the key of
+	// the annotation that holds the last-observed resource
+	// version of the secret containing authentication data for
+	// the NATS cluster.
+	gatewayAuthSecretResourceVersionAnnotationKey = "nats.io/gas"
+
 	// natsServiceRolesHashAnnotationKey is the key of the
 	// annotation that holds the hash of the comma-separated list
 	// of NatsServiceRole UIDs associated with the NATS cluster.
@@ -448,6 +454,14 @@ type AuthConfig struct {
 	// ClusterAuthTimeout is the time in seconds that the NATS server will
 	// allow to cluster members to send their auth credentials.
 	ClusterAuthTimeout int `json:"clusterAuthTimeout,omitempty"`
+
+	// GatewayAuthSecret is the secret containing the explicit authorization
+	// configuration in JSON.
+	GatewayAuthSecret string `json:"gatewayAuthSecret,omitempty"`
+
+	// GatewayAuthTimeout is the time in seconds that the NATS server will
+	// allow to cluster members to send their auth credentials.
+	GatewayAuthTimeout int `json:"gatewayAuthTimeout,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {
@@ -669,6 +683,26 @@ func (cs *ClusterStatus) appendCondition(c ClusterCondition) {
 
 func scalingReason(from, to int) string {
 	return fmt.Sprintf("scaling cluster from %d to %d peers", from, to)
+}
+
+// GetGatewayAuthSecretResourceVersion returns the last-observed resource version of the secret containing authentication data for the NATS cluster.
+func (c *NatsCluster) GetGatewayAuthSecretResourceVersion() string {
+	if c.Annotations == nil {
+		return ""
+	}
+	res, ok := c.Annotations[gatewayAuthSecretResourceVersionAnnotationKey]
+	if !ok {
+		return ""
+	}
+	return res
+}
+
+// SetGatewayAuthSecretResourceVersion sets the last-observed resource version of the secret containing authentication data for the NATS cluster.
+func (c *NatsCluster) SetGatewayAuthSecretResourceVersion(v string) {
+	if c.Annotations == nil {
+		c.Annotations = make(map[string]string, 1)
+	}
+	c.Annotations[gatewayAuthSecretResourceVersionAnnotationKey] = v
 }
 
 // GetClusterAuthSecretResourceVersion returns the last-observed resource version of the secret containing authentication data for the NATS cluster.
