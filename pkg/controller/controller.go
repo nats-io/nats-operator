@@ -310,9 +310,20 @@ func (c *Controller) handleObject(obj interface{}) {
 		}
 		// Enqueue all NatsCluster resources which reference the current secret.
 		for _, cluster := range clusters {
-			if cluster.Spec.Auth != nil && (cluster.Spec.Auth.ClientsAuthSecret == object.Name || cluster.Spec.Auth.ClusterAuthSecret == object.Name) {
-				c.enqueue(cluster)
-				return
+			if cluster.Spec.Auth != nil {
+				var needEnqueue bool
+				switch object.Name {
+				case cluster.Spec.Auth.ClientsAuthSecret:
+					needEnqueue = true
+				case cluster.Spec.Auth.ClientsAuthSecret:
+					needEnqueue = true
+				case cluster.Spec.Auth.ClusterAuthSecret:
+					needEnqueue = true
+				}
+				if needEnqueue {
+					c.enqueue(cluster)
+					return
+				}
 			}
 		}
 		return
