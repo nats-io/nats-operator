@@ -300,7 +300,7 @@ func (c *Controller) handleObject(obj interface{}) {
 		return
 	}
 
-	// If the current resource is a Secret, we must check whether there are any NatsCluster resources that references it via ".spec.auth.clientsAuthSecret" and enqueue them.
+	// If the current resource is a Secret, we must check whether there are any NatsCluster resources that references it via ".spec.auth.*AuthSecret" and enqueue them.
 	if object, ok := obj.(*v1.Secret); ok {
 		// List all NatsCluster resources in the same namespace as the current secret.
 		clusters, err := c.natsClustersLister.NatsClusters(object.Namespace).List(labels.Everything())
@@ -311,18 +311,13 @@ func (c *Controller) handleObject(obj interface{}) {
 		// Enqueue all NatsCluster resources which reference the current secret.
 		for _, cluster := range clusters {
 			if cluster.Spec.Auth != nil {
-				var needEnqueue bool
 				switch object.Name {
 				case cluster.Spec.Auth.ClientsAuthSecret:
-					needEnqueue = true
-				case cluster.Spec.Auth.ClientsAuthSecret:
-					needEnqueue = true
-				case cluster.Spec.Auth.ClusterAuthSecret:
-					needEnqueue = true
-				}
-				if needEnqueue {
 					c.enqueue(cluster)
-					return
+				case cluster.Spec.Auth.GatewayAuthSecret:
+					c.enqueue(cluster)
+				case cluster.Spec.Auth.ClusterAuthSecret:
+					c.enqueue(cluster)
 				}
 			}
 		}
