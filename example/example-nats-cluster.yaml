@@ -1,7 +1,6 @@
 apiVersion: "nats.io/v1alpha2"
 kind: "NatsCluster"
 metadata:
-  name: "example-nats-1"
+  name: "operated-nats"
 spec:
   size: 3
-  version: "1.3.0"
