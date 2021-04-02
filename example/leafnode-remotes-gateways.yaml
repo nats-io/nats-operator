@@ -26,7 +26,7 @@ spec:
     volumeMounts:
     - name: user-credentials
       mountPath: /etc/nats-creds
-      readOnl: true
+      readOnly: true
 
   leafnodeConfig:
     remotes:
