@@ -35,7 +35,7 @@ type ServerConfig struct {
 }
 
 type ClusterConfig struct {
-        Name          string               `json:"name,omitempty"`
+	Name          string               `json:"name,omitempty"`
 	Port          int                  `json:"port,omitempty"`
 	Routes        []string             `json:"routes,omitempty"`
 	TLS           *TLSConfig           `json:"tls,omitempty"`

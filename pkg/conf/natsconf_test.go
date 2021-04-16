@@ -65,7 +65,7 @@ func TestConfMarshal(t *testing.T) {
 				Port:     4222,
 				HTTPPort: 8222,
 				Cluster: &ClusterConfig{
-                                        Name: "my-nats-cluster",
+					Name: "my-nats-cluster",
 					Port: 6222,
 				},
 			},
@@ -85,7 +85,7 @@ func TestConfMarshal(t *testing.T) {
 				Port:     4222,
 				HTTPPort: 8222,
 				Cluster: &ClusterConfig{
-                                        Name: "my-nats-cluster",
+					Name: "my-nats-cluster",
 					Port: 6222,
 					Routes: []string{
 						"nats://nats-1.default.svc:6222",
@@ -117,7 +117,7 @@ func TestConfMarshal(t *testing.T) {
 				Debug:    true,
 				Trace:    true,
 				Cluster: &ClusterConfig{
-                                        Name: "my-nats-cluster",
+					Name: "my-nats-cluster",
 					Port: 6222,
 					Routes: []string{
 						"nats://nats-1.default.svc:6222",
@@ -149,7 +149,7 @@ func TestConfMarshal(t *testing.T) {
 				Port:     4222,
 				HTTPPort: 8222,
 				Cluster: &ClusterConfig{
-                                        Name: "my-nats-cluster",
+					Name: "my-nats-cluster",
 					Port: 6222,
 					Routes: []string{
 						"nats://nats-1.default.svc:6222",
