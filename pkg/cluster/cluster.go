@@ -276,9 +276,15 @@ func (c *Cluster) checkServices() error {
 		}
 	}
 
-	var websocketPort int
+	var websocketPort, gatewayPort, leafnodePort int
 	if c.cluster.Spec.WebsocketConfig != nil {
 		websocketPort = c.cluster.Spec.WebsocketConfig.Port
+	}
+	if c.cluster.Spec.GatewayConfig != nil {
+		gatewayPort = c.cluster.Spec.GatewayConfig.Port
+	}
+	if c.cluster.Spec.LeafNodeConfig != nil {
+		leafnodePort = c.cluster.Spec.LeafNodeConfig.Port
 	}
 
 	// Create the client service if required.
@@ -315,6 +321,8 @@ func (c *Cluster) checkServices() error {
 			c.cluster.Namespace,
 			c.cluster.AsOwner(),
 			websocketPort,
+			gatewayPort,
+			leafnodePort,
 		)
 		if err != nil {
 			return err
