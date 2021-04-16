@@ -499,30 +499,30 @@ func addGatewayConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSp
 	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
 		sconfig.Gateway.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
 	}
+	return
+}
 
-	// Add the same for leaf nodes if present
-	if cluster.LeafNodeConfig != nil {
-		sconfig.LeafNode = &natsconf.LeafNodeServerConfig{
-			Port: cluster.LeafNodeConfig.Port,
+func addLeafnodeConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
+	sconfig.LeafNode = &natsconf.LeafNodeServerConfig{
+		Port: cluster.LeafNodeConfig.Port,
+	}
+	for _, r := range cluster.LeafNodeConfig.Remotes {
+		var urls []string
+		if r.URL != "" {
+			urls = append(urls, r.URL)
 		}
-		for _, r := range cluster.LeafNodeConfig.Remotes {
-			var urls []string
-			if r.URL != "" {
-				urls = append(urls, r.URL)
-			}
-			if len(r.URLs) > 0 {
-				urls = append(urls, r.URLs...)
-			}
-
-			sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
-				URLs:        urls,
-				Credentials: r.Credentials,
-			})
+		if len(r.URLs) > 0 {
+			urls = append(urls, r.URLs...)
 		}
 
-		if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
-			sconfig.LeafNode.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
-		}
+		sconfig.LeafNode.Remotes = append(sconfig.LeafNode.Remotes, natsconf.LeafNodeRemote{
+			URLs:        urls,
+			Credentials: r.Credentials,
+		})
+	}
+
+	if cluster.Pod != nil && cluster.Pod.AdvertiseExternalIP {
+		sconfig.LeafNode.Include = filepath.Join(".", constants.BootConfigGatewayFilePath)
 	}
 	return
 }
@@ -800,6 +800,9 @@ func addConfig(sconfig *natsconf.ServerConfig, cluster v1alpha2.ClusterSpec) {
 	}
 	if cluster.GatewayConfig != nil {
 		addGatewayConfig(sconfig, cluster)
+	}
+	if cluster.LeafNodeConfig != nil {
+		addLeafnodeConfig(sconfig, cluster)
 	}
 	if cluster.WebsocketConfig != nil {
 		addWebsocketConfig(sconfig, cluster)
