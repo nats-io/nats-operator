@@ -138,6 +138,8 @@ func CreateMgmtService(
 	clusterName, clusterVersion, ns string,
 	owner metav1.OwnerReference,
 	websocketPort int,
+	gatewayPort int,
+	leafnodePort int,
 ) error {
 	ports := []v1.ServicePort{
 		{
@@ -164,6 +166,22 @@ func CreateMgmtService(
 			Name:       "websocket",
 			Port:       int32(websocketPort),
 			TargetPort: intstr.FromInt(websocketPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+	if gatewayPort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "gateways",
+			Port:       int32(gatewayPort),
+			TargetPort: intstr.FromInt(gatewayPort),
+			Protocol:   v1.ProtocolTCP,
+		})
+	}
+	if leafnodePort > 0 {
+		ports = append(ports, v1.ServicePort{
+			Name:       "leafnodes",
+			Port:       int32(leafnodePort),
+			TargetPort: intstr.FromInt(leafnodePort),
 			Protocol:   v1.ProtocolTCP,
 		})
 	}
