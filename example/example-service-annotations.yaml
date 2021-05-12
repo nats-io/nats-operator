@@ -1,0 +1,18 @@
+apiVersion: "nats.io/v1alpha2"
+kind: "NatsCluster"
+metadata:
+  name: "annotated-nats"
+spec:
+  size: 3
+  # servicePolicy will apply to the main NATS service
+  servicePolicy:
+    annotations:
+      this.is.an.example: "hello, world"
+    labels:
+      spam: eggs
+  # managementServicePolicy applies to the `-mgmt` service
+  managementServicePolicy:
+    annotations:
+      this.is.an.example: "goodbye, world"
+    labels:
+      spin: "has great scooters"

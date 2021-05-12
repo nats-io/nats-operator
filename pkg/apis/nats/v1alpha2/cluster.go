@@ -156,6 +156,12 @@ type ClusterSpec struct {
 
 	// WebsocketConfig is the websocket configuration from a server.
 	WebsocketConfig *WebsocketConfig `json:"websocketConfig,omitempty"`
+
+	// ServicePolicy defines the policy to create the client service for the NATS cluster.
+	ServicePolicy *ServicePolicy `json:"servicePolicy,omitempty"`
+
+	// ManagementServicePolicy defines the policy to create the management service for the NATS cluster.
+	ManagementServicePolicy *ServicePolicy `json:"managementServicePolicy,omitempty"`
 }
 
 // ServerConfig is extra configuration for the NATS server.
@@ -462,6 +468,16 @@ type AuthConfig struct {
 	// GatewayAuthTimeout is the time in seconds that the NATS server will
 	// allow to cluster members to send their auth credentials.
 	GatewayAuthTimeout int `json:"gatewayAuthTimeout,omitempty"`
+}
+
+// ServicePolicy defines the policy to create service for the NATS cluster.
+type ServicePolicy struct {
+	// Labels specifies the labels to attach to client service the operator creates for the
+	// NATS cluster.
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations specifies the annotations to attach to client service the operator creates.
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 func (c *ClusterSpec) Validate() error {
