@@ -89,8 +89,8 @@ func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
 	return p
 }
 
-func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string, tolerateUnready bool) error {
-	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors, tolerateUnready)
+func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string, tolerateUnready bool, labels map[string]string, annotations map[string]string) error {
+	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors, tolerateUnready, labels, annotations)
 	addOwnerRefToObject(svc.GetObjectMeta(), owner)
 	_, err := kubecli.Services(ns).Create(svc)
 	return err
@@ -106,6 +106,8 @@ func CreateClientService(
 	clusterName, ns string,
 	owner metav1.OwnerReference,
 	websocketPort int,
+	labels map[string]string,
+	annotations map[string]string,
 ) error {
 	ports := []v1.ServicePort{
 		{
@@ -125,7 +127,7 @@ func CreateClientService(
 	}
 
 	selectors := LabelsForCluster(clusterName)
-	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false)
+	return createService(kubecli, ClientServiceName(clusterName), clusterName, ns, "", ports, owner, selectors, false, labels, annotations)
 }
 
 func ManagementServiceName(clusterName string) string {
@@ -140,6 +142,8 @@ func CreateMgmtService(
 	websocketPort int,
 	gatewayPort int,
 	leafnodePort int,
+	labels map[string]string,
+	annotations map[string]string,
 ) error {
 	ports := []v1.ServicePort{
 		{
@@ -188,7 +192,7 @@ func CreateMgmtService(
 
 	selectors := LabelsForCluster(clusterName)
 	selectors[LabelClusterVersionKey] = clusterVersion
-	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true)
+	return createService(kubecli, ManagementServiceName(clusterName), clusterName, ns, v1.ClusterIPNone, ports, owner, selectors, true, labels, annotations)
 }
 
 // addTLSConfig fills in the TLS configuration to be used in the config map.
@@ -864,13 +868,17 @@ func newNatsPidFileVolumeMount() v1.VolumeMount {
 	}
 }
 
-func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string, tolerateUnready bool) *v1.Service {
-	labels := map[string]string{
-		LabelAppKey:         LabelAppValue,
-		LabelClusterNameKey: clusterName,
-	}
+func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.ServicePort, selectors map[string]string, tolerateUnready bool, labels map[string]string, annotations map[string]string) *v1.Service {
 
-	annotations := make(map[string]string)
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[LabelAppKey] = LabelAppValue
+	labels[LabelClusterNameKey] = clusterName
+
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
 	if tolerateUnready == true {
 		annotations[TolerateUnreadyEndpointsAnnotation] = "true"
 	}

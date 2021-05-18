@@ -287,6 +287,12 @@ func (c *Cluster) checkServices() error {
 		leafnodePort = c.cluster.Spec.LeafNodeConfig.Port
 	}
 
+	var labels, annotations map[string]string
+	if c.cluster.Spec.ServicePolicy != nil {
+		labels = c.cluster.Spec.ServicePolicy.Labels
+		annotations = c.cluster.Spec.ServicePolicy.Annotations
+	}
+
 	// Create the client service if required.
 	if mustCreateClientService {
 		err := kubernetesutil.CreateClientService(
@@ -295,6 +301,8 @@ func (c *Cluster) checkServices() error {
 			c.cluster.Namespace,
 			c.cluster.AsOwner(),
 			websocketPort,
+			labels,
+			annotations,
 		)
 		if err != nil {
 			return err
@@ -312,6 +320,12 @@ func (c *Cluster) checkServices() error {
 		}
 	}
 
+	var mgmtLabels, mgmtAnnotations map[string]string
+	if c.cluster.Spec.ManagementServicePolicy != nil {
+		mgmtLabels = c.cluster.Spec.ManagementServicePolicy.Labels
+		mgmtAnnotations = c.cluster.Spec.ManagementServicePolicy.Annotations
+	}
+
 	// Create the management service if required.
 	if mustCreateManagementService {
 		err := kubernetesutil.CreateMgmtService(
@@ -323,6 +337,8 @@ func (c *Cluster) checkServices() error {
 			websocketPort,
 			gatewayPort,
 			leafnodePort,
+			mgmtLabels,
+			mgmtAnnotations,
 		)
 		if err != nil {
 			return err
