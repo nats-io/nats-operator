@@ -116,7 +116,6 @@ func (c *Controller) Run(ctx context.Context) error {
       externalAddress = addr.Address
       ok = true
     }
-
 	}
 	// Fallback to use a label to find the external address.
 	if !ok {
