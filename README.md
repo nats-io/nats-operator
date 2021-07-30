@@ -597,6 +597,10 @@ spec:
     - cluster: "nats-v2-1"
 ```
 
+## Resolvers
+
+The operator only supports the `URL()` resolver, see [example/example-super-cluster.yaml](example/example/example-super-cluster.yaml#L56-L59)
+
 ## Development
 
 ### Building the Docker Image
