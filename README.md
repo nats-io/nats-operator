@@ -599,7 +599,7 @@ spec:
 
 ## Resolvers
 
-The operator only supports the `URL()` resolver, see [example/example-super-cluster.yaml](example/example/example-super-cluster.yaml#L56-L59)
+The operator only supports the `URL()` resolver, see [example/example-super-cluster.yaml](example/example-super-cluster.yaml#L56-L59)
 
 ## Development
 
