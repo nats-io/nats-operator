@@ -37,3 +37,18 @@ run:
 # gen executes the code generation step.
 gen:
 	@./hack/codegen.sh
+
+.PHONY: dockerx
+dockerx:
+ifneq ($(ver),)
+	# Ensure 'docker buildx ls' shows correct platforms.
+	docker buildx build \
+		--tag natsio/nats-operator:$(ver) --tag natsio/nats-operator:latest \
+		--platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8 \
+		--file docker/operator/Dockerfile \
+		--push .
+else
+	# Missing version, try this.
+	# make dockerx ver=1.2.3
+	exit 1
+endif
