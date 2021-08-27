@@ -343,6 +343,8 @@ spec:
 <a name="auth-service-accounts"></a>
 #### Using ServiceAccounts
 
+> :warning: The ServiceAccounts uses a very rudimentary approach of config reloading and watching CRDs and advanced K8S APIs that may not be available in your cluster.  Instead, the decentralized JWT approach should be preferred, to learn more: https://docs.nats.io/developing-with-nats/tutorials/jwt
+
 The NATS Operator can define permissions based on Roles by using any present ServiceAccount in a namespace.
 This feature requires a Kubernetes v1.12+ cluster having the `TokenRequest` API enabled.
 To try this feature using `minikube` v0.30.0+, you can configure it to start as follows:
