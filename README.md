@@ -8,7 +8,7 @@ NATS Operator manages NATS clusters atop [Kubernetes][k8s-home] using [CRDs](htt
 
 [k8s-home]: http://kubernetes.io
 
-> :warning: If looking for [JetStream](https://github.com/nats-io/jetstream) support, this is currently only available in the [Helm charts](https://github.com/nats-io/k8s/tree/master/helm/charts/nats#jetstream)
+> :warning: If looking for [JetStream](https://github.com/nats-io/jetstream) support, but they are available in the [Helm charts](https://github.com/nats-io/k8s/tree/master/helm/charts/nats#jetstream) which are currently the recommended way of deploying NATS in Kubernetes.  In general, the NATS Operator is not recommended to be used for new deployments.
 
 ## Requirements
 
