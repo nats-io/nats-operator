@@ -25,7 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -217,10 +217,33 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	}
 
 	// Grab the first (and single) container's exit code so we can
-	// use it as our own exit code.
-	pod, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get(natsOperatorE2ePodName, metav1.GetOptions{})
+	// use it as our own exit code. Wait for termination.
+	ctx2, fn2 := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn2()
+	exitCode := int(-1)
+	err = kubernetesutil.WaitUntilPodCondition(ctx2, f.KubeClient.CoreV1(), &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: f.Namespace,
+			Name:      natsOperatorE2ePodName,
+		},
+	}, func(event watch.Event) (bool, error) {
+		switch event.Type {
+		case watch.Error:
+			return false, fmt.Errorf("got event of type error: %+v", event.Object)
+		case watch.Deleted:
+			pod := event.Object.(*v1.Pod)
+			return false, fmt.Errorf("pod %q has been deleted", kubernetesutil.ResourceKey(pod))
+		default:
+			pod := event.Object.(*v1.Pod)
+			if t := pod.Status.ContainerStatuses[0].State.Terminated; t != nil {
+				exitCode = int(t.ExitCode)
+				return true, nil
+			}
+			return false, nil
+		}
+	})
 	if err != nil {
 		return -1, err
 	}
-	return int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode), nil
+	return exitCode, nil
 }
