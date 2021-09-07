@@ -199,7 +199,7 @@ func main() {
 }
 
 func run(ctx context.Context, featureMap features.FeatureMap, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
-	// Create a client for the apiextensions.k8s.io/v1beta1 so that we can register our CRDs.
+	// Create a client for the apiextensions.k8s.io/v1 so that we can register our CRDs.
 	extsClient := kubernetesutil.MustNewKubeExtClient(kubeCfg)
 	// Create a client for our API so that we can create shared index informers for our API types.
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
@@ -281,7 +281,8 @@ func createRecorder(kubecli corev1client.CoreV1Interface, name, namespace string
 // exitOnPreexistingNamespaceScopedNatsOperatorPods attempts to detect pre-existing namespace-scoped nats-operator pods, exiting nats-operator if any are found.
 func exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
 	// List all pods in the cluster.
-	pods, err := kubeClient.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
+	ctx := context.TODO()
+	pods, err := kubeClient.CoreV1().Pods(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		logrus.Fatalf("failed to list pods at the cluster level: %v", err)
 	}
@@ -298,7 +299,9 @@ func exitOnPreexistingNamespaceScopedNatsOperatorPods(kubeClient kubernetes.Inte
 // exitOnPreexistingClusterScopedNatsOperatorPods attempts to detect pre-existing cluster-scoped nats-operator pods, exiting nats-operator if any are found.
 func exitOnPreexistingClusterScopedNatsOperatorPods(kubeClient kubernetes.Interface) {
 	// List all pods in the "nats-io" namespace.
-	pods, err := kubeClient.CoreV1().Pods(constants.KubernetesNamespaceNatsIO).List(metav1.ListOptions{})
+	ctx := context.TODO()
+	pods, err := kubeClient.CoreV1().Pods(constants.KubernetesNamespaceNatsIO).
+		List(ctx, metav1.ListOptions{})
 	if err != nil {
 		logrus.Fatalf("failed to list pods in the %q namespace: %v", constants.KubernetesNamespaceNatsIO, err)
 	}
