@@ -16,6 +16,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -89,10 +90,17 @@ func PodWithNodeSelector(p *v1.Pod, ns map[string]string) *v1.Pod {
 	return p
 }
 
-func createService(kubecli corev1client.CoreV1Interface, svcName, clusterName, ns, clusterIP string, ports []v1.ServicePort, owner metav1.OwnerReference, selectors map[string]string, tolerateUnready bool, labels map[string]string, annotations map[string]string) error {
+func createService(
+	kubecli corev1client.CoreV1Interface,
+	svcName, clusterName, ns, clusterIP string,
+	ports []v1.ServicePort, owner metav1.OwnerReference,
+	selectors map[string]string, tolerateUnready bool,
+	labels map[string]string, annotations map[string]string,
+) error {
+	ctx := context.TODO()
 	svc := newNatsServiceManifest(svcName, clusterName, clusterIP, ports, selectors, tolerateUnready, labels, annotations)
 	addOwnerRefToObject(svc.GetObjectMeta(), owner)
-	_, err := kubecli.Services(ns).Create(svc)
+	_, err := kubecli.Services(ns).Create(ctx, svc, metav1.CreateOptions{})
 	return err
 }
 
@@ -284,8 +292,11 @@ func addGatewayAuthConfig(
 		return nil
 	}
 
+	ctx := context.TODO()
+
 	if cs.Auth.GatewayAuthSecret != "" {
-		result, err := kubecli.Secrets(ns).Get(cs.Auth.GatewayAuthSecret, metav1.GetOptions{})
+		result, err := kubecli.Secrets(ns).
+			Get(ctx, cs.Auth.GatewayAuthSecret, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -318,8 +329,10 @@ func addClusterAuthConfig(
 		return nil
 	}
 
+	ctx := context.TODO()
 	if cs.Auth.ClusterAuthSecret != "" {
-		result, err := kubecli.Secrets(ns).Get(cs.Auth.ClusterAuthSecret, metav1.GetOptions{})
+		result, err := kubecli.Secrets(ns).
+			Get(ctx, cs.Auth.ClusterAuthSecret, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -355,20 +368,21 @@ func addAuthConfig(
 		return nil
 	}
 
+	ctx := context.TODO()
 	if cs.Auth.EnableServiceAccounts {
 		roleSelector := map[string]string{
 			LabelClusterNameKey: clusterName,
 		}
 
 		users := make([]*natsconf.User, 0)
-		roles, err := operatorcli.NatsServiceRoles(ns).List(metav1.ListOptions{
+		roles, err := operatorcli.NatsServiceRoles(ns).List(ctx, metav1.ListOptions{
 			LabelSelector: labels.SelectorFromSet(roleSelector).String(),
 		})
 		if err != nil {
 			return err
 		}
 
-		namespaces, err := kubecli.Namespaces().List(metav1.ListOptions{})
+		namespaces, err := kubecli.Namespaces().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err
 		}
@@ -377,13 +391,16 @@ func addAuthConfig(
 			ns = nsObj.Name
 
 			for _, role := range roles.Items {
-				// Lookup for a ServiceAccount with the same name as the NatsServiceRole.
+				// Lookup for a ServiceAccount with the same name as the
+				// NatsServiceRole.
 
-				sa, err := kubecli.ServiceAccounts(ns).Get(role.Name, metav1.GetOptions{})
+				sa, err := kubecli.ServiceAccounts(ns).
+					Get(ctx, role.Name, metav1.GetOptions{})
 				if err != nil {
-					// TODO: Collect created secrets when the service account no
-					// longer exists, currently only deleted when the NatsServiceRole
-					// is deleted since it is the owner of the object.
+					// TODO: Collect created secrets when the service account
+					// no longer exists, currently only deleted when the
+					// NatsServiceRole is deleted since it is the owner of the
+					// object.
 
 					// Skip since cannot map unless valid service account is found.
 					continue
@@ -391,10 +408,10 @@ func addAuthConfig(
 
 				// TODO: Add support for expiration of the issued tokens.
 				tokenSecretName := fmt.Sprintf("%s-%s-bound-token", role.Name, clusterName)
-				cs, err := kubecli.Secrets(ns).Get(tokenSecretName, metav1.GetOptions{})
+				cs, err := kubecli.Secrets(ns).Get(ctx, tokenSecretName, metav1.GetOptions{})
 				if err == nil {
-					// We always get everything and apply, in case there is a diff
-					// then the reloader will apply them.
+					// We always get everything and apply, in case there is a
+					// diff then the reloader will apply them.
 					user := &natsconf.User{
 						User:     role.Name,
 						Password: string(cs.Data["token"]),
@@ -418,7 +435,8 @@ func addAuthConfig(
 
 				// When the role that was mapped is deleted, then also delete the secret.
 				addOwnerRefToObject(tokenSecret.GetObjectMeta(), role.AsOwner())
-				tokenSecret, err = kubecli.Secrets(ns).Create(tokenSecret)
+				tokenSecret, err = kubecli.Secrets(ns).
+					Create(ctx, tokenSecret, metav1.CreateOptions{})
 				if err != nil {
 					return err
 				}
@@ -438,18 +456,20 @@ func addAuthConfig(
 						},
 					},
 				}
-				tr, err := kubecli.ServiceAccounts(ns).CreateToken(sa.Name, ar)
+				tr, err := kubecli.ServiceAccounts(ns).CreateToken(ctx, sa.Name, ar, metav1.CreateOptions{})
 				if err != nil {
 					return err
 				}
 
 				if err == nil {
-					// Update secret with issued token, then save the user in the NATS Config.
+					// Update secret with issued token, then save the user in
+					// the NATS Config.
 					token := tr.Status.Token
 					tokenSecret.Data = map[string][]byte{
 						"token": []byte(token),
 					}
-					tokenSecret, err = kubecli.Secrets(ns).Update(tokenSecret)
+					tokenSecret, err = kubecli.Secrets(ns).
+						Update(ctx, tokenSecret, metav1.UpdateOptions{})
 					if err != nil {
 						return err
 					}
@@ -474,7 +494,7 @@ func addAuthConfig(
 		// Authorization implementation using a secret with the explicit
 		// configuration of all the accounts from a cluster, cannot be
 		// used together with service accounts.
-		result, err := kubecli.Secrets(ns).Get(cs.Auth.ClientsAuthSecret, metav1.GetOptions{})
+		result, err := kubecli.Secrets(ns).Get(ctx, cs.Auth.ClientsAuthSecret, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -573,10 +593,16 @@ func addOperatorConfig(sconfig *natsconf.ServerConfig, cs v1alpha2.ClusterSpec) 
 	sconfig.Resolver = cs.OperatorConfig.Resolver
 }
 
-// CreateAndWaitPod is an util for testing.
-// We should eventually get rid of this in critical code path and move it to test util.
-func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.Pod, timeout time.Duration) (*v1.Pod, error) {
-	_, err := kubecli.Pods(ns).Create(pod)
+// CreateAndWaitPod is an util for testing. We should eventually get rid of
+// this in critical code path and move it to test util.
+func CreateAndWaitPod(
+	kubecli corev1client.CoreV1Interface,
+	ns string,
+	pod *v1.Pod,
+	timeout time.Duration,
+) (*v1.Pod, error) {
+	ctx := context.TODO()
+	_, err := kubecli.Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -584,7 +610,7 @@ func CreateAndWaitPod(kubecli corev1client.CoreV1Interface, ns string, pod *v1.P
 	interval := 5 * time.Second
 	var retPod *v1.Pod
 	err = retryutil.Retry(interval, int(timeout/(interval)), func() (bool, error) {
-		retPod, err = kubecli.Pods(ns).Get(pod.Name, metav1.GetOptions{})
+		retPod, err = kubecli.Pods(ns).Get(ctx, pod.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -614,7 +640,14 @@ func ConfigSecret(clusterName string) string {
 }
 
 // CreateConfigSecret creates the secret that contains the configuration file for a given NATS cluster..
-func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsalphav2client.NatsV1alpha2Interface, clusterName, ns string, cluster v1alpha2.ClusterSpec, owner metav1.OwnerReference) error {
+func CreateConfigSecret(
+	kubecli corev1client.CoreV1Interface,
+	operatorcli natsalphav2client.NatsV1alpha2Interface,
+	clusterName, ns string,
+	cluster v1alpha2.ClusterSpec,
+	owner metav1.OwnerReference,
+) error {
+	ctx := context.TODO()
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
@@ -679,11 +712,11 @@ func CreateConfigSecret(kubecli corev1client.CoreV1Interface, operatorcli natsal
 	}
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
 
-	_, err = kubecli.Secrets(ns).Create(cm)
+	_, err = kubecli.Secrets(ns).Create(ctx, cm, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		// Skip in case it was created already and update instead
 		// with the latest configuration.
-		_, err = kubecli.Secrets(ns).Update(cm)
+		_, err = kubecli.Secrets(ns).Update(ctx, cm, metav1.UpdateOptions{})
 		return err
 	}
 
@@ -699,6 +732,7 @@ func UpdateConfigSecret(
 	cluster v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
+	ctx := context.TODO()
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
 		HTTPPort: int(constants.MonitoringPort),
@@ -716,7 +750,7 @@ func UpdateConfigSecret(
 	// List all available pods then generate the routes
 	// for the NATS cluster.
 	routes := make([]string, 0)
-	podList, err := kubecli.Pods(ns).List(ClusterListOpt(clusterName))
+	podList, err := kubecli.Pods(ns).List(ctx, ClusterListOpt(clusterName))
 	if err != nil {
 		return err
 	}
@@ -780,7 +814,7 @@ func UpdateConfigSecret(
 		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
 	}
 
-	cm, err := kubecli.Secrets(ns).Get(clusterName, metav1.GetOptions{})
+	cm, err := kubecli.Secrets(ns).Get(ctx, clusterName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -794,7 +828,7 @@ func UpdateConfigSecret(
 	// Update the configuration.
 	cm.Data[constants.ConfigFileName] = rawConfig
 
-	_, err = kubecli.Secrets(ns).Update(cm)
+	_, err = kubecli.Secrets(ns).Update(ctx, cm, metav1.UpdateOptions{})
 	return err
 }
 

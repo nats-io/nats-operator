@@ -273,11 +273,11 @@ func WaitUntilPodCondition(ctx context.Context, kubeClient corev1.CoreV1Interfac
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fs.String()
-			return kubeClient.Pods(pod.Namespace).List(options)
+			return kubeClient.Pods(pod.Namespace).List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.FieldSelector = fs.String()
-			return kubeClient.Pods(pod.Namespace).Watch(options)
+			return kubeClient.Pods(pod.Namespace).Watch(ctx, options)
 		},
 	}
 	// Watch for updates to the specified pod until fn is satisfied.
@@ -319,11 +319,11 @@ func WaitUntilDeploymentCondition(ctx context.Context, kubeClient kubernetes.Int
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fs.String()
-			return kubeClient.AppsV1().Deployments(namespace).List(options)
+			return kubeClient.AppsV1().Deployments(namespace).List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.FieldSelector = fs.String()
-			return kubeClient.AppsV1().Deployments(namespace).Watch(options)
+			return kubeClient.AppsV1().Deployments(namespace).Watch(ctx, options)
 		},
 	}
 	// Watch for updates to the specified deployment until fn is satisfied.

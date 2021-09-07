@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	extsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	extsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,17 +41,29 @@ const (
 
 var (
 	// crds contains all the custom resource definitions that nats-operator registers upon starting.
-	crds = []*extsv1beta1.CustomResourceDefinition{
+	trueBool = true
+	crds = []*extsv1.CustomResourceDefinition{
 		// NatsCluster
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: v1alpha2.CRDName,
 			},
-			Spec: extsv1beta1.CustomResourceDefinitionSpec{
-				Group:   v1alpha2.SchemeGroupVersion.Group,
-				Version: v1alpha2.SchemeGroupVersion.Version,
-				Scope:   extsv1beta1.NamespaceScoped,
-				Names: extsv1beta1.CustomResourceDefinitionNames{
+			Spec: extsv1.CustomResourceDefinitionSpec{
+				Group: v1alpha2.SchemeGroupVersion.Group,
+				Versions: []extsv1.CustomResourceDefinitionVersion{
+					{
+						Name: v1alpha2.SchemeGroupVersion.Version,
+						Served: true,
+						Storage: true,
+						Schema: &extsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &extsv1.JSONSchemaProps{
+								XPreserveUnknownFields: &trueBool,
+							},
+						},
+					},
+				},
+				Scope: extsv1.NamespaceScoped,
+				Names: extsv1.CustomResourceDefinitionNames{
 					Plural:     v1alpha2.CRDResourcePlural,
 					Kind:       v1alpha2.CRDResourceKind,
 					ShortNames: []string{"nats"},
@@ -63,11 +75,22 @@ var (
 			ObjectMeta: metav1.ObjectMeta{
 				Name: v1alpha2.ServiceRoleCRDName,
 			},
-			Spec: extsv1beta1.CustomResourceDefinitionSpec{
-				Group:   v1alpha2.SchemeGroupVersion.Group,
-				Version: v1alpha2.SchemeGroupVersion.Version,
-				Scope:   extsv1beta1.NamespaceScoped,
-				Names: extsv1beta1.CustomResourceDefinitionNames{
+			Spec: extsv1.CustomResourceDefinitionSpec{
+				Group: v1alpha2.SchemeGroupVersion.Group,
+				Versions: []extsv1.CustomResourceDefinitionVersion{
+					{
+						Name: v1alpha2.SchemeGroupVersion.Version,
+						Served: true,
+						Storage: true,
+						Schema: &extsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &extsv1.JSONSchemaProps{
+								XPreserveUnknownFields: &trueBool,
+							},
+						},
+					},
+				},
+				Scope: extsv1.NamespaceScoped,
+				Names: extsv1.CustomResourceDefinitionNames{
 					Plural: v1alpha2.ServiceRoleCRDResourcePlural,
 					Kind:   v1alpha2.ServiceRoleCRDResourceKind,
 				},
@@ -83,7 +106,8 @@ var (
 type NatsClusterCRUpdateFunc func(*v1alpha2.NatsCluster)
 
 func GetClusterList(restcli rest.Interface, ns string) (*v1alpha2.NatsClusterList, error) {
-	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw()
+	ctx := context.TODO()
+	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +123,7 @@ func listClustersURI(ns string) string {
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", v1alpha2.SchemeGroupVersion.String(), ns, v1alpha2.CRDResourcePlural)
 }
 
-// MustNewKubeExtClient creates a new client for the apiextensions.k8s.io/v1beta1 API.
+// MustNewKubeExtClient creates a new client for the apiextensions.k8s.io/v1 API.
 func MustNewKubeExtClient(cfg *rest.Config) extsclientset.Interface {
 	return extsclientset.NewForConfigOrDie(cfg)
 }
@@ -127,9 +151,11 @@ func WaitCRDs(extsClient extsclientset.Interface) error {
 }
 
 // createOrUpdateCRD creates or updates the specified custom resource definition according to the provided specification.
-func createOrUpdateCRD(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+func createOrUpdateCRD(crd *extsv1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+	ctx := context.TODO()
 	// At this point the CRD may already exist from manual creation. Attempt to get the CRD
-	d, err := extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{})
+	d, err := extsClient.ApiextensionsV1().CustomResourceDefinitions().
+		Get(ctx, crd.Name, metav1.GetOptions{})
 
 	// CRD already exists, but it's what we expect.
 	if err == nil && reflect.DeepEqual(d.Spec, crd.Spec) {
@@ -140,35 +166,41 @@ func createOrUpdateCRD(crd *extsv1beta1.CustomResourceDefinition, extsClient ext
 	if err == nil {
 		// Attempt to update the CRD by setting its spec to the expected value.
 		d.Spec = crd.Spec
-		_, err = extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Update(d)
+		_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().
+			Update(ctx, d, metav1.UpdateOptions{})
 		return err
 	}
 
 	// No CRD existed, attempt to register the CRD.
-	_, err = extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().
+		Create(ctx, crd, metav1.CreateOptions{})
 	return err
 }
 
 // waitCRDReady blocks until the specified custom resource definition has been established and is ready for being used.
-func waitCRDReady(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+func waitCRDReady(crd *extsv1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
+	// Watch for updates to the specified CRD until it reaches the
+	// "Established" state or until "waitCRDReadyTimeout" elapses.
+	ctx, fn := context.WithTimeout(context.Background(), waitCRDReadyTimeout)
+	defer fn()
+
 	// Grab a ListerWatcher with which we can watch the CRD.
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
-			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().List(options)
+			return extsClient.ApiextensionsV1().CustomResourceDefinitions().
+				List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
-			return extsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(options)
+			return extsClient.ApiextensionsV1().CustomResourceDefinitions().
+				Watch(ctx, options)
 		},
 	}
 
-	// Watch for updates to the specified CRD until it reaches the "Established" state or until "waitCRDReadyTimeout" elapses.
-	ctx, fn := context.WithTimeout(context.Background(), waitCRDReadyTimeout)
-	defer fn()
-	last, err := watch.UntilWithSync(ctx, lw, &extsv1beta1.CustomResourceDefinition{}, nil, func(event watchapi.Event) (bool, error) {
+	last, err := watch.UntilWithSync(ctx, lw, &extsv1.CustomResourceDefinition{}, nil, func(event watchapi.Event) (bool, error) {
 		// Grab the current resource from the event.
-		obj := event.Object.(*extsv1beta1.CustomResourceDefinition)
+		obj := event.Object.(*extsv1.CustomResourceDefinition)
 		// Return true if and only if the CRD is ready.
 		return isReady(obj), nil
 	})
@@ -187,11 +219,11 @@ func waitCRDReady(crd *extsv1beta1.CustomResourceDefinition, extsClient extsclie
 }
 
 // isReady returns whether the specified CRD is ready to be used, by searching for "Established" in its conditions.
-func isReady(crd *extsv1beta1.CustomResourceDefinition) bool {
+func isReady(crd *extsv1.CustomResourceDefinition) bool {
 	for _, cond := range crd.Status.Conditions {
 		switch cond.Type {
-		case extsv1beta1.Established:
-			if cond.Status == extsv1beta1.ConditionTrue {
+		case extsv1.Established:
+			if cond.Status == extsv1.ConditionTrue {
 				return true
 			}
 		}
