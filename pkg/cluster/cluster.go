@@ -406,17 +406,18 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 		}
 	}
 
+	// Wait for the pod to be running and ready.
+	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn()
+
 	// Create the pod.
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Namespace, name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
-	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	// Wait for the pod to be running and ready.
 	c.logger.Infof("waiting for pod %q to become ready", kubernetesutil.ResourceKey(pod))
-	ctx, fn := context.WithTimeout(context.Background(), podReadinessTimeout)
-	defer fn()
 	if err := kubernetesutil.WaitUntilPodReady(ctx, c.config.KubeCli, pod); err != nil {
 		return nil, err
 	}
@@ -442,16 +443,20 @@ func (c *Cluster) tryGracefulPodDeletion(pod *v1.Pod) error {
 // This function DOES NOT attempt to gracefully shutdown the "gnatsd" process.
 // Hence, it should only be used after having tried a gracefully shutdown.
 func (c *Cluster) deletePod(pod *v1.Pod) error {
-	// Establish a watch on the pod that will notify us when the pod is deleted.
-	// It may happen that deletion takes effect too soon after we make the call to "Delete()" (e.g. in cases when the pod has entered the "lame duck" mode and is already in the "Succeeded" phase).
-	// In these scenarios, we may easily lose the "DELETED" event since we haven't had the opportunity to establish the watch yet.
-	// Hence, we must establish the watch beforehand in a separate goroutine.
-	// We must also wait for the informer to acknowledge the pod (i.e. through an "ADDED" event) before proceeding to the actual deletion.
+	// Establish a watch on the pod that will notify us when the pod is
+	// deleted. It may happen that deletion takes effect too soon after we make
+	// the call to "Delete()" (e.g. in cases when the pod has entered the "lame
+	// duck" mode and is already in the "Succeeded" phase).  In these
+	// scenarios, we may easily lose the "DELETED" event since we haven't had
+	// the opportunity to establish the watch yet.  Hence, we must establish
+	// the watch beforehand in a separate goroutine.  We must also wait for the
+	// informer to acknowledge the pod (i.e. through an "ADDED" event) before
+	// proceeding to the actual deletion.
 	ackCh := make(chan struct{})
 	errCh := make(chan error)
+	ctx, fn := context.WithTimeout(context.Background(), podDeletionTimeout)
+	defer fn()
 	go func() {
-		ctx, fn := context.WithTimeout(context.Background(), podDeletionTimeout)
-		defer fn()
 		err := kubernetesutil.WaitUntilPodCondition(ctx, c.config.KubeCli, pod, func(event watch.Event) (bool, error) {
 			switch event.Type {
 			case watch.Added:
@@ -476,7 +481,8 @@ func (c *Cluster) deletePod(pod *v1.Pod) error {
 	<-ackCh
 
 	// Delete the specified pod.
-	err := c.config.KubeCli.Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(podTerminationGracePeriod))
+	delOpt := metav1.NewDeleteOptions(podTerminationGracePeriod)
+	err := c.config.KubeCli.Pods(pod.Namespace).Delete(ctx, pod.Name, *delOpt)
 	if err != nil {
 		if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
@@ -566,7 +572,9 @@ func (c *Cluster) updateCluster() error {
 	}
 
 	// Patch the NatsCluster resource.
-	_, err = c.config.OperatorCli.NatsClusters(c.cluster.Namespace).Patch(c.cluster.Name, types.MergePatchType, patchBytes)
+	ctx := context.TODO()
+	_, err = c.config.OperatorCli.NatsClusters(c.cluster.Namespace).
+		Patch(ctx, c.cluster.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update status: %v", err)
 	}
