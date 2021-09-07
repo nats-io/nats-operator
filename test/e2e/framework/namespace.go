@@ -15,6 +15,8 @@
 package framework
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,14 +28,19 @@ const (
 
 // CreateNamespace creates a namespace with a random name.
 func (f *Framework) CreateNamespace() (*corev1.Namespace, error) {
-	return f.KubeClient.CoreV1().Namespaces().Create(&corev1.Namespace{
+	ctx := context.TODO()
+	return f.KubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: namespaceNamePrefix,
 		},
-	})
+	},
+		metav1.CreateOptions{},
+	)
 }
 
 // DeleteNamespace deletes the specified namespace.
 func (f *Framework) DeleteNamespace(namespace *corev1.Namespace) error {
-	return f.KubeClient.CoreV1().Namespaces().Delete(namespace.Name, &metav1.DeleteOptions{})
+	ctx := context.TODO()
+	return f.KubeClient.CoreV1().Namespaces().
+		Delete(ctx, namespace.Name, metav1.DeleteOptions{})
 }

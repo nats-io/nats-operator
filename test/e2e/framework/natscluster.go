@@ -25,7 +25,7 @@ import (
 	"regexp"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,7 +35,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/slice"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
-	"github.com/nats-io/nats-operator/pkg/conf"
+	natsconf "github.com/nats-io/nats-operator/pkg/conf"
 	"github.com/nats-io/nats-operator/pkg/constants"
 	kubernetesutil "github.com/nats-io/nats-operator/pkg/util/kubernetes"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
@@ -85,17 +85,23 @@ func (f *Framework) CreateCluster(namespace, prefix string, size int, version st
 		f(obj)
 	}
 	// Create the NatsCluster resource.
-	return f.NatsClient.NatsV1alpha2().NatsClusters(obj.Namespace).Create(obj)
+	ctx := context.TODO()
+	return f.NatsClient.NatsV1alpha2().NatsClusters(obj.Namespace).
+		Create(ctx, obj, metav1.CreateOptions{})
 }
 
 // DeleteCluster deletes the specified NatsCluster resource.
 func (f *Framework) DeleteCluster(natsCluster *natsv1alpha2.NatsCluster) error {
-	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Delete(natsCluster.Name, &metav1.DeleteOptions{})
+	ctx := context.TODO()
+	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+		Delete(ctx, natsCluster.Name, metav1.DeleteOptions{})
 }
 
 // UpdateCluster deletes the specified NatsCluster resource.
 func (f *Framework) UpdateCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1alpha2.NatsCluster, error) {
-	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Update(natsCluster)
+	ctx := context.TODO()
+	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+		Update(ctx, natsCluster, metav1.UpdateOptions{})
 }
 
 // NatsClusterHasExpectedVersion returns whether every pod in the
@@ -148,7 +154,9 @@ func (f *Framework) NatsClusterHasExpectedRouteCount(natsCluster *natsv1alpha2.N
 // PodsForNatsCluster returns a slice containing all pods that belong
 // to the specified NatsCluster resource.
 func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Pod, error) {
-	pods, err := f.KubeClient.CoreV1().Pods(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
+	ctx := context.TODO()
+	pods, err := f.KubeClient.CoreV1().Pods(natsCluster.Namespace).
+		List(ctx, kubernetesutil.ClusterListOpt(natsCluster.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +166,9 @@ func (f *Framework) PodsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([
 // ServicesForNatsCluster returns a slice containing all pods that belong
 // to the specified NatsCluster resource.
 func (f *Framework) ServicesForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Service, error) {
-	svc, err := f.KubeClient.CoreV1().Services(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
+	ctx := context.TODO()
+	svc, err := f.KubeClient.CoreV1().Services(natsCluster.Namespace).
+		List(ctx, kubernetesutil.ClusterListOpt(natsCluster.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +178,9 @@ func (f *Framework) ServicesForNatsCluster(natsCluster *natsv1alpha2.NatsCluster
 // SecretsForNatsCluster returns a slice containing all pods that belong
 // to the specified NatsCluster resource.
 func (f *Framework) SecretsForNatsCluster(natsCluster *natsv1alpha2.NatsCluster) ([]v1.Secret, error) {
-	secrets, err := f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).List(kubernetesutil.ClusterListOpt(natsCluster.Name))
+	ctx := context.TODO()
+	secrets, err := f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).
+		List(ctx, kubernetesutil.ClusterListOpt(natsCluster.Name))
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +218,9 @@ func (f *Framework) RouteCountForPod(pod v1.Pod) (int, error) {
 // NatsCluster resource accordingly.
 func (f *Framework) PatchCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1alpha2.NatsCluster, error) {
 	// Grab the most up-to-date version of the provided NatsCluster resource.
-	currentCluster, err := f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Get(natsCluster.Name, metav1.GetOptions{})
+	ctx := context.TODO()
+	currentCluster, err := f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+		Get(ctx, natsCluster.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +234,8 @@ func (f *Framework) PatchCluster(natsCluster *natsv1alpha2.NatsCluster) (*natsv1
 	if err != nil {
 		return nil, err
 	}
-	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Patch(natsCluster.Name, types.MergePatchType, bytes)
+	return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+		Patch(ctx, natsCluster.Name, types.MergePatchType, bytes, metav1.PatchOptions{})
 }
 
 // VersionForPod returns the version of NATS reported by the specified pod.
@@ -358,11 +373,13 @@ func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsClust
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fs.String()
-			return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).List(options)
+			return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+				List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.FieldSelector = fs.String()
-			return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).Watch(options)
+			return f.NatsClient.NatsV1alpha2().NatsClusters(natsCluster.Namespace).
+				Watch(ctx, options)
 		},
 	}
 	// Watch for updates to the NatsCluster resource until fn is
@@ -385,7 +402,7 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 		Container: "nats",
 		Follow:    true,
 	})
-	r, err := req.Stream()
+	r, err := req.Stream(ctx)
 	if err != nil {
 		return err
 	}
@@ -427,7 +444,7 @@ func (f *Framework) WaitUntilPodBootContainerLogLineMatches(ctx context.Context,
 		Container: "bootconfig",
 		Follow:    true,
 	})
-	r, err := req.Stream()
+	r, err := req.Stream(ctx)
 	if err != nil {
 		return err
 	}

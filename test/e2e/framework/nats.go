@@ -15,6 +15,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/nats-io/nats.go"
@@ -42,7 +43,9 @@ func (f *Framework) ConnectToNatsClusterWithUsernamePassword(natsCluster *natsv1
 // It is the caller's responsibility to close the connection when it is no longer needed.
 func (f *Framework) ConnectToNatsClusterWithNatsServiceRole(natsCluster *natsv1alpha2.NatsCluster, nsr *natsv1alpha2.NatsServiceRole) (*nats.Conn, error) {
 	// Get the name of the secret that holds the token used for authentication.
-	s, err := f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).Get(fmt.Sprintf("%s-%s-bound-token", nsr.Name, natsCluster.Name), metav1.GetOptions{})
+	ctx := context.TODO()
+	s, err := f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).
+		Get(ctx, fmt.Sprintf("%s-%s-bound-token", nsr.Name, natsCluster.Name), metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
