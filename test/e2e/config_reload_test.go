@@ -94,15 +94,20 @@ func TestConfigReloadOnResize(t *testing.T) {
 	}
 }
 
-// TestConfigReloadOnClientAuthSecretChange creates a secret containing authentication data for a NATS cluster.
-// This secret initially contains two users ("user-1" and "user-2") and the corresponding password.
-// Then, the test creates a NatsCluster resource that uses this secret for authentication, and makes sure that "user-1" can connect to the NATS cluster.
-// Finally, it removes the entry that corresponds to "user-1" from the authentication secret, and makes sure that "user-1" cannot connect to the NATS cluster anymore.
+// TestConfigReloadOnClientAuthSecretChange creates a secret containing
+// authentication data for a NATS cluster.  This secret initially contains two
+// users ("user-1" and "user-2") and the corresponding password.  Then, the
+// test creates a NatsCluster resource that uses this secret for
+// authentication, and makes sure that "user-1" can connect to the NATS
+// cluster.  Finally, it removes the entry that corresponds to "user-1" from
+// the authentication secret, and makes sure that "user-1" cannot connect to
+// the NATS cluster anymore.
 func TestConfigReloadOnClientAuthSecretChange(t *testing.T) {
 	// Skip the test if "ShareProcessNamespace" is not enabled.
 	f.Require(t, framework.ShareProcessNamespace)
 
-	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
+	// Create a NatsCluster resource with a single member, having configuration
+	// reloading enabled and using the secret above for client authentication.
 	ConfigReloadTestHelper(t, func(natsCluster *natsv1alpha2.NatsCluster, cas *v1.Secret) {
 		natsCluster.Spec.Auth = &natsv1alpha2.AuthConfig{
 			// Use the secret created above for client authentication.
@@ -214,6 +219,8 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 			},
 		},
 	}
+	t.Logf("ConfigReloadTestHelper - auth=%#v", auth)
+
 	// Serialize the object containing authentication data,
 	// we are using wildcard so need to unescape the HTML
 	// which the JSON encoder does by default...
@@ -232,26 +239,34 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 
 	// Create a secret containing authentication data.
 	d = buf2.Bytes()
+	t.Log("ConfigReloadTestHelper - creating secret...")
 	if cas, err = f.CreateSecret(f.Namespace, "data", d); err != nil {
 		t.Fatal(err)
 	}
+	t.Log("ConfigReloadTestHelper - created secret")
+	t.Logf("ConfigReloadTestHelper - f.Namespace=%#v; d=%#v", f.Namespace, string(d))
+
 	// Make sure we cleanup the secret after we're done testing.
 	defer func() {
+		t.Log("ConfigReloadTestHelper - deleting secret...")
 		if err = f.DeleteSecret(cas); err != nil {
 			t.Error(err)
 		}
 	}()
 
 	// Create a NatsCluster resource with a single member, having configuration reloading enabled and using the secret above for client authentication.
+	t.Log("ConfigReloadTestHelper - creating cluster...")
 	natsCluster, err = f.CreateCluster(f.Namespace, "test-nats-reload-", size, version, func(natsCluster *natsv1alpha2.NatsCluster) {
 		customizer(natsCluster, cas)
 	})
-
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log("ConfigReloadTestHelper - created cluster")
+
 	// Make sure we cleanup the NatsCluster resource after we're done testing.
 	defer func() {
+		t.Log("ConfigReloadTestHelper - deleting cluster...")
 		if err = f.DeleteCluster(natsCluster); err != nil {
 			t.Error(err)
 
@@ -261,14 +276,18 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 	// Wait for the single pod to be created.
 	ctx1, fn := context.WithTimeout(context.Background(), waitTimeout)
 	defer fn()
+	t.Logf("ConfigReloadTestHelper - waiting full mesh version for %s", waitTimeout)
 	if err = f.WaitUntilFullMeshWithVersion(ctx1, natsCluster, size, version); err != nil {
 		t.Fatal(err)
 	}
+	t.Log("ConfigReloadTestHelper - done waiting full mesh version")
 
 	// Make sure that "user-1" can connect to the NATS cluster.
+	t.Log("ConfigReloadTestHelper - connecting to nats user/pass...")
 	if c, err = f.ConnectToNatsClusterWithUsernamePassword(natsCluster, username1, password1); err != nil {
 		t.Fatal(err)
 	} else {
+		t.Log("ConfigReloadTestHelper - connected! now closing")
 		c.Close()
 	}
 
@@ -291,26 +310,34 @@ func ConfigReloadTestHelper(t *testing.T, customizer NatsClusterCustomizerWSecre
 
 	// Update the client authentication secret with the new contents.
 	cas.Data["data"] = buf2.Bytes()
+	t.Log("ConfigReloadTestHelper - patching secret...")
 	if cas, err = f.PatchSecret(cas); err != nil {
 		t.Fatal(err)
 	}
+	t.Log("ConfigReloadTestHelper - patched secret")
 
 	// Wait for the "Reloaded: authorization users" log message to appear in the logs for the single pod.
 	ctx2, fn := context.WithTimeout(context.Background(), waitTimeout)
 	defer fn()
+	t.Logf("ConfigReloadTestHelper - waiting (%s) for pod log matches...", waitTimeout)
 	if err = f.WaitUntilPodLogLineMatches(ctx2, natsCluster, 1, "Reloaded: authorization users"); err != nil {
 		t.Fatal(err)
 	}
+	t.Log("ConfigReloadTestHelper - done waiting for match")
 
 	// Make sure that "user-1" CANNOT connect to the NATS cluster anymore.
+	t.Logf("ConfigReloadTestHelper - connecting to nats user/pass (%s/%s)", username1, password1)
 	if _, err = f.ConnectToNatsClusterWithUsernamePassword(natsCluster, username1, password1); err == nil {
 		t.Fatalf("expected connection from %q to have been rejected", username1)
 	}
+	t.Log("ConfigReloadTestHelper - connect ok")
 
 	// Make sure that "user-2" can still connect to the NATS cluster, as its authorization hasn't been revoked.
+	t.Logf("ConfigReloadTestHelper - connecting to nats user/pass (%s/%s)", username2, password2)
 	if c, err = f.ConnectToNatsClusterWithUsernamePassword(natsCluster, username2, password2); err != nil {
 		t.Fatal(err)
 	} else {
+		t.Log("ConfigReloadTestHelper - connect ok, closing!")
 		c.Close()
 	}
 }

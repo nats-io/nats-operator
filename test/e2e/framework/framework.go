@@ -178,6 +178,7 @@ func (f *Framework) WaitForNatsOperator() error {
 			return false, fmt.Errorf("deployment \"%s/%s\" has been deleted", f.Namespace, natsOperatorDeploymentName)
 		default:
 			deployment := event.Object.(*appsv1.Deployment)
+			log.Infof("WaitUntilDeploymentCondition - default - AvailableReplicas=%#v", deployment.Status.AvailableReplicas)
 			return deployment.Status.AvailableReplicas >= 1, nil
 		}
 	})

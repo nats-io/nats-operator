@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -33,6 +34,7 @@ import (
 
 // CreateSecret creates a Secret resource containing the specified key and value.
 func (f *Framework) CreateSecret(namespace string, key string, val []byte) (*v1.Secret, error) {
+	logrus.Infof("CreateSecret - namespace=%#v; key=%#v; val=%#v", namespace, key, string(val))
 	// Create a Secret object using the specified values.
 	obj := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -44,8 +46,13 @@ func (f *Framework) CreateSecret(namespace string, key string, val []byte) (*v1.
 		},
 	}
 	ctx := context.TODO()
-	return f.KubeClient.CoreV1().Secrets(obj.Namespace).
+	sec, err := f.KubeClient.CoreV1().Secrets(obj.Namespace).
 		Create(ctx, obj, metav1.CreateOptions{})
+	if err != nil {
+		logrus.Infof("CreateSecret - Create - err=%#v", err)
+		return nil, err
+	}
+	return sec, nil
 }
 
 // DeleteSecret deletes the specified Secret resource.
@@ -55,27 +62,44 @@ func (f *Framework) DeleteSecret(secret *v1.Secret) error {
 		Delete(ctx, secret.Name, metav1.DeleteOptions{})
 }
 
-// PatchSecret performs a patch on the specified Secret resource to align its ".data" field with the provided value.
-// It takes the desired state as an argument and patches the Secret resource accordingly.
+// PatchSecret performs a patch on the specified Secret resource to align its
+// ".data" field with the provided value.  It takes the desired state as an
+// argument and patches the Secret resource accordingly.
 func (f *Framework) PatchSecret(secret *v1.Secret) (*v1.Secret, error) {
+	logrus.Infof("PatchSecret - secret=%#v", secret)
+
 	// Grab the most up-to-date version of the provided Secret resource.
 	ctx := context.TODO()
 	currentSecret, err := f.KubeClient.CoreV1().Secrets(secret.Namespace).
 		Get(ctx, secret.Name, metav1.GetOptions{})
 	if err != nil {
+		logrus.Infof("PatchSecret - Get - err=%#v", err)
 		return nil, err
 	}
+	logrus.Infof("PatchSecret - oldSecret=%#v", currentSecret)
+
 	// Create a deep copy of currentSecret so we can create a patch.
 	newSecret := currentSecret.DeepCopy()
+
 	// Make the data of newSecret match the desired data.
 	newSecret.Data = secret.Data
+
 	// Patch the Secret resource.
 	bytes, err := kubernetesutil.CreatePatch(currentSecret, newSecret, v1.Secret{})
 	if err != nil {
+		logrus.Infof("PatchSecret - CreatePatch - err=%#v", err)
 		return nil, err
 	}
-	return f.KubeClient.CoreV1().Secrets(secret.Namespace).
+
+	sec, err := f.KubeClient.CoreV1().Secrets(secret.Namespace).
 		Patch(ctx, secret.Name, types.MergePatchType, bytes, metav1.PatchOptions{})
+	if err != nil {
+		logrus.Infof("PatchSecret - Patch - err=%#v", err)
+		return nil, err
+	}
+	logrus.Infof("PatchSecret - newSecret=%#v", sec)
+	logrus.Infof("PatchSecret - OK")
+	return sec, nil
 }
 
 // WaitUntilSecretCondition waits until the specified condition is verified in configuration secret for the specified NatsCluster resource.

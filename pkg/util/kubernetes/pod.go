@@ -33,6 +33,7 @@ import (
 
 	"github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	"github.com/nats-io/nats-operator/pkg/constants"
+	"github.com/sirupsen/logrus"
 )
 
 // hostPorts defines which HostPorts that should be enabled
@@ -135,6 +136,7 @@ func natsPodReloaderContainer(image, tag, pullPolicy string, r v1.ResourceRequir
 		container.Command = append(container.Command, "-config", v)
 	}
 
+	logrus.Infof("natsPodReloaderContainer - container=%#v", container)
 	return container
 }
 
@@ -329,7 +331,7 @@ func WaitUntilDeploymentCondition(ctx context.Context, kubeClient kubernetes.Int
 	// Watch for updates to the specified deployment until fn is satisfied.
 	last, err := watch.UntilWithSync(ctx, lw, &appsv1.Deployment{}, nil, fn)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to wait until deployment condition: failed watch until with sync: %w", err)
 	}
 	if last == nil {
 		return fmt.Errorf("no events received for deployment \"%s/%s\"", namespace, name)

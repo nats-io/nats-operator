@@ -26,6 +26,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -134,12 +135,14 @@ func (f *Framework) NatsClusterHasExpectedRouteCount(natsCluster *natsv1alpha2.N
 	// List pods belonging to the specified NatsCluster resource.
 	pods, err := f.PodsForNatsCluster(natsCluster)
 	if err != nil {
+		log.Infof("NatsClusterHasExpectedRouteCount - PodsForNatsCluster - err=%#v", err)
 		return false, err
 	}
 	// Make sure that every pod has routes to every other pod.
 	for _, pod := range pods {
 		r, err := f.RouteCountForPod(pod)
 		if err != nil {
+			log.Infof("NatsClusterHasExpectedRouteCount - RouteCountForPod - err=%#v", err)
 			return false, err
 		}
 		if r != expectedSize-1 {
@@ -309,13 +312,15 @@ func (f *Framework) WaitUntilFullMesh(ctx context.Context, natsCluster *natsv1al
 		return nc.Status.Size == expectedSize, nil
 	})
 	if err != nil {
+		log.Infof("WaitUntilFullMesh - WaitUntilNatsClusterCondition - err=%#v", err)
 		return err
 	}
 	// Wait for all the pods to report the expected routes and version.
-	return retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
+	err = retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
 		// Check whether the full mesh has formed with the expected size.
 		m, err := f.NatsClusterHasExpectedRouteCount(natsCluster, expectedSize)
 		if err != nil {
+			log.Infof("WaitUntilFullMesh - NatsClusterHasExpectedRouteCount - err=%#v", err)
 			return false, nil
 		}
 		if !m {
@@ -323,6 +328,11 @@ func (f *Framework) WaitUntilFullMesh(ctx context.Context, natsCluster *natsv1al
 		}
 		return true, nil
 	})
+	if err != nil {
+		log.Infof("WaitUntilFullMesh - RetryWithContext - err=%#v", err)
+		return err
+	}
+	return nil
 }
 
 // WaitUntilFullMeshWithVersion waits until all the pods belonging to
@@ -336,15 +346,17 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		return nc.Status.Size == expectedSize && nc.Status.CurrentVersion == expectedVersion, nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to wait until nats cluster condition: %w", err)
 	}
+
 	// Wait for all the pods to report the expected routes and
 	// version.
-	return retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
+	err = retryutil.RetryWithContext(ctx, 5*time.Second, func() (bool, error) {
 		// Check whether the full mesh has formed with the
 		// expected size.
 		m, err := f.NatsClusterHasExpectedRouteCount(natsCluster, expectedSize)
 		if err != nil {
+			log.Infof("WaitUntilFullMeshWithVersion - NatsClusterHasExpectedRouteCount - err=%#v", err)
 			return false, nil
 		}
 		if !m {
@@ -355,6 +367,7 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		// the expected version.
 		v, err := f.NatsClusterHasExpectedVersion(natsCluster, expectedVersion)
 		if err != nil {
+			log.Infof("WaitUntilFullMeshWithVersion - NatsClusterHasExpectedVersion - err=%#v", err)
 			return false, nil
 		}
 		if !v {
@@ -362,6 +375,10 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 		}
 		return true, nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to retry with context: %w", err)
+	}
+	return nil
 }
 
 // WaitUntilNatsClusterCondition waits until the specified condition
@@ -369,6 +386,8 @@ func (f *Framework) WaitUntilFullMeshWithVersion(ctx context.Context, natsCluste
 func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsCluster *natsv1alpha2.NatsCluster, fn watch.ConditionFunc) error {
 	// Create a field selector that matches the specified NatsCluster resource.
 	fs := kubernetesutil.ByCoordinates(natsCluster.Namespace, natsCluster.Name)
+
+	log.Infof("WaitUntilNatsClusterCondition - fs=%#v", fs.String())
 	// Create a ListWatch so we can receive events for the matched pods.
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
@@ -382,11 +401,12 @@ func (f *Framework) WaitUntilNatsClusterCondition(ctx context.Context, natsClust
 				Watch(ctx, options)
 		},
 	}
+
 	// Watch for updates to the NatsCluster resource until fn is
 	// satisfied, or until the timeout is reached.
 	last, err := watch.UntilWithSync(ctx, lw, &natsv1alpha2.NatsCluster{}, nil, fn)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to watch until with sync: %w", err)
 	}
 	if last == nil {
 		return fmt.Errorf("no events received for natscluster %q", natsCluster.Name)
@@ -408,9 +428,12 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 	}
 	defer r.Close()
 	rd := bufio.NewReader(r)
+
+	log.Infof("WaitUntilPodLogLineMatches - regex=%#v", regex)
 	for {
 		select {
 		case <-ctx.Done():
+			log.Infof("WaitUntilPodLogLineMatches - context done!")
 			return fmt.Errorf("failed to find a matching log line within the specified timeout")
 		default:
 			// Read a single line from the logs and check
@@ -418,13 +441,19 @@ func (f *Framework) WaitUntilPodLogLineMatches(ctx context.Context, natsCluster 
 			// expression.
 			str, err := rd.ReadString('\n')
 			if err != nil && err != io.EOF {
+				log.Infof("WaitUntilPodLogLineMatches - ReadString - err=%#v", err)
 				return err
 			}
 			if err == io.EOF {
+				log.Infof("WaitUntilPodLogLineMatches - EOF!")
 				return fmt.Errorf("failed to find a matching log line before EOF")
 			}
+
+			log.Infof("WaitUntilPodLogLineMatches - line=%#v", str)
+
 			m, err := regexp.MatchString(regex, str)
 			if err != nil {
+				log.Infof("WaitUntilPodLogLineMatches - MatchString - err=%#v", err)
 				return err
 			}
 			// If the current log line matches the regular

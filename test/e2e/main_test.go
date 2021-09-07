@@ -79,6 +79,7 @@ func TestMain(m *testing.M) {
 		// and start streaming logs until it terminates.
 		c, err := f.WaitForNatsOperatorE2ePodTermination()
 		if err != nil {
+			logrus.Fatalf("TestMain - WaitForNatsOperatorE2ePodTermination - err=%#v", err)
 			panic(err)
 		}
 		// Delete the nats-operator and nats-operator-e2e pods.

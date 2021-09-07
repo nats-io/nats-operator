@@ -103,6 +103,7 @@ func New(config Config, cl *v1alpha2.NatsCluster) *Cluster {
 
 // Reconcile looks at the current state of the associated NatsCluster resource and attempts to drive it towards the desired state.
 func (c *Cluster) Reconcile() error {
+	logrus.Info("Reconcile - begin")
 	// Exit immediately in case the NatsCluster resource is marked as paused.
 	if c.cluster.Spec.Paused {
 		c.logger.Infof("control is paused, skipping reconciliation")
@@ -123,6 +124,7 @@ func (c *Cluster) Reconcile() error {
 
 	// Make sure that the configuration secret for the current cluster has been created.
 	if err := c.checkConfigSecret(); err != nil {
+		logrus.Infof("Reconcile - checkConfigSecret - err=%#v", err)
 		return fmt.Errorf("failed to create config secret: %s", err)
 	}
 
@@ -178,6 +180,8 @@ func (c *Cluster) Reconcile() error {
 }
 
 func (c *Cluster) checkAuthUpdate() error {
+	logrus.Info("checkAuthUpdate - begin")
+
 	// needUpdate set to true if any secrets for auth is updated
 	var needUpdate bool
 	if c.cluster.Spec.Auth.ClientsAuthSecret != "" {
@@ -191,6 +195,7 @@ func (c *Cluster) checkAuthUpdate() error {
 			c.cluster.SetClientAuthSecretResourceVersion(result.ResourceVersion)
 			needUpdate = true
 		}
+		logrus.Infof("checkAuthUpdate - ClientsAuthSecret - needUpdate=%#v", needUpdate)
 	} else if c.cluster.Spec.Auth.EnableServiceAccounts {
 		// Get the hash of the comma-separated list of NatsServiceRole UIDs associated with the current NATS cluster.
 		currentHash := c.cluster.GetNatsServiceRolesHash()
@@ -222,6 +227,7 @@ func (c *Cluster) checkAuthUpdate() error {
 			c.cluster.SetNatsServiceRolesHash(desiredHash)
 			needUpdate = true
 		}
+		logrus.Infof("checkAuthUpdate - EnableServiceAccounts - needUpdate=%#v", needUpdate)
 	}
 
 	if c.cluster.Spec.Auth.ClusterAuthSecret != "" {
@@ -235,6 +241,7 @@ func (c *Cluster) checkAuthUpdate() error {
 			c.cluster.SetClusterAuthSecretResourceVersion(result.ResourceVersion)
 			needUpdate = true
 		}
+		logrus.Infof("checkAuthUpdate - ClusterAuthSecret - needUpdate=%#v", needUpdate)
 	}
 
 	if c.cluster.Spec.Auth.GatewayAuthSecret != "" {
@@ -248,6 +255,7 @@ func (c *Cluster) checkAuthUpdate() error {
 			c.cluster.SetGatewayAuthSecretResourceVersion(result.ResourceVersion)
 			needUpdate = true
 		}
+		logrus.Infof("checkAuthUpdate - GatewayAuthSecret - needUpdate=%#v", needUpdate)
 	}
 
 	if needUpdate {

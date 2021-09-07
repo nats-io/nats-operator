@@ -47,6 +47,7 @@ import (
 	"github.com/nats-io/nats-operator/pkg/constants"
 	"github.com/nats-io/nats-operator/pkg/util/retryutil"
 	"github.com/nats-io/nats-operator/pkg/util/versionCheck"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -364,12 +365,14 @@ func addAuthConfig(
 	cs v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
+	logrus.Infof("addAuthConfig - %s/%s", ns, clusterName)
 	if cs.Auth == nil {
 		return nil
 	}
 
 	ctx := context.TODO()
 	if cs.Auth.EnableServiceAccounts {
+		logrus.Info("addAuthConfig - if EnableServiceAccounts")
 		roleSelector := map[string]string{
 			LabelClusterNameKey: clusterName,
 		}
@@ -491,6 +494,7 @@ func addAuthConfig(
 		}
 		return nil
 	} else if cs.Auth.ClientsAuthSecret != "" {
+		logrus.Info("addAuthConfig - if ClientsAuthSecret")
 		// Authorization implementation using a secret with the explicit
 		// configuration of all the accounts from a cluster, cannot be
 		// used together with service accounts.
@@ -513,6 +517,7 @@ func addAuthConfig(
 		}
 		return nil
 	} else if cs.Auth.ClientsAuthFile != "" {
+		logrus.Info("addAuthConfig - if ClientAuthFile")
 		sconfig.Authorization = &natsconf.AuthorizationConfig{
 			Include: cs.Auth.ClientsAuthFile,
 		}
@@ -647,6 +652,7 @@ func CreateConfigSecret(
 	cluster v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
+	logrus.Infof("CreateConfigSecret - %s/%s", clusterName, ns)
 	ctx := context.TODO()
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
@@ -676,6 +682,9 @@ func CreateConfigSecret(
 		sconfig.ServerName = "$SERVER_NAME"
 	}
 
+	cluster.ServerConfig.Debug = true
+	cluster.ServerConfig.Trace = true
+
 	addConfig(sconfig, cluster)
 	err := addAuthConfig(kubecli, operatorcli, ns, clusterName, sconfig, cluster, owner)
 	if err != nil {
@@ -693,6 +702,8 @@ func CreateConfigSecret(
 	if err != nil {
 		return err
 	}
+	logrus.Infof("CreateConfigSecret - natsconf.Marshal - conf=%#v", string(rawConfig))
+
 	if cluster.UseServerName {
 		rawConfig = bytes.Replace(rawConfig, []byte(`"$SERVER_NAME"`), []byte("$SERVER_NAME"), -1)
 	}
@@ -713,6 +724,7 @@ func CreateConfigSecret(
 	addOwnerRefToObject(cm.GetObjectMeta(), owner)
 
 	_, err = kubecli.Secrets(ns).Create(ctx, cm, metav1.CreateOptions{})
+	logrus.Infof("CreateConfigSecret - Secrets.Create - err=%#v", err)
 	if apierrors.IsAlreadyExists(err) {
 		// Skip in case it was created already and update instead
 		// with the latest configuration.
@@ -732,6 +744,7 @@ func UpdateConfigSecret(
 	cluster v1alpha2.ClusterSpec,
 	owner metav1.OwnerReference,
 ) error {
+	logrus.Infof("UpdateConfigSecret - %s/%s", clusterName, ns)
 	ctx := context.TODO()
 	sconfig := &natsconf.ServerConfig{
 		Port:     int(constants.ClientPort),
@@ -787,6 +800,10 @@ func UpdateConfigSecret(
 		}
 	}
 	sconfig.Cluster.Routes = routes
+	logrus.Infof("UpdateConfigSecret - Routes=%#v", sconfig.Cluster.Routes)
+
+	cluster.ServerConfig.Debug = true
+	cluster.ServerConfig.Trace = true
 
 	if cluster.UseServerName {
 		sconfig.ServerName = "$SERVER_NAME"
@@ -805,6 +822,7 @@ func UpdateConfigSecret(
 	if err != nil {
 		return err
 	}
+	logrus.Infof("UpdateConfigSecret - natsconf.Marshal- conf=%#v", string(rawConfig))
 
 	// FIXME: Quoted "include" causes include to be ignored.
 	rawConfig = bytes.Replace(rawConfig, []byte(`"include":`), []byte("include "), -1)
@@ -829,6 +847,7 @@ func UpdateConfigSecret(
 	cm.Data[constants.ConfigFileName] = rawConfig
 
 	_, err = kubecli.Secrets(ns).Update(ctx, cm, metav1.UpdateOptions{})
+	logrus.Infof("UpdateConfigSecret - Secrets.Update - err=%#v", err)
 	return err
 }
 
@@ -1304,6 +1323,7 @@ func NewNatsPodSpec(namespace, name, clusterName string, cs v1alpha2.ClusterSpec
 	// Enable PID namespace sharing and attach sidecar that
 	// reloads the server whenever the config file is updated.
 	if cs.Pod != nil && cs.Pod.EnableConfigReload {
+		logrus.Infof("NewNatsPodSpec - EnableConfigReload!")
 		pod.Spec.ShareProcessNamespace = &[]bool{true}[0]
 
 		// Allow customizing reloader image

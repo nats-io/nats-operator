@@ -44,6 +44,7 @@ type Reloader struct {
 
 // Run starts the main loop.
 func (r *Reloader) Run(ctx context.Context) error {
+	log.Printf("Reloader.Run - begin")
 	ctx, cancel := context.WithCancel(ctx)
 	r.quit = func() {
 		cancel()
@@ -57,6 +58,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 	)
 	startTime = time.Now()
 	for {
+		log.Printf("Reloader.Run - start for 1")
 		pidfile, err := ioutil.ReadFile(r.PidFile)
 		if err != nil {
 			goto WaitAndRetry
@@ -143,6 +145,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 
 WaitForEvent:
 	for {
+		log.Printf("Reloader.Run - start for 2")
 		select {
 		case <-ctx.Done():
 			return nil
@@ -221,12 +224,11 @@ WaitForEvent:
 			break TryReload
 		}
 	}
-
-	return nil
 }
 
 // Stop shutsdown the process.
 func (r *Reloader) Stop() error {
+	log.Printf("Reloader.Run - shutting down")
 	log.Println("Shutting down...")
 	r.quit()
 	return nil
@@ -234,6 +236,7 @@ func (r *Reloader) Stop() error {
 
 // NewReloader returns a configured NATS server reloader.
 func NewReloader(config *Config) (*Reloader, error) {
+	log.Printf("NewReloader")
 	return &Reloader{
 		Config: config,
 	}, nil
