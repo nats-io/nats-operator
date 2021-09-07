@@ -68,7 +68,7 @@ func New(cfg *rest.Config) (*rest.RESTClient, *runtime.Scheme, error) {
 	config.GroupVersion = &v1alpha2.SchemeGroupVersion
 	config.APIPath = "/apis"
 	config.ContentType = runtime.ContentTypeJSON
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: serializer.NewCodecFactory(crScheme)}
+	config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: serializer.NewCodecFactory(crScheme)}
 
 	client, err := rest.RESTClientFor(&config)
 	if err != nil {
@@ -83,32 +83,32 @@ func (c *natsClusterCR) Create(ctx context.Context, natsCluster *v1alpha2.NatsCl
 		return nil, errors.New("need to set metadata.Namespace in NATS cluster CR")
 	}
 	result := &v1alpha2.NatsCluster{}
-	err := c.client.Post().Context(ctx).
+	err := c.client.Post().
 		Namespace(natsCluster.Namespace).
 		Resource(v1alpha2.CRDResourcePlural).
 		Body(natsCluster).
-		Do().
+		Do(ctx).
 		Into(result)
 	return result, err
 }
 
 func (c *natsClusterCR) Get(ctx context.Context, namespace, name string) (*v1alpha2.NatsCluster, error) {
 	result := &v1alpha2.NatsCluster{}
-	err := c.client.Get().Context(ctx).
+	err := c.client.Get().
 		Namespace(namespace).
 		Resource(v1alpha2.CRDResourcePlural).
 		Name(name).
-		Do().
+		Do(ctx).
 		Into(result)
 	return result, err
 }
 
 func (c *natsClusterCR) Delete(ctx context.Context, namespace, name string) error {
-	return c.client.Delete().Context(ctx).
+	return c.client.Delete().
 		Namespace(namespace).
 		Resource(v1alpha2.CRDResourcePlural).
 		Name(name).
-		Do().
+		Do(ctx).
 		Error()
 }
 
@@ -120,12 +120,12 @@ func (c *natsClusterCR) Update(ctx context.Context, natsCluster *v1alpha2.NatsCl
 		return nil, errors.New("need to set metadata.Name in NATS cluster CR")
 	}
 	result := &v1alpha2.NatsCluster{}
-	err := c.client.Put().Context(ctx).
+	err := c.client.Put().
 		Namespace(natsCluster.Namespace).
 		Resource(v1alpha2.CRDResourcePlural).
 		Name(natsCluster.Name).
 		Body(natsCluster).
-		Do().
+		Do(ctx).
 		Into(result)
 	return result, err
 }
