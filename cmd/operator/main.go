@@ -199,7 +199,7 @@ func main() {
 }
 
 func run(ctx context.Context, featureMap features.FeatureMap, kubeCfg *rest.Config, kubeClient kubernetes.Interface) {
-	// Create a client for the apiextensions.k8s.io/v1beta1 so that we can register our CRDs.
+	// Create a client for the apiextensions.k8s.io/v1 so that we can register our CRDs.
 	extsClient := kubernetesutil.MustNewKubeExtClient(kubeCfg)
 	// Create a client for our API so that we can create shared index informers for our API types.
 	natsClient := kubernetesutil.MustNewNatsClientFromConfig(kubeCfg)
