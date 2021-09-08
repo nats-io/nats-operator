@@ -48,11 +48,11 @@ var (
 				Name: v1alpha2.CRDName,
 			},
 			Spec: extsv1.CustomResourceDefinitionSpec{
-				Group:   v1alpha2.SchemeGroupVersion.Group,
+				Group: v1alpha2.SchemeGroupVersion.Group,
 				Versions: []extsv1.CustomResourceDefinitionVersion{
 					{
-						Name: v1alpha2.SchemeGroupVersion.Version,
-						Served: true,
+						Name:    v1alpha2.SchemeGroupVersion.Version,
+						Served:  true,
 						Storage: true,
 						Schema: &extsv1.CustomResourceValidation{
 							OpenAPIV3Schema: &extsv1.JSONSchemaProps{
@@ -61,7 +61,7 @@ var (
 						},
 					},
 				},
-				Scope:   extsv1.NamespaceScoped,
+				Scope: extsv1.NamespaceScoped,
 				Names: extsv1.CustomResourceDefinitionNames{
 					Plural:     v1alpha2.CRDResourcePlural,
 					Kind:       v1alpha2.CRDResourceKind,
@@ -75,11 +75,11 @@ var (
 				Name: v1alpha2.ServiceRoleCRDName,
 			},
 			Spec: extsv1.CustomResourceDefinitionSpec{
-				Group:   v1alpha2.SchemeGroupVersion.Group,
+				Group: v1alpha2.SchemeGroupVersion.Group,
 				Versions: []extsv1.CustomResourceDefinitionVersion{
 					{
-						Name: v1alpha2.SchemeGroupVersion.Version,
-						Served: true,
+						Name:    v1alpha2.SchemeGroupVersion.Version,
+						Served:  true,
 						Storage: true,
 						Schema: &extsv1.CustomResourceValidation{
 							OpenAPIV3Schema: &extsv1.JSONSchemaProps{
@@ -88,7 +88,7 @@ var (
 						},
 					},
 				},
-				Scope:   extsv1.NamespaceScoped,
+				Scope: extsv1.NamespaceScoped,
 				Names: extsv1.CustomResourceDefinitionNames{
 					Plural: v1alpha2.ServiceRoleCRDResourcePlural,
 					Kind:   v1alpha2.ServiceRoleCRDResourceKind,
@@ -105,7 +105,7 @@ var (
 type NatsClusterCRUpdateFunc func(*v1alpha2.NatsCluster)
 
 func GetClusterList(restcli rest.Interface, ns string) (*v1alpha2.NatsClusterList, error) {
-	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw()
+	b, err := restcli.Get().RequestURI(listClustersURI(ns)).DoRaw(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func WaitCRDs(extsClient extsclientset.Interface) error {
 // createOrUpdateCRD creates or updates the specified custom resource definition according to the provided specification.
 func createOrUpdateCRD(crd *extsv1.CustomResourceDefinition, extsClient extsclientset.Interface) error {
 	// At this point the CRD may already exist from manual creation. Attempt to get the CRD
-	d, err := extsClient.ApiextensionsV1().CustomResourceDefinitions().Get(crd.Name, metav1.GetOptions{})
+	d, err := extsClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crd.Name, metav1.GetOptions{})
 
 	// CRD already exists, but it's what we expect.
 	if err == nil && reflect.DeepEqual(d.Spec, crd.Spec) {
@@ -162,12 +162,12 @@ func createOrUpdateCRD(crd *extsv1.CustomResourceDefinition, extsClient extsclie
 	if err == nil {
 		// Attempt to update the CRD by setting its spec to the expected value.
 		d.Spec = crd.Spec
-		_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().Update(d)
+		_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().Update(context.TODO(), d, metav1.UpdateOptions{})
 		return err
 	}
 
 	// No CRD existed, attempt to register the CRD.
-	_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().Create(crd)
+	_, err = extsClient.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 	return err
 }
 
@@ -177,11 +177,11 @@ func waitCRDReady(crd *extsv1.CustomResourceDefinition, extsClient extsclientset
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
-			return extsClient.ApiextensionsV1().CustomResourceDefinitions().List(options)
+			return extsClient.ApiextensionsV1().CustomResourceDefinitions().List(context.TODO(), options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.FieldSelector = ByCoordinates(crd.Namespace, crd.Name).String()
-			return extsClient.ApiextensionsV1().CustomResourceDefinitions().Watch(options)
+			return extsClient.ApiextensionsV1().CustomResourceDefinitions().Watch(context.TODO(), options)
 		},
 	}
 

@@ -40,7 +40,7 @@ func (c *Cluster) upgradePod(pod *v1.Pod) error {
 func (c *Cluster) upgradeRunningPod(oldPod *v1.Pod) error {
 	ns := c.cluster.Namespace
 
-	pod, err := c.config.KubeCli.Pods(ns).Get(oldPod.GetName(), metav1.GetOptions{})
+	pod, err := c.config.KubeCli.Pods(ns).Get(context.TODO(), oldPod.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("fail to get pod %q: %v", kubernetesutil.ResourceKey(oldPod), err)
 	}
@@ -55,7 +55,7 @@ func (c *Cluster) upgradeRunningPod(oldPod *v1.Pod) error {
 		return fmt.Errorf("error creating patch: %v", err)
 	}
 
-	_, err = c.config.KubeCli.Pods(ns).Patch(pod.GetName(), types.StrategicMergePatchType, patchdata)
+	_, err = c.config.KubeCli.Pods(ns).Patch(context.TODO(), pod.GetName(), types.StrategicMergePatchType, patchdata, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("fail to update the NATS member %q: %v", kubernetesutil.ResourceKey(oldPod), err)
 	}
@@ -89,7 +89,7 @@ func (c *Cluster) maybeUpgradeMgmtService() error {
 	ns := c.cluster.Namespace
 	sn := kubernetesutil.ManagementServiceName(c.cluster.Name)
 
-	svc, err := c.config.KubeCli.Services(ns).Get(sn, metav1.GetOptions{})
+	svc, err := c.config.KubeCli.Services(ns).Get(context.TODO(), sn, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get service \"%s/%s\": %v", ns, sn, err)
 	}
@@ -106,7 +106,7 @@ func (c *Cluster) maybeUpgradeMgmtService() error {
 		return fmt.Errorf("error creating patch: %v", err)
 	}
 
-	_, err = c.config.KubeCli.Services(ns).Patch(svc.GetName(), types.StrategicMergePatchType, patchdata)
+	_, err = c.config.KubeCli.Services(ns).Patch(context.TODO(), svc.GetName(), types.StrategicMergePatchType, patchdata, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("fail to update the NATS management service %q: %v", kubernetesutil.ResourceKey(svc), err)
 	}

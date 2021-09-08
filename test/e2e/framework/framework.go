@@ -110,7 +110,7 @@ func New(featureMap features.FeatureMap, kubeconfig, namespace string) *Framewor
 
 // Cleanup deletes the nats-operator deployment and the nats-operator-e2e pod, ignoring errors.
 func (f *Framework) Cleanup() {
-	if err := f.KubeClient.CoreV1().Pods(f.Namespace).Delete(natsOperatorE2ePodName, &metav1.DeleteOptions{}); err != nil {
+	if err := f.KubeClient.CoreV1().Pods(f.Namespace).Delete(context.TODO(), natsOperatorE2ePodName, metav1.DeleteOptions{}); err != nil {
 		log.Warnf("failed to delete the %q pod: %v", natsOperatorE2ePodName, err)
 	}
 }
@@ -141,7 +141,7 @@ func (f *Framework) FeatureDetect() {
 	// Detect whether the TokenRequest API is active by performing
 	// a GET request to the "/token" subresource of the "default"
 	// service account.
-	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(); err != nil {
+	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(context.TODO()); err != nil {
 		if errors.IsMethodNotSupported(err) {
 			// We've got a "405 METHOD NOT ALLOWED" response instead of a "404 NOT FOUND".
 			// This means that the "/token" subresource is
@@ -198,7 +198,7 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	req := f.KubeClient.CoreV1().Pods(f.Namespace).GetLogs(natsOperatorE2ePodName, &v1.PodLogOptions{
 		Follow: true,
 	})
-	r, err := req.Stream()
+	r, err := req.Stream(context.TODO())
 	if err != nil {
 		return -1, err
 	}

@@ -15,6 +15,7 @@
 package framework
 
 import (
+	"context"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,7 +38,7 @@ func (f *Framework) CreateNatsServiceRole(namespace, prefix string, fn ...NatsSe
 			Namespace:    namespace,
 		},
 	}
-	a, err := f.KubeClient.CoreV1().ServiceAccounts(a.Namespace).Create(a)
+	a, err := f.KubeClient.CoreV1().ServiceAccounts(a.Namespace).Create(context.TODO(), a, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -61,23 +62,23 @@ func (f *Framework) CreateNatsServiceRole(namespace, prefix string, fn ...NatsSe
 		f(obj)
 	}
 	// Create the NatsServiceRole resource.
-	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(obj.Namespace).Create(obj)
+	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(obj.Namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
 }
 
 // DeleteNatsServiceRole deletes the specified NatsServiceRole resource.
 func (f *Framework) DeleteNatsServiceRole(nsr *natsv1alpha2.NatsServiceRole) error {
 	// Delete the service account that backs the NatsServiceRole.
 	// Avoid erroring if we fail to delete the service account, as it is not the primary intent of this function.
-	_ = f.KubeClient.CoreV1().ServiceAccounts(nsr.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
+	_ = f.KubeClient.CoreV1().ServiceAccounts(nsr.Namespace).Delete(context.TODO(), nsr.Name, metav1.DeleteOptions{})
 	// Delete the NatsServiceRole with the specified name.
-	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Delete(nsr.Name, &metav1.DeleteOptions{})
+	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Delete(context.TODO(), nsr.Name, metav1.DeleteOptions{})
 }
 
 // PatchNatsServiceRole performs a patch on the specified NatsServiceRole resource to align its ".spec" field with the provided value.
 // It takes the desired state as an argument and patches the NatsServiceRole resource accordingly.
 func (f *Framework) PatchNatsServiceRole(nsr *natsv1alpha2.NatsServiceRole) (*natsv1alpha2.NatsServiceRole, error) {
 	// Grab the most up-to-date version of the provided NatsServiceRole resource.
-	currentNsr, err := f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Get(nsr.Name, metav1.GetOptions{})
+	currentNsr, err := f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Get(context.TODO(), nsr.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -90,5 +91,5 @@ func (f *Framework) PatchNatsServiceRole(nsr *natsv1alpha2.NatsServiceRole) (*na
 	if err != nil {
 		return nil, err
 	}
-	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Patch(nsr.Name, types.MergePatchType, bytes)
+	return f.NatsClient.NatsV1alpha2().NatsServiceRoles(nsr.Namespace).Patch(context.TODO(), nsr.Name, types.MergePatchType, bytes, metav1.PatchOptions{})
 }

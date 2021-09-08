@@ -65,7 +65,7 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 			continue
 		}
 
-		pods, err := m.kubecli.Pods(ns).List(metav1.ListOptions{LabelSelector: ls})
+		pods, err := m.kubecli.Pods(ns).List(context.TODO(), metav1.ListOptions{LabelSelector: ls})
 		if err != nil {
 			logrus.Errorf("failed to list pods for selector %v: %v", ls, err)
 			continue
@@ -89,7 +89,7 @@ func (m *Monkeys) CrushPods(ctx context.Context, c *CrashConfig) {
 		}
 
 		for tokill := range tokills {
-			err = m.kubecli.Pods(ns).Delete(tokill, metav1.NewDeleteOptions(0))
+			err = m.kubecli.Pods(ns).Delete(context.TODO(), tokill, *metav1.NewDeleteOptions(0))
 			if err != nil {
 				logrus.Errorf("failed to kill pod %v: %v", tokill, err)
 				continue
