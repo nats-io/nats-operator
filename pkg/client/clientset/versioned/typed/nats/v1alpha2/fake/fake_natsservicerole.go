@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -37,7 +39,7 @@ var natsservicerolesResource = schema.GroupVersionResource{Group: "nats", Versio
 var natsservicerolesKind = schema.GroupVersionKind{Group: "nats", Version: "v1alpha2", Kind: "NatsServiceRole"}
 
 // Get takes name of the natsServiceRole, and returns the corresponding natsServiceRole object, and an error if there is any.
-func (c *FakeNatsServiceRoles) Get(name string, options v1.GetOptions) (result *v1alpha2.NatsServiceRole, err error) {
+func (c *FakeNatsServiceRoles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.NatsServiceRole, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(natsservicerolesResource, c.ns, name), &v1alpha2.NatsServiceRole{})
 
@@ -48,7 +50,7 @@ func (c *FakeNatsServiceRoles) Get(name string, options v1.GetOptions) (result *
 }
 
 // List takes label and field selectors, and returns the list of NatsServiceRoles that match those selectors.
-func (c *FakeNatsServiceRoles) List(opts v1.ListOptions) (result *v1alpha2.NatsServiceRoleList, err error) {
+func (c *FakeNatsServiceRoles) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.NatsServiceRoleList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(natsservicerolesResource, natsservicerolesKind, c.ns, opts), &v1alpha2.NatsServiceRoleList{})
 
@@ -70,14 +72,14 @@ func (c *FakeNatsServiceRoles) List(opts v1.ListOptions) (result *v1alpha2.NatsS
 }
 
 // Watch returns a watch.Interface that watches the requested natsServiceRoles.
-func (c *FakeNatsServiceRoles) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeNatsServiceRoles) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(natsservicerolesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a natsServiceRole and creates it.  Returns the server's representation of the natsServiceRole, and an error, if there is any.
-func (c *FakeNatsServiceRoles) Create(natsServiceRole *v1alpha2.NatsServiceRole) (result *v1alpha2.NatsServiceRole, err error) {
+func (c *FakeNatsServiceRoles) Create(ctx context.Context, natsServiceRole *v1alpha2.NatsServiceRole, opts v1.CreateOptions) (result *v1alpha2.NatsServiceRole, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(natsservicerolesResource, c.ns, natsServiceRole), &v1alpha2.NatsServiceRole{})
 
@@ -88,7 +90,7 @@ func (c *FakeNatsServiceRoles) Create(natsServiceRole *v1alpha2.NatsServiceRole)
 }
 
 // Update takes the representation of a natsServiceRole and updates it. Returns the server's representation of the natsServiceRole, and an error, if there is any.
-func (c *FakeNatsServiceRoles) Update(natsServiceRole *v1alpha2.NatsServiceRole) (result *v1alpha2.NatsServiceRole, err error) {
+func (c *FakeNatsServiceRoles) Update(ctx context.Context, natsServiceRole *v1alpha2.NatsServiceRole, opts v1.UpdateOptions) (result *v1alpha2.NatsServiceRole, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(natsservicerolesResource, c.ns, natsServiceRole), &v1alpha2.NatsServiceRole{})
 
@@ -99,7 +101,7 @@ func (c *FakeNatsServiceRoles) Update(natsServiceRole *v1alpha2.NatsServiceRole)
 }
 
 // Delete takes name of the natsServiceRole and deletes it. Returns an error if one occurs.
-func (c *FakeNatsServiceRoles) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeNatsServiceRoles) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(natsservicerolesResource, c.ns, name), &v1alpha2.NatsServiceRole{})
 
@@ -107,15 +109,15 @@ func (c *FakeNatsServiceRoles) Delete(name string, options *v1.DeleteOptions) er
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeNatsServiceRoles) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(natsservicerolesResource, c.ns, listOptions)
+func (c *FakeNatsServiceRoles) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(natsservicerolesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha2.NatsServiceRoleList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched natsServiceRole.
-func (c *FakeNatsServiceRoles) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha2.NatsServiceRole, err error) {
+func (c *FakeNatsServiceRoles) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.NatsServiceRole, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(natsservicerolesResource, c.ns, name, pt, data, subresources...), &v1alpha2.NatsServiceRole{})
 

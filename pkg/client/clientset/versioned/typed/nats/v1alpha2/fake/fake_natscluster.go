@@ -17,6 +17,8 @@
 package fake
 
 import (
+	"context"
+
 	v1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -37,7 +39,7 @@ var natsclustersResource = schema.GroupVersionResource{Group: "nats", Version: "
 var natsclustersKind = schema.GroupVersionKind{Group: "nats", Version: "v1alpha2", Kind: "NatsCluster"}
 
 // Get takes name of the natsCluster, and returns the corresponding natsCluster object, and an error if there is any.
-func (c *FakeNatsClusters) Get(name string, options v1.GetOptions) (result *v1alpha2.NatsCluster, err error) {
+func (c *FakeNatsClusters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha2.NatsCluster, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(natsclustersResource, c.ns, name), &v1alpha2.NatsCluster{})
 
@@ -48,7 +50,7 @@ func (c *FakeNatsClusters) Get(name string, options v1.GetOptions) (result *v1al
 }
 
 // List takes label and field selectors, and returns the list of NatsClusters that match those selectors.
-func (c *FakeNatsClusters) List(opts v1.ListOptions) (result *v1alpha2.NatsClusterList, err error) {
+func (c *FakeNatsClusters) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha2.NatsClusterList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(natsclustersResource, natsclustersKind, c.ns, opts), &v1alpha2.NatsClusterList{})
 
@@ -70,14 +72,14 @@ func (c *FakeNatsClusters) List(opts v1.ListOptions) (result *v1alpha2.NatsClust
 }
 
 // Watch returns a watch.Interface that watches the requested natsClusters.
-func (c *FakeNatsClusters) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeNatsClusters) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(natsclustersResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a natsCluster and creates it.  Returns the server's representation of the natsCluster, and an error, if there is any.
-func (c *FakeNatsClusters) Create(natsCluster *v1alpha2.NatsCluster) (result *v1alpha2.NatsCluster, err error) {
+func (c *FakeNatsClusters) Create(ctx context.Context, natsCluster *v1alpha2.NatsCluster, opts v1.CreateOptions) (result *v1alpha2.NatsCluster, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(natsclustersResource, c.ns, natsCluster), &v1alpha2.NatsCluster{})
 
@@ -88,7 +90,7 @@ func (c *FakeNatsClusters) Create(natsCluster *v1alpha2.NatsCluster) (result *v1
 }
 
 // Update takes the representation of a natsCluster and updates it. Returns the server's representation of the natsCluster, and an error, if there is any.
-func (c *FakeNatsClusters) Update(natsCluster *v1alpha2.NatsCluster) (result *v1alpha2.NatsCluster, err error) {
+func (c *FakeNatsClusters) Update(ctx context.Context, natsCluster *v1alpha2.NatsCluster, opts v1.UpdateOptions) (result *v1alpha2.NatsCluster, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(natsclustersResource, c.ns, natsCluster), &v1alpha2.NatsCluster{})
 
@@ -99,7 +101,7 @@ func (c *FakeNatsClusters) Update(natsCluster *v1alpha2.NatsCluster) (result *v1
 }
 
 // Delete takes name of the natsCluster and deletes it. Returns an error if one occurs.
-func (c *FakeNatsClusters) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeNatsClusters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(natsclustersResource, c.ns, name), &v1alpha2.NatsCluster{})
 
@@ -107,15 +109,15 @@ func (c *FakeNatsClusters) Delete(name string, options *v1.DeleteOptions) error 
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeNatsClusters) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(natsclustersResource, c.ns, listOptions)
+func (c *FakeNatsClusters) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(natsclustersResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha2.NatsClusterList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched natsCluster.
-func (c *FakeNatsClusters) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha2.NatsCluster, err error) {
+func (c *FakeNatsClusters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha2.NatsCluster, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(natsclustersResource, c.ns, name, pt, data, subresources...), &v1alpha2.NatsCluster{})
 
