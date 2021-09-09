@@ -98,7 +98,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 	log.Infof("Pod running on node %q", nodeName)
 
-	node, err := c.kc.CoreV1().Nodes().Get(nodeName, k8smetav1.GetOptions{})
+	node, err := c.kc.CoreV1().Nodes().Get(context.TODO(), nodeName, k8smetav1.GetOptions{})
 	if err != nil {
 		return err
 	}

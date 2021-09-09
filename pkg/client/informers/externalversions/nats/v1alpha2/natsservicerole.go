@@ -17,6 +17,7 @@
 package v1alpha2
 
 import (
+	"context"
 	time "time"
 
 	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
@@ -59,13 +60,13 @@ func NewFilteredNatsServiceRoleInformer(client versioned.Interface, namespace st
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.NatsV1alpha2().NatsServiceRoles(namespace).List(options)
+				return client.NatsV1alpha2().NatsServiceRoles(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.NatsV1alpha2().NatsServiceRoles(namespace).Watch(options)
+				return client.NatsV1alpha2().NatsServiceRoles(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&natsv1alpha2.NatsServiceRole{},

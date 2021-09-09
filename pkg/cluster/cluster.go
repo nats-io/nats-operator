@@ -408,7 +408,7 @@ func (c *Cluster) createPod() (*v1.Pod, error) {
 
 	// Create the pod.
 	pod := kubernetesutil.NewNatsPodSpec(c.cluster.Namespace, name, c.cluster.Name, c.cluster.Spec, c.cluster.AsOwner())
-	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(pod)
+	pod, err = c.config.KubeCli.Pods(c.cluster.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +476,7 @@ func (c *Cluster) deletePod(pod *v1.Pod) error {
 	<-ackCh
 
 	// Delete the specified pod.
-	err := c.config.KubeCli.Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(podTerminationGracePeriod))
+	err := c.config.KubeCli.Pods(pod.Namespace).Delete(context.TODO(), pod.Name, *metav1.NewDeleteOptions(podTerminationGracePeriod))
 	if err != nil {
 		if !kubernetesutil.IsKubernetesResourceNotFoundError(err) {
 			return err
@@ -566,7 +566,7 @@ func (c *Cluster) updateCluster() error {
 	}
 
 	// Patch the NatsCluster resource.
-	_, err = c.config.OperatorCli.NatsClusters(c.cluster.Namespace).Patch(c.cluster.Name, types.MergePatchType, patchBytes)
+	_, err = c.config.OperatorCli.NatsClusters(c.cluster.Namespace).Patch(context.TODO(), c.cluster.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update status: %v", err)
 	}

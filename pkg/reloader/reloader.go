@@ -221,8 +221,6 @@ WaitForEvent:
 			break TryReload
 		}
 	}
-
-	return nil
 }
 
 // Stop shutsdown the process.
