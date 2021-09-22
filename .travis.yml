@@ -22,7 +22,7 @@ before_script:
 - curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.22.2/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
 - curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.22.0/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
 - curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.31.0/skaffold-linux-amd64 && chmod +x skaffold && sudo mv skaffold /usr/local/bin/
-- minikube start --vm-driver=docker --kubernetes-version=v1.22.2 --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/apiserver.key --extra-config=apiserver.service-account-issuer=api --extra-config=apiserver.service-account-api-audiences=api
+- minikube start --vm-driver=docker --kubernetes-version=v1.22.2 --extra-config=apiserver.service-account-signing-key-file=/var/lib/minikube/certs/sa.key --extra-config=apiserver.service-account-key-file=/var/lib/minikube/certs/sa.pub --extra-config=apiserver.service-account-issuer=api --extra-config=apiserver.service-account-api-audiences=api
 - minikube update-context
 - JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}'; until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do sleep 1; done
 
