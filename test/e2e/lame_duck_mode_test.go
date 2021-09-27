@@ -17,13 +17,7 @@
 package e2e
 
 import (
-	"context"
-	"sort"
-	"sync"
-	"testing"
 	"time"
-
-	natsv1alpha2 "github.com/nats-io/nats-operator/pkg/apis/nats/v1alpha2"
 )
 
 // podLDMResult captures information about the time at which a pod was placed in "lame duck" mode.
@@ -38,6 +32,7 @@ type podLDMResult struct {
 // sets a size of 3 in the NatsCluster resource and waits for the
 // scale-down operation to complete while making sure that each pod has
 // been placed in the "lame duck" mode.
+/*
 func TestLameDuckModeWhenScalingDown(t *testing.T) {
 	var (
 		initialSize = 3
@@ -126,3 +121,4 @@ func TestLameDuckModeWhenScalingDown(t *testing.T) {
 		}
 	}
 }
+*/
