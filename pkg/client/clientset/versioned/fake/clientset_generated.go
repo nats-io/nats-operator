@@ -72,7 +72,10 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-var _ clientset.Interface = &Clientset{}
+var (
+	_ clientset.Interface = &Clientset{}
+	_ testing.FakeClient  = &Clientset{}
+)
 
 // NatsV1alpha2 retrieves the NatsV1alpha2Client
 func (c *Clientset) NatsV1alpha2() natsv1alpha2.NatsV1alpha2Interface {
