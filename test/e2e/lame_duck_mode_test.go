@@ -42,8 +42,8 @@ func TestLameDuckModeWhenScalingDown(t *testing.T) {
 	var (
 		initialSize = 3
 		finalSize   = 1
-		serverImage = "synadia/nats-server"
-		version     = "2.0.0"
+		serverImage = "nats"
+		version     = "2.6.1"
 	)
 
 	var (
