@@ -25,7 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -110,7 +110,7 @@ func New(featureMap features.FeatureMap, kubeconfig, namespace string) *Framewor
 
 // Cleanup deletes the nats-operator deployment and the nats-operator-e2e pod, ignoring errors.
 func (f *Framework) Cleanup() {
-	if err := f.KubeClient.CoreV1().Pods(f.Namespace).Delete(natsOperatorE2ePodName, &metav1.DeleteOptions{}); err != nil {
+	if err := f.KubeClient.CoreV1().Pods(f.Namespace).Delete(context.TODO(), natsOperatorE2ePodName, metav1.DeleteOptions{}); err != nil {
 		log.Warnf("failed to delete the %q pod: %v", natsOperatorE2ePodName, err)
 	}
 }
@@ -141,7 +141,7 @@ func (f *Framework) FeatureDetect() {
 	// Detect whether the TokenRequest API is active by performing
 	// a GET request to the "/token" subresource of the "default"
 	// service account.
-	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(); err != nil {
+	if _, err := f.KubeClient.CoreV1().RESTClient().Get().Resource("serviceaccounts").Namespace(f.Namespace).Name("default").SubResource("token").DoRaw(context.TODO()); err != nil {
 		if errors.IsMethodNotSupported(err) {
 			// We've got a "405 METHOD NOT ALLOWED" response instead of a "404 NOT FOUND".
 			// This means that the "/token" subresource is
@@ -198,7 +198,7 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	req := f.KubeClient.CoreV1().Pods(f.Namespace).GetLogs(natsOperatorE2ePodName, &v1.PodLogOptions{
 		Follow: true,
 	})
-	r, err := req.Stream()
+	r, err := req.Stream(context.TODO())
 	if err != nil {
 		return -1, err
 	}
@@ -217,10 +217,33 @@ func (f *Framework) WaitForNatsOperatorE2ePodTermination() (int, error) {
 	}
 
 	// Grab the first (and single) container's exit code so we can
-	// use it as our own exit code.
-	pod, err := f.KubeClient.CoreV1().Pods(f.Namespace).Get(natsOperatorE2ePodName, metav1.GetOptions{})
+	// use it as our own exit code. Wait for termination.
+	ctx2, fn2 := context.WithTimeout(context.Background(), podReadinessTimeout)
+	defer fn2()
+	exitCode := int(-1)
+	err = kubernetesutil.WaitUntilPodCondition(ctx2, f.KubeClient.CoreV1(), &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: f.Namespace,
+			Name:      natsOperatorE2ePodName,
+		},
+	}, func(event watch.Event) (bool, error) {
+		switch event.Type {
+		case watch.Error:
+			return false, fmt.Errorf("got event of type error: %+v", event.Object)
+		case watch.Deleted:
+			pod := event.Object.(*v1.Pod)
+			return false, fmt.Errorf("pod %q has been deleted", kubernetesutil.ResourceKey(pod))
+		default:
+			pod := event.Object.(*v1.Pod)
+			if t := pod.Status.ContainerStatuses[0].State.Terminated; t != nil {
+				exitCode = int(t.ExitCode)
+				return true, nil
+			}
+			return false, nil
+		}
+	})
 	if err != nil {
 		return -1, err
 	}
-	return int(pod.Status.ContainerStatuses[0].State.Terminated.ExitCode), nil
+	return exitCode, nil
 }

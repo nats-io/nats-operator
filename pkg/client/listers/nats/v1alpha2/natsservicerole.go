@@ -24,8 +24,10 @@ import (
 )
 
 // NatsServiceRoleLister helps list NatsServiceRoles.
+// All objects returned here must be treated as read-only.
 type NatsServiceRoleLister interface {
 	// List lists all NatsServiceRoles in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha2.NatsServiceRole, err error)
 	// NatsServiceRoles returns an object that can list and get NatsServiceRoles.
 	NatsServiceRoles(namespace string) NatsServiceRoleNamespaceLister
@@ -56,10 +58,13 @@ func (s *natsServiceRoleLister) NatsServiceRoles(namespace string) NatsServiceRo
 }
 
 // NatsServiceRoleNamespaceLister helps list and get NatsServiceRoles.
+// All objects returned here must be treated as read-only.
 type NatsServiceRoleNamespaceLister interface {
 	// List lists all NatsServiceRoles in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha2.NatsServiceRole, err error)
 	// Get retrieves the NatsServiceRole from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha2.NatsServiceRole, error)
 	NatsServiceRoleNamespaceListerExpansion
 }

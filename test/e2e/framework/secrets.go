@@ -43,19 +43,19 @@ func (f *Framework) CreateSecret(namespace string, key string, val []byte) (*v1.
 			key: val,
 		},
 	}
-	return f.KubeClient.CoreV1().Secrets(obj.Namespace).Create(obj)
+	return f.KubeClient.CoreV1().Secrets(obj.Namespace).Create(context.TODO(), obj, metav1.CreateOptions{})
 }
 
 // DeleteSecret deletes the specified Secret resource.
 func (f *Framework) DeleteSecret(secret *v1.Secret) error {
-	return f.KubeClient.CoreV1().Secrets(secret.Namespace).Delete(secret.Name, &metav1.DeleteOptions{})
+	return f.KubeClient.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
 }
 
 // PatchSecret performs a patch on the specified Secret resource to align its ".data" field with the provided value.
 // It takes the desired state as an argument and patches the Secret resource accordingly.
 func (f *Framework) PatchSecret(secret *v1.Secret) (*v1.Secret, error) {
 	// Grab the most up-to-date version of the provided Secret resource.
-	currentSecret, err := f.KubeClient.CoreV1().Secrets(secret.Namespace).Get(secret.Name, metav1.GetOptions{})
+	currentSecret, err := f.KubeClient.CoreV1().Secrets(secret.Namespace).Get(context.TODO(), secret.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (f *Framework) PatchSecret(secret *v1.Secret) (*v1.Secret, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.KubeClient.CoreV1().Secrets(secret.Namespace).Patch(secret.Name, types.MergePatchType, bytes)
+	return f.KubeClient.CoreV1().Secrets(secret.Namespace).Patch(context.TODO(), secret.Name, types.MergePatchType, bytes, metav1.PatchOptions{})
 }
 
 // WaitUntilSecretCondition waits until the specified condition is verified in configuration secret for the specified NatsCluster resource.
@@ -79,11 +79,11 @@ func (f *Framework) WaitUntilSecretCondition(ctx context.Context, natsCluster *n
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = ls.String()
-			return f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).List(options)
+			return f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).List(context.TODO(), options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watchapi.Interface, error) {
 			options.LabelSelector = ls.String()
-			return f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).Watch(options)
+			return f.KubeClient.CoreV1().Secrets(natsCluster.Namespace).Watch(context.TODO(), options)
 		},
 	}
 	// Watch for updates to the matched secrets until fn is satisfied, or until the timeout is reached.
