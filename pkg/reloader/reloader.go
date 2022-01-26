@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -24,6 +23,7 @@ type Config struct {
 	ConfigFiles   []string
 	MaxRetries    int
 	RetryWaitSecs int
+	Signal        os.Signal
 }
 
 // Reloader monitors the state from a single server config file
@@ -42,20 +42,12 @@ type Reloader struct {
 	quit func()
 }
 
-// Run starts the main loop.
-func (r *Reloader) Run(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	r.quit = func() {
-		cancel()
-	}
+func (r *Reloader) waitForProcess() error {
+	var proc *os.Process
+	var pid int
+	var attempts int = 0
 
-	var (
-		proc      *os.Process
-		pid       int
-		attempts  int
-		startTime time.Time
-	)
-	startTime = time.Now()
+	startTime := time.Now()
 	for {
 		pidfile, err := ioutil.ReadFile(r.PidFile)
 		if err != nil {
@@ -84,11 +76,26 @@ func (r *Reloader) Run(ctx context.Context) error {
 
 	if attempts > 0 {
 		log.Printf("found pid from pidfile %q after %v failed attempts (%v time after start)",
-			r.PidFile, attempts, time.Now().Sub(startTime))
+			r.PidFile, attempts, time.Since(startTime))
 	}
 
 	r.pid = pid
 	r.proc = proc
+	log.Printf("Live, ready to kick pid %v", r.proc.Pid)
+	return nil
+}
+
+// Run starts the main loop.
+func (r *Reloader) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	r.quit = func() {
+		cancel()
+	}
+
+	err := r.waitForProcess()
+	if err != nil {
+		return err
+	}
 
 	configWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -109,7 +116,7 @@ func (r *Reloader) Run(ctx context.Context) error {
 		}
 	}
 
-	attempts = 0
+	attempts := 0
 	// lastConfigAppliedCache is the last config update
 	// applied by us
 	lastConfigAppliedCache := make(map[string][]byte)
@@ -195,18 +202,24 @@ WaitForEvent:
 				// config files here and continue with our business.
 				break
 			}
-
 		case err := <-configWatcher.Errors:
 			log.Printf("Error: %s\n", err)
 			continue
+		}
+
+		// Reread process data, in case it changed - just to ensure to send the signal to
+		// the right process.
+		err = r.waitForProcess()
+		if err != nil {
+			return err
 		}
 
 		// Configuration was updated, try to do reload for a few times
 		// otherwise give up and wait for next event.
 	TryReload:
 		for {
-			log.Println("Sending signal to server to reload configuration")
-			err := r.proc.Signal(syscall.SIGHUP)
+			log.Printf("Sending signal '%s' to server to reload configuration\n", r.Signal.String())
+			err := r.proc.Signal(r.Signal)
 			if err != nil {
 				log.Printf("Error during reload: %s\n", err)
 				if attempts > r.MaxRetries {
