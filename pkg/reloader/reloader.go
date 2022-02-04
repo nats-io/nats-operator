@@ -66,7 +66,7 @@ func (r *Reloader) waitForProcess() error {
 		break
 
 	WaitAndRetry:
-		log.Printf("Error: %s\n", err)
+		log.Printf("Error: %s", err)
 		attempts++
 		if attempts > r.MaxRetries {
 			return fmt.Errorf("Too many errors attempting to find server process")
@@ -154,7 +154,7 @@ WaitForEvent:
 		case <-ctx.Done():
 			return nil
 		case event := <-configWatcher.Events:
-			log.Printf("Event: %+v \n", event)
+			log.Printf("Event: %+v ", event)
 			touchedInfo, err := os.Stat(event.Name)
 			if err != nil {
 				// Beware that this means that we won't reconfigure if a file
@@ -170,7 +170,7 @@ WaitForEvent:
 			for _, configFile := range r.ConfigFiles {
 				configInfo, err := os.Stat(configFile)
 				if err != nil {
-					log.Printf("Error: %s\n", err)
+					log.Printf("Error: %s", err)
 					continue WaitForEvent
 				}
 				if !os.SameFile(touchedInfo, configInfo) {
@@ -180,11 +180,11 @@ WaitForEvent:
 				h := sha256.New()
 				f, err := os.Open(configFile)
 				if err != nil {
-					log.Printf("Error: %s\n", err)
+					log.Printf("Error: %s", err)
 					continue WaitForEvent
 				}
 				if _, err := io.Copy(h, f); err != nil {
-					log.Printf("Error: %s\n", err)
+					log.Printf("Error: %s", err)
 					continue WaitForEvent
 				}
 				digest := h.Sum(nil)
@@ -203,7 +203,7 @@ WaitForEvent:
 				break
 			}
 		case err := <-configWatcher.Errors:
-			log.Printf("Error: %s\n", err)
+			log.Printf("Error: %s", err)
 			continue
 		}
 
@@ -218,10 +218,10 @@ WaitForEvent:
 		// otherwise give up and wait for next event.
 	TryReload:
 		for {
-			log.Printf("Sending signal '%s' to server to reload configuration\n", r.Signal.String())
+			log.Printf("Sending signal '%s' to server to reload configuration", r.Signal.String())
 			err := r.proc.Signal(r.Signal)
 			if err != nil {
-				log.Printf("Error during reload: %s\n", err)
+				log.Printf("Error during reload: %s", err)
 				if attempts > r.MaxRetries {
 					return fmt.Errorf("Too many errors (%v) attempting to signal server to reload", attempts)
 				}
