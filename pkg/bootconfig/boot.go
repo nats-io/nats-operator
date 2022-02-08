@@ -112,10 +112,18 @@ func (c *Controller) Run(ctx context.Context) error {
 			break
 		}
 	}
-
 	// Fallback to use a label to find the external address.
 	if !ok {
 		externalAddress, ok = node.Labels[c.opts.TargetTag]
+		if !ok || len(externalAddress) == 0 {
+	    for _, addr := range node.Status.Addresses {
+ // Fallback to use the InternalIP if no label is defined
+        if addr.Type == "InternalIP" {
+          externalAddress = addr.Address
+          ok = true
+        }
+      }
+    }
 		if !ok || len(externalAddress) == 0 {
 			return errors.New("Could not find external IP address.")
 		}
