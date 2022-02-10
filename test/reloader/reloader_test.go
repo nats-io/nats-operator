@@ -36,6 +36,7 @@ func TestReloader(t *testing.T) {
 	nconfig := &natsreloader.Config{
 		PidFile:     pidfile.Name(),
 		ConfigFiles: []string{},
+		Signal:      syscall.SIGHUP,
 	}
 
 	var configFiles []*os.File
