@@ -33,4 +33,3 @@ script:
   - kubectl delete namespace ${NAMESPACE_SCOPED_E2E_NAMESPACE}
   - cd $GOPATH/src/github.com/nats-io/nats-operator/ && make e2e FEATURE_GATE_CLUSTER_SCOPED=true NAMESPACE=${CLUSTER_SCOPED_E2E_NAMESPACE}
   - kubectl delete namespace ${CLUSTER_SCOPED_E2E_NAMESPACE}
-  - cd $GOPATH/src/github.com/nats-io/nats-operator/test/reloader/ && go test ./... -v
