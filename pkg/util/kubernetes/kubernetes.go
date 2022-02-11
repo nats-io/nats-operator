@@ -877,25 +877,19 @@ func newNatsServiceManifest(svcName, clusterName, clusterIP string, ports []v1.S
 	labels[LabelAppKey] = LabelAppValue
 	labels[LabelClusterNameKey] = clusterName
 
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	if tolerateUnready == true {
-		annotations[TolerateUnreadyEndpointsAnnotation] = "true"
-	}
-
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        svcName,
-			Labels:      labels,
-			Annotations: annotations,
+			Name:   svcName,
+			Labels: labels,
 		},
 		Spec: v1.ServiceSpec{
-			Ports:     ports,
-			Selector:  selectors,
-			ClusterIP: clusterIP,
+			Ports:                    ports,
+			Selector:                 selectors,
+			ClusterIP:                clusterIP,
+			PublishNotReadyAddresses: tolerateUnready,
 		},
 	}
+
 	return svc
 }
 
