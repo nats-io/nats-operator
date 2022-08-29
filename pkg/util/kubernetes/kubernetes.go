@@ -112,7 +112,7 @@ func CreateClientService(
 ) error {
 	ports := []v1.ServicePort{
 		{
-			Name:       "client",
+			Name:       "tcp-client",
 			Port:       constants.ClientPort,
 			TargetPort: intstr.FromInt(constants.ClientPort),
 			Protocol:   v1.ProtocolTCP,
