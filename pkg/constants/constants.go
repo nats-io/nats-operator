@@ -136,7 +136,8 @@ const (
 
 	// NatsContainerName is the name of the main container.
 	NatsContainerName = "nats"
+)
 
 	// KubernetesNamespaceNatsIO represents the "nats-io" Kubernetes namespace.
-	KubernetesNamespaceNatsIO = "nats-io"
-)
+	var KubernetesNamespaceNatsIO = "nats-io"
+
