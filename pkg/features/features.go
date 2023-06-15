@@ -29,12 +29,15 @@ type FeatureMap map[Feature]bool
 const (
 	// ClusterScoped is used to indicate whether nats-operator should operate at the namespace or cluster level.
 	ClusterScoped Feature = "ClusterScoped"
+	// BypassNamespaceEnforcement is used to disable the checks that require a cluster-scoped operator to use a fixed namespace.
+	BypassNamespaceEnforcement Feature = "BypassNamespaceEnforcement"
 )
 
 var (
 	// defaultFeatureMap represents the default status of the nats-operator feature gates.
 	defaultFeatureMap = map[Feature]bool{
-		ClusterScoped: false,
+		ClusterScoped:              false,
+		BypassNamespaceEnforcement: false,
 	}
 )
 
