@@ -107,8 +107,10 @@ func main() {
 	}
 	// Force cluster-scoped instances of nats-operator to run on the "nats-io" namespace.
 	// This is the simplest way to guarantee that leader election occurs as expected because all cluster-scoped instances will do resource locking on this same namespace.
-	if featureMap.IsEnabled(features.ClusterScoped) && namespace != constants.KubernetesNamespaceNatsIO {
-		logrus.Fatalf("cluster-scoped instances of nats-operator must run on the %q namespace", constants.KubernetesNamespaceNatsIO)
+	if featureMap.IsEnabled(features.ClusterScoped) {
+		if !featureMap.IsEnabled(features.BypassNamespaceEnforcement) && namespace != constants.KubernetesNamespaceNatsIO {
+			logrus.Fatalf("cluster-scoped instances of nats-operator must run on the %q namespace", constants.KubernetesNamespaceNatsIO)
+		}
 	}
 
 	if len(local.KubeConfigPath) == 0 {

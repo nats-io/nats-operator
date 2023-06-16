@@ -2,7 +2,7 @@ dist: focal
 
 language: go
 go:
-  - "1.16.7"
+  - "1.17.13"
 go_import_path: github.com/nats-io/nats-operator
 
 env:
