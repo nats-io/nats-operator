@@ -31,7 +31,7 @@ spec:
   version: "2.1.8"
 ```
 
-NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the any necessary operations on the associated NATS clusters in order to align their current status with the desired one.
+NATS Operator monitors creation/modification/deletion of `NatsCluster` resources and reacts by attempting to perform the many necessary operations on the associated NATS clusters in order to align their current status with the desired one.
 
 ## Installing
 
